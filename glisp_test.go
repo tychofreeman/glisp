@@ -114,6 +114,12 @@ func ParseWrapper(input interface{}) []interface{} {
 
 func Execute (input []interface{}) interface{} {
     var output interface{} = input
+    for x := 1; x < len(input); x++ {
+        switch y := input[x].(type) {
+        case []interface{}:
+            input[x] = Execute(y)
+        }
+    }
     if len(input) > 0 {
         switch x := input[0].(type) {
         case reflect.Value:
@@ -148,10 +154,10 @@ func TestAtomIsFalseForComplexExpres(t *testing.T) {
     AssertThat(t, Process("(atom ())"), IsFalse)
 }
 
-func IGNORE_TestCorrectlyHandlesNestedCalls(t *testing.T) {
-    AssertThat(t, Process("(car (cdr (\"a\" \"b\" \"c\")))"), HasExactly("\"b\""))
-}
-
 func TestIntegerLiteralsAreImplemented(t *testing.T) {
     AssertThat(t, Process("(car (1))"), Equals(int64(1)))
+}
+
+func TestCorrectlyHandlesNestedCalls(t *testing.T) {
+    AssertThat(t, Process("(car (cdr (\"a\" \"b\" \"c\")))"), Equals("\"b\""))
 }
