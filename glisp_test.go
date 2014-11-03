@@ -36,6 +36,15 @@ func cdr(in interface{}) []interface{} {
     return nil
 }
 
+func cons(in []interface{}) interface{} {
+    out := []interface{}{in[0]}
+    switch x := in[1].(type) {
+    case []interface{}:
+        out = append(out, x...)
+    }
+    return out
+}
+
 func cadr(in []interface{}) interface{} {
     return cdr(car(in))
 }
@@ -51,27 +60,29 @@ func atom(in interface{}) bool {
     return true
 }
 
-func Process2(tok interface{}) []interface{} {
-    name := car(tok)
-    var result interface{}
-    var rest = car(cdr(tok))
-    if name == "quote" {
-        result = cdr(tok)
-    } else if name == "car" {
-        result = car(rest)
-    } else if name == "cdr" {
-        result = cdr(rest)
-    } else if name == "atom" {
-        result = atom(rest)
-    } else {
-        result = tok
-    }
-    return []interface{}{result}
-}
-
 func quote(sexp []interface{}) interface{} {
     return sexp[0]
 }
+
+func plusInt64(in []int64) int64 {
+    sum := int64(0)
+    for _, i := range in {
+        sum = sum + i
+    }
+    return sum
+}
+
+func plus(in []interface{}) interface{} {
+    ints := []int64{}
+    for _, i := range in {
+        switch x := i.(type) {
+        case int64:
+            ints = append(ints, x)
+        }
+    }
+    return plusInt64(ints)
+}
+
 
 func Parse(input [] interface{}) []interface{} {
     output := []interface{}{}
@@ -89,6 +100,10 @@ func Parse(input [] interface{}) []interface{} {
                     output = append(output, reflect.ValueOf(cadr))
                 } else if x == "atom" {
                     output = append(output, reflect.ValueOf(atom))
+                } else if x == "cons" {
+                    output = append(output, reflect.ValueOf(cons))
+                } else if x == "plus" {
+                    output = append(output, reflect.ValueOf(plus))
                 } else {
                     output = append(output, x)
                 }
@@ -160,4 +175,12 @@ func TestIntegerLiteralsAreImplemented(t *testing.T) {
 
 func TestCorrectlyHandlesNestedCalls(t *testing.T) {
     AssertThat(t, Process("(car (cdr (\"a\" \"b\" \"c\")))"), Equals("\"b\""))
+}
+
+func TestConsCreatesLists(t *testing.T) {
+    AssertThat(t, Process("(cons \"a\" (quote (\"b\")))"), HasExactly("\"a\"", "\"b\""))
+}
+
+func TestOnePlusOneEqualsTwo(t *testing.T) {
+    AssertThat(t, Process("(plus 1 1)"), Equals(int64(2)))
 }
