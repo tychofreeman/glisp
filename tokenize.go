@@ -19,7 +19,7 @@ func Tokenize(buf *bytes.Buffer) ([]interface{}) {
     for ; buf.Len() > 0; {
         c := rune(buf.Next(1)[0])
         
-        if unicode.IsLetter(c) {
+        if unicode.IsLetter(c) || unicode.IsNumber(c) || c == '"' {
             acc += string(c)
         } else if c == '(' {
             var nested []interface{} = Tokenize(buf)

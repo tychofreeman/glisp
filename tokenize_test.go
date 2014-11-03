@@ -53,3 +53,11 @@ func TestDeeplyNestedListsWorkToo(t *testing.T) {
 func TestMultipleFirstLevelExprsPossible(t *testing.T) {
     AssertThat(t, TokenizeString("(a) (b) (c)"), HasExactly(HasExactly("a"), HasExactly("b"), HasExactly("c")))
 }
+
+func TestHandlesNumbersToo(t *testing.T) {
+    AssertThat(t, TokenizeString("1"), HasExactly("1"))
+}
+
+func TestHandlesStringLiterals(t *testing.T) {
+    AssertThat(t, TokenizeString("\"abc\""), HasExactly("\"abc\""))
+}
