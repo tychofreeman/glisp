@@ -2,10 +2,10 @@ package glisp
 
 import (
     "testing"
-    //. "github.com/tychofreeman/go-matchers"
-    . "matchers"
+    . "github.com/tychofreeman/go-matchers"
     "fmt"
     "strconv"
+    "reflect"
 )
 
 func caar(in interface{}) interface{} {
@@ -23,7 +23,7 @@ func car(in interface{}) interface{} {
     return nil
 }
 
-func cdr(in interface{}) interface{} {
+func cdr(in interface{}) []interface{} {
     if in == nil {
         return nil
     }
@@ -41,9 +41,12 @@ func cadr(in []interface{}) interface{} {
 }
 
 func atom(in interface{}) bool {
-    switch in.(type) {
+    switch x := in.(type) {
         case []interface{}:
-            return false
+            switch x[0].(type) {
+                case []interface{}:
+                    return false
+            }
     }
     return true
 }
@@ -66,7 +69,11 @@ func Process2(tok interface{}) []interface{} {
     return []interface{}{result}
 }
 
-func Parse(input []interface{}) []interface{} {
+func quote(sexp []interface{}) interface{} {
+    return sexp[0]
+}
+
+func Parse(input [] interface{}) []interface{} {
     output := []interface{}{}
     for i := 0; i < len(input); i++ { 
         switch x := input[i].(type) {
@@ -74,7 +81,17 @@ func Parse(input []interface{}) []interface{} {
             if num, err := strconv.ParseInt(x, 10, 64); err == nil {
                 output = append(output, num)
             } else {
-                output = append(output, x)
+                if x == "quote" {
+                    output = append(output, reflect.ValueOf(quote))
+                } else if x == "car" {
+                    output = append(output, reflect.ValueOf(caar))
+                } else if x == "cdr" {
+                    output = append(output, reflect.ValueOf(cadr))
+                } else if x == "atom" {
+                    output = append(output, reflect.ValueOf(atom))
+                } else {
+                    output = append(output, x)
+                }
             }
         case []interface{}:
             output = append(output, Parse(x))
@@ -86,33 +103,49 @@ func Parse(input []interface{}) []interface{} {
     return output
 }
 
+func ParseWrapper(input interface{}) []interface{} {
+    switch x := input.(type) {
+    case []interface{}:
+        return Parse(x)
+    default:
+        return []interface{}{}
+    }
+}
+
 func Execute (input []interface{}) interface{} {
     var output interface{} = input
+    if len(input) > 0 {
+        switch x := input[0].(type) {
+        case reflect.Value:
+            rtn := x.Call([]reflect.Value{reflect.ValueOf(cdr(input))})[0].Interface()
+            return rtn
+        }
+    }
     return output
 }
 
 func Process(input string)  interface{} {
-    return Execute(Process2(Parse(TokenizeString(input))[0]))
+    return Execute(ParseWrapper(TokenizeString(input)[0]))
 }
 
 func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
-    AssertThat(t, Process("(quote (\"a\" \"b\" \"c\"))"), HasExactly(HasExactly(HasExactly("\"a\"", "\"b\"", "\"c\""))))
+    AssertThat(t, Process("(quote (\"a\" \"b\" \"c\"))"), HasExactly("\"a\"", "\"b\"", "\"c\""))
 }
 
 func TestCarGrabsFirstItem(t *testing.T) {
-    AssertThat(t, Process("(car (\"a\" \"b\"))"), HasExactly("\"a\""))
+    AssertThat(t, Process("(car (\"a\" \"b\"))"), Equals("\"a\""))
 }
 
 func TestCdrGrabsTail(t *testing.T) {
-    AssertThat(t, Process("(cdr (\"a\" \"b\" \"c\" (\"d\"))"), HasExactly(HasExactly("\"b\"", "\"c\"", HasExactly("\"d\""))))
+    AssertThat(t, Process("(cdr (\"a\" \"b\" \"c\" (\"d\"))"), HasExactly("\"b\"", "\"c\"", HasExactly("\"d\"")))
 }
 
 func TestAtomIsTrueForSymbols(t *testing.T) {
-    AssertThat(t, Process("(atom \"a\")"), HasExactly(IsTrue))
+    AssertThat(t, Process("(atom \"a\")"), IsTrue)
 }
 
 func TestAtomIsFalseForComplexExpres(t *testing.T) {
-    AssertThat(t, Process("(atom ())"), HasExactly(IsFalse))
+    AssertThat(t, Process("(atom ())"), IsFalse)
 }
 
 func IGNORE_TestCorrectlyHandlesNestedCalls(t *testing.T) {
@@ -120,5 +153,5 @@ func IGNORE_TestCorrectlyHandlesNestedCalls(t *testing.T) {
 }
 
 func TestIntegerLiteralsAreImplemented(t *testing.T) {
-    AssertThat(t, Process("(car (1))"), HasExactly(Equals(int64(1))))
+    AssertThat(t, Process("(car (1))"), Equals(int64(1)))
 }
