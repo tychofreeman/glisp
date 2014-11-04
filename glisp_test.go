@@ -113,15 +113,46 @@ func Execute (input []interface{}) interface{} {
     return output
 }
 
+func Reparse(bindings map[string]interface{}, input []interface{}) []interface{} {
+    output := []interface{}{}
+    for _, i := range input {
+        switch x := i.(type) {
+        case string:
+            if val, ok := bindings[x]; ok {
+                output = append(output, val)
+            } else {
+                output = append(output, x)
+            }
+        default:
+            output = append(output, i)
+        }
+    }
+    return output
+}
+
 func lambda(input []interface{}) interface{} {
-    //paramBindings := car(input)
+    paramBindings := []string{}
+    switch x := car(input).(type) {
+    case []interface{}:
+        for _, i := range x {
+            switch z := i.(type) {
+                case string:
+                    paramBindings = append(paramBindings, z)
+            }
+        }
+    }
+
     body := input[1]
     return reflect.ValueOf(func(paramValues []interface{}) interface{} {
+        bindings := map[string]interface{}{}
+        for i := range paramBindings {
+            bindings[paramBindings[i]] = paramValues[i]
+        }
         switch body2 := body.(type) {
         case []interface{}:
-            return Execute(body2)   
+            return Execute(Reparse(bindings, body2))
         default:
-            return Execute(cdr(input))
+            return Execute(Reparse(bindings, cdr(input)))
         }
     })
 }
@@ -233,4 +264,8 @@ func TestSupportsLambdas(t *testing.T) {
 
 func TestSupportsExpressionsInLambdas(t *testing.T) {
     AssertThat(t, Process("((lambda () (quote (1 2 3))))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
+}
+
+func TestSupportsLambdaParameters(t *testing.T) {
+    AssertThat(t, Process("((lambda (a) a) 1)"), HasExactly(Equals(int64(1))))
 }
