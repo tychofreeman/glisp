@@ -115,9 +115,14 @@ func Execute (input []interface{}) interface{} {
 
 func lambda(input []interface{}) interface{} {
     //paramBindings := car(input)
-    body := cdr(input)
+    body := input[1]
     return reflect.ValueOf(func(paramValues []interface{}) interface{} {
-        return Execute(body)   
+        switch body2 := body.(type) {
+        case []interface{}:
+            return Execute(body2)   
+        default:
+            return Execute(cdr(input))
+        }
     })
 }
 
@@ -224,4 +229,8 @@ func TestOneNotEqualTwo(t *testing.T) {
 
 func TestSupportsLambdas(t *testing.T) {
     AssertThat(t, Process("((lambda () 6))"), HasExactly(Equals(int64(6))))
+}
+
+func TestSupportsExpressionsInLambdas(t *testing.T) {
+    AssertThat(t, Process("((lambda () (quote (1 2 3))))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
 }
