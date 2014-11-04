@@ -91,6 +91,35 @@ func plus(in []interface{}) interface{} {
     return plusInt64(ints)
 }
 
+func eq(in []interface{}) interface{} {
+    return reflect.DeepEqual(in[0], in[1])
+}
+
+func Execute (input []interface{}) interface{} {
+    var output interface{} = input
+    for x := 0; x < len(input); x++ {
+        switch y := input[x].(type) {
+        case []interface{}:
+            input[x] = Execute(y)
+        }
+    }
+    if len(input) > 0 {
+        switch x := input[0].(type) {
+        case reflect.Value:
+            rtn := x.Call([]reflect.Value{reflect.ValueOf(cdr(input))})[0].Interface()
+            return rtn
+        }
+    }
+    return output
+}
+
+func lambda(input []interface{}) interface{} {
+    //paramBindings := car(input)
+    body := cdr(input)
+    return reflect.ValueOf(func(paramValues []interface{}) interface{} {
+        return Execute(body)   
+    })
+}
 
 func Parse(input [] interface{}) []interface{} {
     output := []interface{}{}
@@ -114,6 +143,10 @@ func Parse(input [] interface{}) []interface{} {
                     output = append(output, reflect.ValueOf(plus))
                 } else if x == "if" {
                     output = append(output, reflect.ValueOf(if_))
+                } else if x == "eq" {
+                    output = append(output, reflect.ValueOf(eq))
+                } else if x == "lambda" {
+                    output = append(output, reflect.ValueOf(lambda))
                 } else {
                     output = append(output, x)
                 }
@@ -135,24 +168,6 @@ func ParseWrapper(input interface{}) []interface{} {
     default:
         return []interface{}{}
     }
-}
-
-func Execute (input []interface{}) interface{} {
-    var output interface{} = input
-    for x := 1; x < len(input); x++ {
-        switch y := input[x].(type) {
-        case []interface{}:
-            input[x] = Execute(y)
-        }
-    }
-    if len(input) > 0 {
-        switch x := input[0].(type) {
-        case reflect.Value:
-            rtn := x.Call([]reflect.Value{reflect.ValueOf(cdr(input))})[0].Interface()
-            return rtn
-        }
-    }
-    return output
 }
 
 func Process(input string)  interface{} {
@@ -197,4 +212,16 @@ func TestOnePlusOneEqualsTwo(t *testing.T) {
 
 func TestConditional(t *testing.T) {
     AssertThat(t, Process("(if (atom ()) 1 2)"), Equals(int64(2)))
+}
+
+func TestOneEqualsOne(t *testing.T) {
+    AssertThat(t, Process("(eq 1 1)"), IsTrue)
+}
+
+func TestOneNotEqualTwo(t *testing.T) {
+    AssertThat(t, Process("(eq 1 2)"), IsFalse)
+}
+
+func TestSupportsLambdas(t *testing.T) {
+    AssertThat(t, Process("((lambda () 6))"), HasExactly(Equals(int64(6))))
 }
