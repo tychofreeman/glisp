@@ -64,6 +64,14 @@ func quote(sexp []interface{}) interface{} {
     return sexp[0]
 }
 
+func if_(in []interface{}) interface{} {
+    if in[0] == false || in[0] == nil {
+        return in[2]
+    } else {
+        return in[1]
+    }
+}
+
 func plusInt64(in []int64) int64 {
     sum := int64(0)
     for _, i := range in {
@@ -104,6 +112,8 @@ func Parse(input [] interface{}) []interface{} {
                     output = append(output, reflect.ValueOf(cons))
                 } else if x == "plus" {
                     output = append(output, reflect.ValueOf(plus))
+                } else if x == "if" {
+                    output = append(output, reflect.ValueOf(if_))
                 } else {
                     output = append(output, x)
                 }
@@ -183,4 +193,8 @@ func TestConsCreatesLists(t *testing.T) {
 
 func TestOnePlusOneEqualsTwo(t *testing.T) {
     AssertThat(t, Process("(plus 1 1)"), Equals(int64(2)))
+}
+
+func TestConditional(t *testing.T) {
+    AssertThat(t, Process("(if (atom ()) 1 2)"), Equals(int64(2)))
 }
