@@ -8,35 +8,48 @@ import (
     "reflect"
 )
 
-func caar(in interface{}) interface{} {
-    return car(car(in))
-}
+type Scope struct {}
 
-func car(in interface{}) interface{} {
-    if in == nil {
+type Callable struct {
+    Call func(scope *Scope, in []interface{}) interface{}
+    Transform func(scope *Scope, in []interface{}) (*Scope, []interface{})
+    y string
+};
+
+
+func car(scope *Scope, in []interface{}) interface{} {
+    if in == nil || len(in) < 1 {
         return nil
     }
-    switch t := in.(type) {
-        case []interface{}:
-            return t[0];
-    }
-    return nil
-}
-
-func cdr(in interface{}) []interface{} {
-    if in == nil {
-        return nil
-    }
-    switch t := in.(type) {
+    switch t := in[0].(type) {
         case []interface{}:
             if len(t) > 0 {
-                return t[1:]
+                return t[0];
             }
     }
     return nil
 }
 
-func cons(in []interface{}) interface{} {
+func _cdr(in []interface{}) []interface{} {
+    if in == nil || len(in) < 1 {
+        fmt.Printf("Len: %v\n", len(in))
+        return []interface{}{}
+    }
+    return in[1:]
+}
+
+func cdr(scope *Scope, in []interface{}) interface{} {
+    if in == nil || len(in) < 1 {
+        return []interface{}{}
+    }
+    switch x := in[0].(type) {
+        case []interface{}:
+            return _cdr(x)
+    }
+    return []interface{}{}
+}
+
+func cons(scope *Scope, in []interface{}) interface{} {
     out := []interface{}{in[0]}
     switch x := in[1].(type) {
     case []interface{}:
@@ -45,26 +58,22 @@ func cons(in []interface{}) interface{} {
     return out
 }
 
-func cadr(in []interface{}) interface{} {
-    return cdr(car(in))
-}
-
-func atom(in interface{}) bool {
-    switch x := in.(type) {
+func atom(scope *Scope, in []interface{}) interface{} {
+    if len(in) < 1 {
+        return false
+    }
+    switch in[0].(type) {
         case []interface{}:
-            switch x[0].(type) {
-                case []interface{}:
-                    return false
-            }
+            return false
     }
     return true
 }
 
-func quote(sexp []interface{}) interface{} {
-    return sexp[0]
+func quote(scope *Scope, sexp []interface{}) interface{} {
+    return sexp
 }
 
-func if_(in []interface{}) interface{} {
+func if_(scope *Scope, in []interface{}) interface{} {
     if in[0] == false || in[0] == nil {
         return in[2]
     } else {
@@ -80,7 +89,7 @@ func plusInt64(in []int64) int64 {
     return sum
 }
 
-func plus(in []interface{}) interface{} {
+func plus(scope *Scope, in []interface{}) interface{} {
     ints := []int64{}
     for _, i := range in {
         switch x := i.(type) {
@@ -91,23 +100,30 @@ func plus(in []interface{}) interface{} {
     return plusInt64(ints)
 }
 
-func eq(in []interface{}) interface{} {
+func eq(scope *Scope, in []interface{}) interface{} {
     return reflect.DeepEqual(in[0], in[1])
 }
 
-func Execute (input []interface{}) interface{} {
+func Execute (scope *Scope, input []interface{}) interface{} {
     var output interface{} = input
+    //fmt.Printf("Execute %v\n", input)
     for x := 0; x < len(input); x++ {
         switch y := input[x].(type) {
         case []interface{}:
-            input[x] = Execute(y)
+            //fmt.Printf("Recursing on %v\n", y)
+            input[x] = Execute(scope, y)
         }
     }
     if len(input) > 0 {
         switch x := input[0].(type) {
-        case reflect.Value:
-            rtn := x.Call([]reflect.Value{reflect.ValueOf(cdr(input))})[0].Interface()
+        case Callable:
+            //fmt.Printf("Calling %v function with %v\n", x.y, _cdr(input))
+            rtn := x.Call(scope, _cdr(input))
+            //fmt.Printf("\tReturned %v\n", rtn)
             return rtn
+        default:
+            //fmt.Printf("Failed to execute: %v\n", input)
+            panic(fmt.Sprintf("Got the wrong type: %T : %v\n", x, x))
         }
     }
     return output
@@ -130,31 +146,42 @@ func Reparse(bindings map[string]interface{}, input []interface{}) []interface{}
     return output
 }
 
-func lambda(input []interface{}) interface{} {
-    paramBindings := []string{}
-    switch x := car(input).(type) {
+func copyToStrings(_input interface{}) []string {
+    output := []string{}
+    switch input := _input.(type) {
     case []interface{}:
-        for _, i := range x {
+        for _, i := range input {
             switch z := i.(type) {
                 case string:
-                    paramBindings = append(paramBindings, z)
+                    output = append(output, z)
+                default:
+                    output = append(output, "")
             }
         }
+    default:
+        panic("Well, fuck")
     }
+    return output
+}
+
+func lambda(scope *Scope, input []interface{}) interface{} {
+    paramBindings := copyToStrings(input[0])
+    //fmt.Printf("ParamBindings: %v -> %v\n", input, paramBindings)
 
     body := input[1]
-    return reflect.ValueOf(func(paramValues []interface{}) interface{} {
+    //fmt.Printf("Got Body: %v\n", body)
+    return Callable{func(scope *Scope, paramValues []interface{}) interface{} {
         bindings := map[string]interface{}{}
         for i := range paramBindings {
             bindings[paramBindings[i]] = paramValues[i]
         }
         switch body2 := body.(type) {
         case []interface{}:
-            return Execute(Reparse(bindings, body2))
+            return Reparse(bindings, body2)
         default:
-            return Execute(Reparse(bindings, cdr(input)))
+            return Reparse(bindings, _cdr(input))
         }
-    })
+    }, nil, "-lambda-"}
 }
 
 func Parse(input [] interface{}) []interface{} {
@@ -166,23 +193,23 @@ func Parse(input [] interface{}) []interface{} {
                 output = append(output, num)
             } else {
                 if x == "quote" {
-                    output = append(output, reflect.ValueOf(quote))
+                    output = append(output, Callable{quote, nil, "quote"})
                 } else if x == "car" {
-                    output = append(output, reflect.ValueOf(caar))
+                    output = append(output, Callable{car, nil, "car"})
                 } else if x == "cdr" {
-                    output = append(output, reflect.ValueOf(cadr))
+                    output = append(output, Callable{cdr, nil, "cdr"})
                 } else if x == "atom" {
-                    output = append(output, reflect.ValueOf(atom))
+                    output = append(output, Callable{atom, nil, "atom"})
                 } else if x == "cons" {
-                    output = append(output, reflect.ValueOf(cons))
+                    output = append(output, Callable{cons, nil, "cons"})
                 } else if x == "plus" {
-                    output = append(output, reflect.ValueOf(plus))
+                    output = append(output, Callable{plus, nil, "plus"})
                 } else if x == "if" {
-                    output = append(output, reflect.ValueOf(if_))
+                    output = append(output, Callable{if_, nil, "if"})
                 } else if x == "eq" {
-                    output = append(output, reflect.ValueOf(eq))
+                    output = append(output, Callable{eq, nil, "eq"})
                 } else if x == "lambda" {
-                    output = append(output, reflect.ValueOf(lambda))
+                    output = append(output, Callable{lambda, nil, "lambda"})
                 } else {
                     output = append(output, x)
                 }
@@ -207,19 +234,20 @@ func ParseWrapper(input interface{}) []interface{} {
 }
 
 func Process(input string)  interface{} {
-    return Execute(ParseWrapper(TokenizeString(input)[0]))
+    scope := Scope{}
+    return Execute(&scope, ParseWrapper(TokenizeString(input)[0]))
 }
 
 func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
-    AssertThat(t, Process("(quote (\"a\" \"b\" \"c\"))"), HasExactly("\"a\"", "\"b\"", "\"c\""))
+    AssertThat(t, Process("(quote \"a\" \"b\" \"c\")"), HasExactly("\"a\"", "\"b\"", "\"c\""))
 }
 
 func TestCarGrabsFirstItem(t *testing.T) {
-    AssertThat(t, Process("(car (\"a\" \"b\"))"), Equals("\"a\""))
+    AssertThat(t, Process("(car (quote \"a\" \"b\"))"), Equals("\"a\""))
 }
 
 func TestCdrGrabsTail(t *testing.T) {
-    AssertThat(t, Process("(cdr (\"a\" \"b\" \"c\" (\"d\"))"), HasExactly("\"b\"", "\"c\"", HasExactly("\"d\"")))
+    AssertThat(t, Process("(cdr (quote \"a\" \"b\" \"c\" (quote \"d\"))"), HasExactly("\"b\"", "\"c\"", HasExactly("\"d\"")))
 }
 
 func TestAtomIsTrueForSymbols(t *testing.T) {
@@ -227,19 +255,19 @@ func TestAtomIsTrueForSymbols(t *testing.T) {
 }
 
 func TestAtomIsFalseForComplexExpres(t *testing.T) {
-    AssertThat(t, Process("(atom ())"), IsFalse)
+    AssertThat(t, Process("(atom (quote)"), IsFalse)
 }
 
 func TestIntegerLiteralsAreImplemented(t *testing.T) {
-    AssertThat(t, Process("(car (1))"), Equals(int64(1)))
+    AssertThat(t, Process("(car (quote 1))"), Equals(int64(1)))
 }
 
 func TestCorrectlyHandlesNestedCalls(t *testing.T) {
-    AssertThat(t, Process("(car (cdr (\"a\" \"b\" \"c\")))"), Equals("\"b\""))
+    AssertThat(t, Process("(car (cdr (quote \"a\" \"b\" \"c\")))"), Equals("\"b\""))
 }
 
 func TestConsCreatesLists(t *testing.T) {
-    AssertThat(t, Process("(cons \"a\" (quote (\"b\")))"), HasExactly("\"a\"", "\"b\""))
+    AssertThat(t, Process("(cons \"a\" (quote \"b\"))"), HasExactly("\"a\"", "\"b\""))
 }
 
 func TestOnePlusOneEqualsTwo(t *testing.T) {
@@ -247,7 +275,7 @@ func TestOnePlusOneEqualsTwo(t *testing.T) {
 }
 
 func TestConditional(t *testing.T) {
-    AssertThat(t, Process("(if (atom ()) 1 2)"), Equals(int64(2)))
+    AssertThat(t, Process("(if (atom (quote)) 1 2)"), Equals(int64(2)))
 }
 
 func TestOneEqualsOne(t *testing.T) {
@@ -259,13 +287,21 @@ func TestOneNotEqualTwo(t *testing.T) {
 }
 
 func TestSupportsLambdas(t *testing.T) {
-    AssertThat(t, Process("((lambda () 6))"), HasExactly(Equals(int64(6))))
+    AssertThat(t, Process("((lambda (quote) 6))"), HasExactly(Equals(int64(6))))
 }
 
 func TestSupportsExpressionsInLambdas(t *testing.T) {
-    AssertThat(t, Process("((lambda () (quote (1 2 3))))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
+    AssertThat(t, Process("((lambda (quote) (quote 1 2 3)))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
 }
 
 func TestSupportsLambdaParameters(t *testing.T) {
-    AssertThat(t, Process("((lambda (a) a) 1)"), HasExactly(Equals(int64(1))))
+    AssertThat(t, Process("((lambda (quote a) a) 1)"), HasExactly(Equals(int64(1))))
+}
+
+func TestLambdasAreClosures(t *testing.T) {
+    AssertThat(t, Process("((lambda (quote a) (lambda (quote ) a)) 1)"), HasExactly(Equals(int64(1))))
+}
+
+func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
+    AssertThat(t, Process("(let (quote a 1) a)"), Equals(int64(1)))
 }
