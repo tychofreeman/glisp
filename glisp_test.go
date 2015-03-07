@@ -4,7 +4,8 @@ import (
     "testing"
     . "github.com/tychofreeman/go-matchers"
     "fmt"
-//    "strconv"
+    "strings"
+    "strconv"
 //    "reflect"
 )
 
@@ -20,6 +21,9 @@ func rest(all []interface{}) []interface{} {
 
 type Function func(_ *Scope, params []interface{}) interface{}
 
+//type Lambda func(s *Scope, params []interface{}) (*Scope, Function)
+type Lambda struct{}
+
 func GetValues(things []interface{}) []interface{} {
     output := []interface{}{}
     for _, i := range things {
@@ -28,9 +32,21 @@ func GetValues(things []interface{}) []interface{} {
     return output
 }
 
+func last(input []interface{}) interface{} {
+    if len(input) > 0 {
+        return input[len(input)-1]
+    }
+    return nil
+}
+
 func GetValue(thing interface{}) interface{} {
     switch x := thing.(type) {
     case string:
+        if strings.HasPrefix(x, "\"") {
+            return x[1:len(x)-2]
+        } else if num, err := strconv.ParseInt(strings.TrimSpace(x), 10, 64); err == nil {
+            return num
+        }
         return x
     case []interface{}:
         switch y := x[0].(type) {
@@ -126,6 +142,11 @@ func Parse(thing interface{}) interface{} {
             return fn
         }
     case []interface{}:
+        if len(x) > 1 && x[0] == "lambda" {
+            return Function(func(_ *Scope, params[]interface{}) interface{} {
+                return GetValue(last(x))
+            })
+        }
         return ParseMany(x)
     }
     return thing
