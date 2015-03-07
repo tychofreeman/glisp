@@ -69,7 +69,8 @@ func car(_ *Scope, params []interface{}) interface{} {
 func cdr(_ *Scope, params []interface{}) interface{} {
     if len(params) > 0 {
         switch x := params[0].(type) {
-            if (len(x) > 0 {
+        case []interface{}:
+            if len(x) > 0 {
                 return rest(x)
             }
         }
