@@ -51,6 +51,7 @@ func GetValue(thing interface{}) interface{} {
     case []interface{}:
         switch y := x[0].(type) {
         case Function:
+            fmt.Printf("Got function %v\n", x)
             params := GetValues(rest(x))
             z := y(nil, params)
             fmt.Printf("Calling function %v(%v) -> %v\n", y, params, z)
@@ -59,6 +60,8 @@ func GetValue(thing interface{}) interface{} {
             z := GetValue(y)
             fmt.Printf("...So, I called it recursively... %T %v\n", z, z)
             return z
+        default:
+            fmt.Printf("Oops!!\n")
         }
     default:
         fmt.Printf("Couldn't find thing of type %T (%v)\n", x, x)
@@ -143,8 +146,13 @@ func Parse(thing interface{}) interface{} {
         }
     case []interface{}:
         if len(x) > 1 && x[0] == "lambda" {
+            body := ParseMany(rest(rest(x)))
             return Function(func(_ *Scope, params[]interface{}) interface{} {
-                return GetValue(last(x))
+                l := last(body)
+                fmt.Printf("Lambda has expression: %v\n", l)
+                v := GetValue(l)
+                fmt.Printf("                          -> %v\n", v)
+                return v
             })
         }
         return ParseMany(x)
