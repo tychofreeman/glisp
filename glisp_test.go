@@ -116,6 +116,7 @@ var lookup = map[string]Function {
     "car"  : car,
     "cdr"  : cdr,
     "atom" : atom,
+    "cons" : cons,
 }
 
 func Parse(thing interface{}) interface{} {
