@@ -29,7 +29,6 @@ func GetValues(things []interface{}) []interface{} {
 }
 
 func GetValue(thing interface{}) interface{} {
-    
     switch x := thing.(type) {
     case string:
         return x
@@ -67,9 +66,21 @@ func car(_ *Scope, params []interface{}) interface{} {
     return nil
 }
 
+func cdr(_ *Scope, params []interface{}) interface{} {
+    if len(params) > 0 {
+        switch x := params[0].(type) {
+            if (len(x) > 0 {
+                return rest(x)
+            }
+        }
+    }
+    return nil
+}
+
 var lookup = map[string]Function {
     "quote": quote,
     "car"  : car,
+    "cdr"  : cdr,
 }
 
 func Parse(thing interface{}) interface{} {
