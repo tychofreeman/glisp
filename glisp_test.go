@@ -78,10 +78,24 @@ func cdr(_ *Scope, params []interface{}) interface{} {
     return nil
 }
 
+func atom(_ *Scope, params []interface{}) interface{} {
+    if len(params) > 0 {
+        switch params[0].(type) {
+        case []interface{}:
+            return false
+        default:
+            return true
+        }
+    } else {
+        return false
+    }
+}
+
 var lookup = map[string]Function {
     "quote": quote,
     "car"  : car,
     "cdr"  : cdr,
+    "atom" : atom,
 }
 
 func Parse(thing interface{}) interface{} {
