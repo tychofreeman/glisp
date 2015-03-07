@@ -91,6 +91,26 @@ func atom(_ *Scope, params []interface{}) interface{} {
     }
 }
 
+func cons(_ *Scope, params []interface{}) interface{} {
+    if len(params) == 1 {
+        return params
+    } else if len(params) == 2 {
+        if atom(nil, rest(params)) == true {
+            return params
+        } else {
+            switch x := params[1].(type) {
+            case []interface{}:
+                output := []interface{}{params[0]}
+                for _, i := range x {
+                    output = append(output, i)
+                }
+                return output
+            }
+        }
+    }
+    return nil
+}
+
 var lookup = map[string]Function {
     "quote": quote,
     "car"  : car,
