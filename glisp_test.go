@@ -4,271 +4,102 @@ import (
     "testing"
     . "github.com/tychofreeman/go-matchers"
     "fmt"
-    "strconv"
-    "reflect"
+//    "strconv"
+//    "reflect"
 )
 
 type Scope struct {}
-type Calling func(scope *Scope, in []interface{}) interface{}
 
-type Callable struct {
-    Call Calling
-    Transform func(scope *Scope, in []interface{}) (*Scope, []interface{})
-    name string
-};
-
-
-func car(in []interface{}) Calling {
-    return func(scope *Scope, in []interface{}) interface{} {
-        if in == nil || len(in) < 1 {
-            return nil
-        }
-        switch t := in[0].(type) {
-            case []interface{}:
-                if len(t) > 0 {
-                    return t[0];
-                }
-        }
-        return nil
+func rest(all []interface{}) []interface{} {
+    if len(all) > 0 {
+        return all[1:]
     }
-}
-
-func _cdr(in []interface{}) []interface{} {
-    if in == nil || len(in) < 1 {
-        fmt.Printf("Len: %v\n", len(in))
-        return []interface{}{}
-    }
-    return in[1:]
-}
-
-func cdr(in []interface{}) Calling {
-    return func(scope *Scope, in []interface{}) interface{} {
-        if in == nil || len(in) < 1 {
-            return []interface{}{}
-        }
-        switch x := in[0].(type) {
-            case []interface{}:
-                return _cdr(x)
-        }
-        return []interface{}{}
-    }
-}
-
-func cons(in []interface{}) Calling {
-    return func(scope *Scope, in []interface{}) interface{} {
-        out := []interface{}{in[0]}
-        switch x := in[1].(type) {
-        case []interface{}:
-            out = append(out, x...)
-        }
-        return out
-    }
-}
-
-func atom(in []interface{}) Calling {
-    return func(scope *Scope, in []interface{}) interface{} {
-        if len(in) < 1 {
-            return false
-        }
-        switch in[0].(type) {
-            case []interface{}:
-                return false
-        }
-        return true
-    }
-}
-
-func quote(sexp []interface{}) Calling {
-    return func(scope *Scope, in []interface{}) interface{} {
-        fmt.Printf("Returning %v\n", in)
-        return in
-    }
-}
-
-func if_(in []interface{}) Calling {
-    return func(scope *Scope, in []interface{}) interface{} {
-        if in[0] == false || in[0] == nil {
-            return in[2]
-        } else {
-            return in[1]
-        }
-    }
-}
-
-func plusInt64(in []int64) int64 {
-    sum := int64(0)
-    for _, i := range in {
-        sum = sum + i
-    }
-    return sum
-}
-
-func plus(in []interface{}) Calling {
-    return func(scope *Scope, in []interface{}) interface{} {
-        ints := []int64{}
-        for _, i := range in {
-            switch x := i.(type) {
-            case int64:
-                ints = append(ints, x)
-            }
-        }
-        return plusInt64(ints)
-    }
+    return nil
 }
 
 
-func eq(in []interface{}) Calling {
-    return func(scope *Scope, in []interface{}) interface{} {
-        return reflect.DeepEqual(in[0], in[1])
-    }
-}
+type Function func(_ *Scope, params []interface{}) interface{}
 
-func Execute (scope *Scope, input []Callable) interface{} {
+func GetValues(things []interface{}) []interface{} {
     output := []interface{}{}
+    for _, i := range things {
+        output = append(output, GetValue(i))
+    }
+    return output
+}
+
+func GetValue(thing interface{}) interface{} {
     
-    fmt.Printf("Execute %v\n", input)
-    for _, i := range input {
-        output = append(output, i.Call(scope, []interface{}{}))
-    }
-    if len(output) > 0 {
-        switch c := output[0].(type) {
-        case Callable:
-            return c.Call(scope, _cdr(output))
-        default:
-            return nil
-        }
-    }
-    return output
-}
-
-func copyToStrings(_input interface{}) []string {
-    output := []string{}
-    switch input := _input.(type) {
+    switch x := thing.(type) {
+    case string:
+        return x
     case []interface{}:
-        for _, i := range input {
-            switch z := i.(type) {
-                case string:
-                    output = append(output, z)
-                default:
-                    output = append(output, "")
-            }
-        }
-    default:
-        panic("Well, fuck")
-    }
-    return output
-}
-
-/*
-func lambda(input []interface{}) Calling {
-    paramBindings := copyToStrings(input[0])
-    //fmt.Printf("ParamBindings: %v -> %v\n", input, paramBindings)
-
-    body := interface{}(_cdr(input))
-
-    if body == nil {
-        return func(scope *Scope, paramValues []interface{}) interface{} { return []interface{}{} }
-    } else {
-        return func(scope *Scope, paramValues []interface{}) interface{} {
-            zz := func(bindings map[string]interface{}, i interface{}) interface{} {
-                var last interface{}
-                switch j:= i.(type) {
-                case []Callable:
-                    last = Execute(scope, j)
-                case Callable:
-                    last = j.Call([]interface{}{})
-                }
-                return last
-            }
-            bindings := map[string]interface{}{}
-            for i := range paramBindings {
-                bindings[paramBindings[i]] = paramValues[i]
-            }
-            switch body2 := body.(type) {
-            case []Callable:
-                var last interface{}
-                for _, i := range body2 {
-                    last = zz(bindings, i)
-                }
-                return last
-            case Callable:
-                return Excute(bindings, []body2)
-            default:
-                return zz(bindings, body2)
-            }
-        }
-    }
-}*/
-
-var nilFunc Callable = Callable{func(s *Scope, in []interface{}) interface{} {return nil}, nil, "unknown"}
-
-func literal(in []interface{}) Calling {
-    return func(s *Scope, in []interface{}) interface{} {
-        return in[0]
-    }
-}
-
-func Parse(input [] interface{}) []Callable {
-    output := []Callable{}
-    for i := 0; i < len(input); i++ { 
-        switch x := input[i].(type) {
-        case string:
-            if num, err := strconv.ParseInt(x, 10, 64); err == nil {
-                output = append(output, Callable{literal([]interface{}{num}), nil, "literal"})
-            } else {
-                if x == "quote" {
-                    output = append(output, Callable{quote(input), nil, "quote"})
-                } else if x == "car" {
-                    output = append(output, Callable{car(input), nil, "car"})
-                } else if x == "cdr" {
-                    output = append(output, Callable{cdr(input), nil, "cdr"})
-                } else if x == "atom" {
-                    output = append(output, Callable{atom(input), nil, "atom"})
-                } else if x == "cons" {
-                    output = append(output, Callable{cons(input), nil, "cons"})
-                } else if x == "plus" {
-                    output = append(output, Callable{plus(input), nil, "plus"})
-                } else if x == "if" {
-                    output = append(output, Callable{if_(input), nil, "if"})
-                } else if x == "eq" {
-                    output = append(output, Callable{eq(input), nil, "eq"})
-                } else if x == "lambda" {
-                    //output = append(output, Callable{lambda(input), nil, "lambda"})
-                    output = append(output, nilFunc)
-                } else {
-                    output = append(output, Callable{literal([]interface{}{x}), nil, "literal-unknown"})
-                }
-            }
+        switch y := x[0].(type) {
+        case Function:
+            params := GetValues(rest(x))
+            z := y(nil, params)
+            fmt.Printf("Calling function %v(%v) -> %v\n", y, params, z)
+            return z
         case []interface{}:
-            output = append(output, Callable{
-                func(s *Scope, in []interface{}) interface{} {
-                    z:= Parse(x);
-                    params := []interface{}{}
-                    for i := 1; i < len(z); i++ {
-                        params = append(params, z[i].Call(s, []interface{}{}))
-                    }
-                    return z[0].Call(s, params)
-                }, nil, "Parse"})
-        default:
-            output = append(output, nilFunc)
-            fmt.Printf("Could not find type for %v: %T\n", input[i], input[i])
+            z := GetValue(y)
+            fmt.Printf("...So, I called it recursively... %T %v\n", z, z)
+            return z
         }
+    default:
+        fmt.Printf("Couldn't find thing of type %T (%v)\n", x, x)
     }
-    return output
+    return nil
 }
 
-func ParseWrapper(input interface{}) []Callable {
-    switch x := input.(type) {
-    case []interface{}:
-        return Parse(x)
-    default:
-        return []Callable{nilFunc}
+func quote(_ *Scope, params []interface{}) interface{} {
+    return params
+}
+
+func car(_ *Scope, params []interface{}) interface{} {
+    if len(params) > 0 {
+        switch x := params[0].(type) {
+        case []interface{}:
+            if len(x) > 0 {
+                return x[0]
+            }
+        }
     }
+    return nil
+}
+
+var lookup = map[string]Function {
+    "quote": quote,
+    "car"  : car,
+}
+
+func Parse(thing interface{}) interface{} {
+    switch x := thing.(type) {
+    case string:
+        if fn, ok := lookup[x]; ok {
+            return fn
+        }
+    case []interface{}:
+        return ParseMany(x)
+    }
+    return thing
+}
+
+func ParseMany(input []interface{}) []interface{} {
+    output := []interface{}{}
+    for _, i := range input {
+        output = append(output, Parse(i))
+    }
+    return output
 }
 
 func Process(input string)  interface{} {
-    scope := Scope{}
-    return Execute(&scope, ParseWrapper(TokenizeString(input)[0]))
+    tokenized := TokenizeString(input)
+    fmt.Printf("Tokenized: %v\n", tokenized)
+    parsed := ParseMany(tokenized)
+    fmt.Printf("Parsed: %v\n", parsed)
+    value := GetValue(parsed)
+    fmt.Printf("Value: %v\n", value)
+    return value
 }
 
 func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
