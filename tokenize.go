@@ -5,7 +5,7 @@ import (
     "bytes"
 )
 
-func TokenizeString(input string) ([]interface{}) {
+func TokenizeString(input string) []interface{} {
     return Tokenize(bytes.NewBufferString(input))
 }
 
