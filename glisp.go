@@ -72,8 +72,12 @@ func GetValue(scope *Scope, source interface{}) interface{} {
             panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %v\n", value.name, scope))
         }
     case []interface{}:
-        fmt.Printf("Got first value: %T %v\n", value, value)
         switch firstValue := value[0].(type) {
+        case NonEvaluatingFunction:
+            return firstValue(scope, rest(value))
+        case Function:
+            params := GetValues(scope, rest(value))
+            return firstValue(scope, params)
         case Symbol:
             if resolvedSymb, ok := scope.lookup(firstValue.name); ok {
                 switch symb := resolvedSymb.(type) {
@@ -249,11 +253,8 @@ func Parse(source interface{}) interface{} {
 }
 
 func ParseMany(input []interface{}) []interface{} {
-    fmt.Printf("ParseMany: %v\n", input)
     output := []interface{}{}
     for _, i := range input {
-        x := Parse(i)
-        fmt.Printf("   %v\n", x)
         output = append(output, Parse(i))
     }
     return output
@@ -262,7 +263,8 @@ func ParseMany(input []interface{}) []interface{} {
 func Process(input string)  interface{} {
     tokenized := TokenizeString(input)
     parsed := ParseMany(tokenized)
-    fmt.Printf("Parsed: %v\n", parsed)
+    //fmt.Printf("Parsed: %v\n", parsed)
     value := GetValue(&Scope{nil, builtins}, parsed)
+    //fmt.Printf("Value: %v\n", value)
     return value
 }

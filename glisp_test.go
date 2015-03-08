@@ -10,7 +10,7 @@ func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
 }
 
 func TestQuotePreventsEvaluationOfParams(t *testing.T) {
-    AssertThat(t, Process("(quote (plus 1 2))"), HasExactly(Symbol{"plus"}, "1", "2"))
+    AssertThat(t, Process("(quote (plus 1 2))"), HasExactly(Symbol{"plus"}, int64(1), int64(2)))
 }
 
 func TestCarGrabsFirstItem(t *testing.T) {
