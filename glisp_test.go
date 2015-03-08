@@ -54,7 +54,7 @@ func GetValue(scope *Scope, thing interface{}) interface{} {
     switch x := thing.(type) {
     case string:
         if strings.HasPrefix(x, "\"") {
-            return x[1:len(x)-2]
+            return x[1:len(x)-1]
         } else if num, err := strconv.ParseInt(strings.TrimSpace(x), 10, 64); err == nil {
             return num
         }
@@ -141,12 +141,43 @@ func cons(_ *Scope, params []interface{}) interface{} {
     return nil
 }
 
+func plus(_ *Scope, params[]interface{}) interface{} {
+    var sum int64 = 0
+    for _, p := range params {
+        switch x := p.(type) {
+        case int64:
+            sum = sum + x
+        }
+    }
+    return sum
+}
+
+func if_(_ *Scope, params[]interface{}) interface{} {
+    if len(params) != 3 {
+        panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %v parts - %v.", len(params), params))
+    }
+    if true == params[0] {
+        return params[1]
+    }
+    return params[2]
+}
+
+func eq(_ *Scope, params []interface{}) interface{} {
+    if len(params) != 2 {
+        panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %v - %v", len(params), params))
+    }
+    return params[0] == params[1]
+}
+
 var lookup = map[string]Function {
     "quote": quote,
     "car"  : car,
     "cdr"  : cdr,
     "atom" : atom,
     "cons" : cons,
+    "plus" : plus,
+    "if"   : if_,
+    "eq"   : eq,
 }
 
 
@@ -216,16 +247,15 @@ func Process(input string)  interface{} {
 
 func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
     x := Process("(quote \"a\" \"b\" \"c\")")
-    fmt.Printf("X: %v\n", x)
-    AssertThat(t, x, HasExactly("\"a\"", "\"b\"", "\"c\""))
+    AssertThat(t, x, HasExactly("a", "b", "c"))
 }
 
 func TestCarGrabsFirstItem(t *testing.T) {
-    AssertThat(t, Process("(car (quote \"a\" \"b\"))"), Equals("\"a\""))
+    AssertThat(t, Process("(car (quote \"a\" \"b\"))"), Equals("a"))
 }
 
 func TestCdrGrabsTail(t *testing.T) {
-    AssertThat(t, Process("(cdr (quote \"a\" \"b\" \"c\" (quote \"d\"))"), HasExactly("\"b\"", "\"c\"", HasExactly("\"d\"")))
+    AssertThat(t, Process("(cdr (quote \"a\" \"b\" \"c\" (quote \"d\"))"), HasExactly("b", "c", HasExactly("d")))
 }
 
 func TestAtomIsTrueForSymbols(t *testing.T) {
@@ -241,11 +271,11 @@ func TestIntegerLiteralsAreImplemented(t *testing.T) {
 }
 
 func TestCorrectlyHandlesNestedCalls(t *testing.T) {
-    AssertThat(t, Process("(car (cdr (quote \"a\" \"b\" \"c\")))"), Equals("\"b\""))
+    AssertThat(t, Process("(car (cdr (quote \"a\" \"b\" \"c\")))"), Equals("b"))
 }
 
 func TestConsCreatesLists(t *testing.T) {
-    AssertThat(t, Process("(cons \"a\" (quote \"b\"))"), HasExactly("\"a\"", "\"b\""))
+    AssertThat(t, Process("(cons \"a\" (quote \"b\"))"), HasExactly("a", "b"))
 }
 
 func TestOnePlusOneEqualsTwo(t *testing.T) {
@@ -266,7 +296,6 @@ func TestOneNotEqualTwo(t *testing.T) {
 
 func TestSupportsLambdas(t *testing.T) {
     x := Process("((lambda () 6))")
-    fmt.Printf("TestSupportsLambdas: %v\n", x)
     AssertThat(t, x, Equals(int64(6)))
 }
 
