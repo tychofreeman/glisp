@@ -206,8 +206,8 @@ func param_binding_form_to_scope_and_order(param_decls interface{}) (func([]inte
     }
 }
 
-func Parse(thing interface{}) interface{} {
-    switch x := thing.(type) {
+func Parse(source interface{}) interface{} {
+    switch x := source.(type) {
     case string:
         if fn, ok := lookup[x]; ok {
             return fn
@@ -226,7 +226,7 @@ func Parse(thing interface{}) interface{} {
         }
         return ParseMany(x)
     }
-    return thing
+    return source
 }
 
 func ParseMany(input []interface{}) []interface{} {
