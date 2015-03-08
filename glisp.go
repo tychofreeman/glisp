@@ -21,10 +21,19 @@ func (scope *Scope) lookup(name string) (interface{}, bool) {
     return nil, false
 }
 
+func first(all []interface{}) interface{} {
+    if all != nil && len(all) > 0 {
+        return all[0]
+    }
+    return nil
+}
 
+func second(all []interface{}) interface{} {
+    return first(rest(all))
+}
 
 func rest(all []interface{}) []interface{} {
-    if len(all) > 0 {
+    if all != nil && len(all) > 0 {
         return all[1:]
     }
     return nil
@@ -215,7 +224,7 @@ func Parse(source interface{}) interface{} {
     case []interface{}:
         if len(node) > 1 && node[0] == "lambda" {
             body := ParseMany(rest(rest(node)))
-            param_binding_fn := param_binding_form_to_scope_and_order(rest(node)[0])
+            param_binding_fn := param_binding_form_to_scope_and_order(second(node))
             return Function(func(scope *Scope, params[]interface{}) interface{} {
                 param_bindings := param_binding_fn(params)
                 scope2 := &Scope{scope, param_bindings}
