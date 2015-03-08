@@ -39,8 +39,10 @@ func rest(all []interface{}) []interface{} {
     return nil
 }
 
+type Symbol struct { name string }
 
 type Function func(_ *Scope, params []interface{}) interface{}
+type NonEvaluatingFunction func(_ *Scope, params []interface{}) interface{}
 
 func GetValues(scope *Scope, things []interface{}) []interface{} {
     output := []interface{}{}
@@ -57,33 +59,37 @@ func last(input []interface{}) interface{} {
     return nil
 }
 
-func GetValueFromString(scope *Scope, value string) interface{} {
-    if strings.HasPrefix(value, "\"") {
-        return value[1:len(value)-1]
-    } else if num, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64); err == nil {
-        return num
-    }
-    if y, ok := scope.lookup(value); ok {
-        return y
-    }
-    panic(fmt.Sprintf("Invalid value %v - not a string or number, and could not be found in look-up table %v.", value, scope.table))
-}
-
-
-
 func GetValue(scope *Scope, source interface{}) interface{} {
     switch value := source.(type) {
+    case int64:
+        return value
     case string:
-        return GetValueFromString(scope, value)
+        return value
+    case Symbol:
+        if resolved, ok := scope.lookup(value.name); ok {
+            return resolved
+        } else {
+            panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %v\n", value.name, scope))
+        }
     case []interface{}:
+        fmt.Printf("Got first value: %T %v\n", value, value)
         switch firstValue := value[0].(type) {
-        case Function:
-            params := GetValues(scope, rest(value))
-            return firstValue(scope, params)
+        case Symbol:
+            if resolvedSymb, ok := scope.lookup(firstValue.name); ok {
+                switch symb := resolvedSymb.(type) {
+                case NonEvaluatingFunction:
+                    return symb(scope, rest(value))
+                case Function:
+                    params := GetValues(scope, rest(value))
+                    return symb(scope, params)
+                default:
+                    panic(fmt.Sprintf("A list should be either a function or a nested list (probably actually a high-order function) - found %T %v in %v\n", firstValue, firstValue, source))
+                }
+            } else {
+                panic(fmt.Sprintf("Could not resolve symbol %v in lookup %v\n", firstValue.name, scope))
+            }
         case []interface{}:
             return GetValue(scope, firstValue)
-        default:
-            panic("A list should be either a function or a nested list (probably actually a high-order function)")
         }
     default:
         panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", value, value))
@@ -92,7 +98,10 @@ func GetValue(scope *Scope, source interface{}) interface{} {
 }
 
 func quote(_ *Scope, params []interface{}) interface{} {
-    return params
+    if len(params) > 0 {
+        return params[0]
+    }
+    panic(fmt.Sprintf("QUOTE takes exactly 1 argument; you have %v - %v\n", len(params), params))
 }
 
 func car(_ *Scope, params []interface{}) interface{} {
@@ -180,19 +189,19 @@ func eq(_ *Scope, params []interface{}) interface{} {
     return params[0] == params[1]
 }
 
-var lookup = map[string]Function {
-    "quote": quote,
-    "car"  : car,
-    "cdr"  : cdr,
-    "atom" : atom,
-    "cons" : cons,
-    "plus" : plus,
-    "if"   : if_,
-    "eq"   : eq,
+var builtins = map[string]interface{} {
+    "quote": NonEvaluatingFunction(quote),
+    "car"  : Function(car),
+    "cdr"  : Function(cdr),
+    "atom" : Function(atom),
+    "cons" : Function(cons),
+    "plus" : Function(plus),
+    "if"   : Function(if_),
+    "eq"   : Function(eq),
 }
 
 
-func param_binding_form_to_scope_and_order(param_decls interface{}) (func([]interface{}) map[string]interface{}) {
+func make_param_binding_fn(param_decls interface{}) (func([]interface{}) map[string]interface{}) {
     param_names := []string{}
     switch x := param_decls.(type) {
     case []interface{}:
@@ -218,19 +227,20 @@ func param_binding_form_to_scope_and_order(param_decls interface{}) (func([]inte
 func Parse(source interface{}) interface{} {
     switch node := source.(type) {
     case string:
-        if fn, ok := lookup[node]; ok {
-            return fn
+        if strings.HasPrefix(node, "\"") {
+            return node[1:len(node)-1]
+        } else if num, err := strconv.ParseInt(strings.TrimSpace(node), 10, 64); err == nil {
+            return num
+        } else {
+            return Symbol{node}
         }
     case []interface{}:
         if len(node) > 1 && node[0] == "lambda" {
             body := ParseMany(rest(rest(node)))
-            param_binding_fn := param_binding_form_to_scope_and_order(second(node))
+            param_binding_fn := make_param_binding_fn(second(node))
             return Function(func(scope *Scope, params[]interface{}) interface{} {
                 param_bindings := param_binding_fn(params)
-                scope2 := &Scope{scope, param_bindings}
-                l := last(body)
-                v := GetValue(scope2, l)
-                return v
+                return GetValue(&Scope{scope, param_bindings}, last(body))
             })
         }
         return ParseMany(node)
@@ -239,8 +249,11 @@ func Parse(source interface{}) interface{} {
 }
 
 func ParseMany(input []interface{}) []interface{} {
+    fmt.Printf("ParseMany: %v\n", input)
     output := []interface{}{}
     for _, i := range input {
+        x := Parse(i)
+        fmt.Printf("   %v\n", x)
         output = append(output, Parse(i))
     }
     return output
@@ -248,10 +261,8 @@ func ParseMany(input []interface{}) []interface{} {
 
 func Process(input string)  interface{} {
     tokenized := TokenizeString(input)
-    //fmt.Printf("Tokenized: %v\n", tokenized)
     parsed := ParseMany(tokenized)
-    //fmt.Printf("Parsed: %v\n", parsed)
-    value := GetValue(&Scope{nil, map[string]interface{}{}}, parsed)
-    //fmt.Printf("Value: %v\n", value)
+    fmt.Printf("Parsed: %v\n", parsed)
+    value := GetValue(&Scope{nil, builtins}, parsed)
     return value
 }

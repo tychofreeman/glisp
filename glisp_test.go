@@ -6,15 +6,19 @@ import (
 )
 
 func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
-    AssertThat(t, Process("(quote \"a\" \"b\" \"c\")"), HasExactly("a", "b", "c"))
+    AssertThat(t, Process("(quote (\"a\" \"b\" \"c\"))"), HasExactly("a", "b", "c"))
+}
+
+func TestQuotePreventsEvaluationOfParams(t *testing.T) {
+    AssertThat(t, Process("(quote (plus 1 2))"), HasExactly(Symbol{"plus"}, "1", "2"))
 }
 
 func TestCarGrabsFirstItem(t *testing.T) {
-    AssertThat(t, Process("(car (quote \"a\" \"b\"))"), Equals("a"))
+    AssertThat(t, Process("(car (quote (\"a\" \"b\")))"), Equals("a"))
 }
 
 func TestCdrGrabsTail(t *testing.T) {
-    AssertThat(t, Process("(cdr (quote \"a\" \"b\" \"c\" (quote \"d\"))"), HasExactly("b", "c", HasExactly("d")))
+    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\")))"), HasExactly("b", "c", HasExactly("d")))
 }
 
 func TestAtomIsTrueForSymbols(t *testing.T) {
@@ -22,19 +26,19 @@ func TestAtomIsTrueForSymbols(t *testing.T) {
 }
 
 func TestAtomIsFalseForComplexExpres(t *testing.T) {
-    AssertThat(t, Process("(atom (quote)"), IsFalse)
+    AssertThat(t, Process("(atom (quote ())"), IsFalse)
 }
 
 func TestIntegerLiteralsAreImplemented(t *testing.T) {
-    AssertThat(t, Process("(car (quote 1))"), Equals(int64(1)))
+    AssertThat(t, Process("(car (quote (1)))"), Equals(int64(1)))
 }
 
 func TestCorrectlyHandlesNestedCalls(t *testing.T) {
-    AssertThat(t, Process("(car (cdr (quote \"a\" \"b\" \"c\")))"), Equals("b"))
+    AssertThat(t, Process("(car (cdr (quote (\"a\" \"b\" \"c\"))))"), Equals("b"))
 }
 
 func TestConsCreatesLists(t *testing.T) {
-    AssertThat(t, Process("(cons \"a\" (quote \"b\"))"), HasExactly("a", "b"))
+    AssertThat(t, Process("(cons \"a\" (quote (\"b\")))"), HasExactly("a", "b"))
 }
 
 func TestOnePlusOneEqualsTwo(t *testing.T) {
@@ -42,7 +46,7 @@ func TestOnePlusOneEqualsTwo(t *testing.T) {
 }
 
 func TestConditional(t *testing.T) {
-    AssertThat(t, Process("(if (atom (quote)) 1 2)"), Equals(int64(2)))
+    AssertThat(t, Process("(if (atom (quote ())) 1 2)"), Equals(int64(2)))
 }
 
 func TestOneEqualsOne(t *testing.T) {
@@ -58,7 +62,7 @@ func TestSupportsLambdas(t *testing.T) {
 }
 
 func TestSupportsExpressionsInLambdas(t *testing.T) {
-    AssertThat(t, Process("((lambda () (quote 1 2 3)))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
+    AssertThat(t, Process("((lambda () (quote (1 2 3))))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
 }
 
 func TestSupportsLambdaParameters(t *testing.T) {
@@ -70,5 +74,5 @@ func TestLambdasAreClosures(t *testing.T) {
 }
 
 func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
-    AssertThat(t, Process("(let (quote a 1) a)"), Equals(int64(1)))
+    AssertThat(t, Process("(let (a 1) a)"), Equals(int64(1)))
 }
