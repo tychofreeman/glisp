@@ -246,8 +246,7 @@ func Process(input string)  interface{} {
 }
 
 func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
-    x := Process("(quote \"a\" \"b\" \"c\")")
-    AssertThat(t, x, HasExactly("a", "b", "c"))
+    AssertThat(t, Process("(quote \"a\" \"b\" \"c\")"), HasExactly("a", "b", "c"))
 }
 
 func TestCarGrabsFirstItem(t *testing.T) {
@@ -295,8 +294,7 @@ func TestOneNotEqualTwo(t *testing.T) {
 }
 
 func TestSupportsLambdas(t *testing.T) {
-    x := Process("((lambda () 6))")
-    AssertThat(t, x, Equals(int64(6)))
+    AssertThat(t, Process("((lambda () 6))"), Equals(int64(6)))
 }
 
 func TestSupportsExpressionsInLambdas(t *testing.T) {
