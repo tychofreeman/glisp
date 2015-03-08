@@ -70,11 +70,9 @@ func GetValue(scope *Scope, source interface{}) interface{} {
         switch firstValue := value[0].(type) {
         case Function:
             params := GetValues(scope, rest(value))
-            z := firstValue(scope, params)
-            return z
+            return firstValue(scope, params)
         case []interface{}:
-            z := GetValue(scope, firstValue)
-            return z
+            return GetValue(scope, firstValue)
         default:
             panic("A list should be either a function or a nested list (probably actually a high-order function)")
         }
