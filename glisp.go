@@ -207,15 +207,15 @@ func param_binding_form_to_scope_and_order(param_decls interface{}) (func([]inte
 }
 
 func Parse(source interface{}) interface{} {
-    switch x := source.(type) {
+    switch node := source.(type) {
     case string:
-        if fn, ok := lookup[x]; ok {
+        if fn, ok := lookup[node]; ok {
             return fn
         }
     case []interface{}:
-        if len(x) > 1 && x[0] == "lambda" {
-            body := ParseMany(rest(rest(x)))
-            param_binding_fn := param_binding_form_to_scope_and_order(rest(x)[0])
+        if len(node) > 1 && node[0] == "lambda" {
+            body := ParseMany(rest(rest(node)))
+            param_binding_fn := param_binding_form_to_scope_and_order(rest(node)[0])
             return Function(func(scope *Scope, params[]interface{}) interface{} {
                 param_bindings := param_binding_fn(params)
                 scope2 := &Scope{scope, param_bindings}
@@ -224,7 +224,7 @@ func Parse(source interface{}) interface{} {
                 return v
             })
         }
-        return ParseMany(x)
+        return ParseMany(node)
     }
     return source
 }
