@@ -22,6 +22,7 @@ func (scope *Scope) lookup(name string) (interface{}, bool) {
 }
 
 
+
 func rest(all []interface{}) []interface{} {
     if len(all) > 0 {
         return all[1:]

@@ -9,7 +9,7 @@ func TokenizeString(input string) ([]interface{}) {
     return Tokenize(bytes.NewBufferString(input))
 }
 
-func Tokenize(buf *bytes.Buffer) ([]interface{}) {
+func Tokenize(buf *bytes.Buffer) []interface{} {
     if buf.Len() == 0 {
         return nil
     }
