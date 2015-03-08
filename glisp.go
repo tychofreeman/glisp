@@ -48,18 +48,24 @@ func last(input []interface{}) interface{} {
     return nil
 }
 
-func GetValue(scope *Scope, thing interface{}) interface{} {
-    switch x := thing.(type) {
+func GetValueFromString(scope *Scope, value string) interface{} {
+    if strings.HasPrefix(value, "\"") {
+        return value[1:len(value)-1]
+    } else if num, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64); err == nil {
+        return num
+    }
+    if y, ok := scope.lookup(value); ok {
+        return y
+    }
+    panic(fmt.Sprintf("Invalid value %v - not a string or number, and could not be found in look-up table %v.", value, scope.table))
+}
+
+
+
+func GetValue(scope *Scope, source interface{}) interface{} {
+    switch x := source.(type) {
     case string:
-        if strings.HasPrefix(x, "\"") {
-            return x[1:len(x)-1]
-        } else if num, err := strconv.ParseInt(strings.TrimSpace(x), 10, 64); err == nil {
-            return num
-        }
-        if y, ok := scope.lookup(x); ok {
-            return y
-        }
-        panic(fmt.Sprintf("Invalid value %v - not a string or number, and could not be found in look-up table %v.", x, scope.table))
+        return GetValueFromString(scope, x)
     case []interface{}:
         switch y := x[0].(type) {
         case Function:
@@ -73,7 +79,7 @@ func GetValue(scope *Scope, thing interface{}) interface{} {
             panic("A list should be either a function or a nested list (probably actually a high-order function)")
         }
     default:
-        panic(fmt.Sprintf("Couldn't find thing of type %T (%v)\n", x, x))
+        panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", x, x))
     }
     return nil
 }
