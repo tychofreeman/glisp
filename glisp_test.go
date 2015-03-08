@@ -9,7 +9,21 @@ import (
 //    "reflect"
 )
 
-type Scope struct {}
+type Scope struct {
+    prev *Scope
+    table map[string]interface{}
+}
+
+func (scope *Scope) lookup(name string) (interface{}, bool) {
+    if val, ok := scope.table[name]; ok {
+        return val, ok
+    }
+    if scope.prev != nil {
+        return scope.prev.lookup(name)
+    }
+    return nil, false
+}
+
 
 func rest(all []interface{}) []interface{} {
     if len(all) > 0 {
@@ -21,13 +35,10 @@ func rest(all []interface{}) []interface{} {
 
 type Function func(_ *Scope, params []interface{}) interface{}
 
-//type Lambda func(s *Scope, params []interface{}) (*Scope, Function)
-type Lambda struct{}
-
-func GetValues(things []interface{}) []interface{} {
+func GetValues(scope *Scope, things []interface{}) []interface{} {
     output := []interface{}{}
     for _, i := range things {
-        output = append(output, GetValue(i))
+        output = append(output, GetValue(scope, i))
     }
     return output
 }
@@ -39,7 +50,7 @@ func last(input []interface{}) interface{} {
     return nil
 }
 
-func GetValue(thing interface{}) interface{} {
+func GetValue(scope *Scope, thing interface{}) interface{} {
     switch x := thing.(type) {
     case string:
         if strings.HasPrefix(x, "\"") {
@@ -47,24 +58,24 @@ func GetValue(thing interface{}) interface{} {
         } else if num, err := strconv.ParseInt(strings.TrimSpace(x), 10, 64); err == nil {
             return num
         }
-        return x
+        if y, ok := scope.lookup(x); ok {
+            return y
+        }
+        panic(fmt.Sprintf("Invalid value %v - not a string or number, and could not be found in look-up table %v.", x, scope.table))
     case []interface{}:
         switch y := x[0].(type) {
         case Function:
-            fmt.Printf("Got function %v\n", x)
-            params := GetValues(rest(x))
-            z := y(nil, params)
-            fmt.Printf("Calling function %v(%v) -> %v\n", y, params, z)
+            params := GetValues(scope, rest(x))
+            z := y(scope, params)
             return z
         case []interface{}:
-            z := GetValue(y)
-            fmt.Printf("...So, I called it recursively... %T %v\n", z, z)
+            z := GetValue(scope, y)
             return z
         default:
-            fmt.Printf("Oops!!\n")
+            panic("A list should be either a function or a nested list (probably actually a high-order function)")
         }
     default:
-        fmt.Printf("Couldn't find thing of type %T (%v)\n", x, x)
+        panic(fmt.Sprintf("Couldn't find thing of type %T (%v)\n", x, x))
     }
     return nil
 }
@@ -138,6 +149,30 @@ var lookup = map[string]Function {
     "cons" : cons,
 }
 
+
+func param_binding_form_to_scope_and_order(param_decls interface{}) (func([]interface{}) map[string]interface{}) {
+    param_names := []string{}
+    switch x := param_decls.(type) {
+    case []interface{}:
+        for _, y := range x {
+            switch z := y.(type) {
+            case string:
+                param_names = append(param_names, z)
+            default:
+                param_names = append(param_names, "")
+            }
+        }
+    }
+    return func(params []interface{}) map[string]interface{} {
+
+        scope := map[string]interface{}{}
+        for i := 0; i < len(param_names); i++ {
+            scope[param_names[i]] = params[i]
+        }
+        return scope
+    }
+}
+
 func Parse(thing interface{}) interface{} {
     switch x := thing.(type) {
     case string:
@@ -147,11 +182,12 @@ func Parse(thing interface{}) interface{} {
     case []interface{}:
         if len(x) > 1 && x[0] == "lambda" {
             body := ParseMany(rest(rest(x)))
-            return Function(func(_ *Scope, params[]interface{}) interface{} {
+            param_binding_fn := param_binding_form_to_scope_and_order(rest(x)[0])
+            return Function(func(scope *Scope, params[]interface{}) interface{} {
+                param_bindings := param_binding_fn(params)
+                scope2 := &Scope{scope, param_bindings}
                 l := last(body)
-                fmt.Printf("Lambda has expression: %v\n", l)
-                v := GetValue(l)
-                fmt.Printf("                          -> %v\n", v)
+                v := GetValue(scope2, l)
                 return v
             })
         }
@@ -170,11 +206,11 @@ func ParseMany(input []interface{}) []interface{} {
 
 func Process(input string)  interface{} {
     tokenized := TokenizeString(input)
-    fmt.Printf("Tokenized: %v\n", tokenized)
+    //fmt.Printf("Tokenized: %v\n", tokenized)
     parsed := ParseMany(tokenized)
-    fmt.Printf("Parsed: %v\n", parsed)
-    value := GetValue(parsed)
-    fmt.Printf("Value: %v\n", value)
+    //fmt.Printf("Parsed: %v\n", parsed)
+    value := GetValue(&Scope{nil, map[string]interface{}{}}, parsed)
+    //fmt.Printf("Value: %v\n", value)
     return value
 }
 
@@ -229,21 +265,21 @@ func TestOneNotEqualTwo(t *testing.T) {
 }
 
 func TestSupportsLambdas(t *testing.T) {
-    x := Process("((lambda (quote) 6))")
+    x := Process("((lambda () 6))")
     fmt.Printf("TestSupportsLambdas: %v\n", x)
     AssertThat(t, x, Equals(int64(6)))
 }
 
 func TestSupportsExpressionsInLambdas(t *testing.T) {
-    AssertThat(t, Process("((lambda (quote) (quote 1 2 3)))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
+    AssertThat(t, Process("((lambda () (quote 1 2 3)))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
 }
 
 func TestSupportsLambdaParameters(t *testing.T) {
-    AssertThat(t, Process("((lambda (quote a) a) 1)"), HasExactly(Equals(int64(1))))
+    AssertThat(t, Process("((lambda (a) a) 1)"), Equals(int64(1)))
 }
 
 func TestLambdasAreClosures(t *testing.T) {
-    AssertThat(t, Process("((lambda (quote a) (lambda (quote ) a)) 1)"), HasExactly(Equals(int64(1))))
+    AssertThat(t, Process("((lambda (a) ((lambda () a))) 1)"), Equals(int64(1)))
 }
 
 func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
