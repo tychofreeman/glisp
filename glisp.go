@@ -63,13 +63,13 @@ func GetValueFromString(scope *Scope, value string) interface{} {
 
 
 func GetValue(scope *Scope, source interface{}) interface{} {
-    switch x := source.(type) {
+    switch value := source.(type) {
     case string:
-        return GetValueFromString(scope, x)
+        return GetValueFromString(scope, value)
     case []interface{}:
-        switch y := x[0].(type) {
+        switch y := value[0].(type) {
         case Function:
-            params := GetValues(scope, rest(x))
+            params := GetValues(scope, rest(value))
             z := y(scope, params)
             return z
         case []interface{}:
@@ -79,7 +79,7 @@ func GetValue(scope *Scope, source interface{}) interface{} {
             panic("A list should be either a function or a nested list (probably actually a high-order function)")
         }
     default:
-        panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", x, x))
+        panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", value, value))
     }
     return nil
 }
