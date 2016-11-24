@@ -39,8 +39,22 @@ func rest(all []interface{}) []interface{} {
     return nil
 }
 
-type Symbol struct { name string }
 
+//
+// It might not be a bad idea to move GetValues to a sum-type of {Symbol|Function|...}. Then,
+// it might be good to add type info around that structure as well.
+//
+type Symbol struct { name string }
+func (sym Symbol) Eval(scope *Scope) interface{} {
+    if resolved, ok := scope.lookup(sym.name); ok {
+        return resolved
+    } else {
+        panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %v\n", sym.name, scope))
+    }
+}
+
+
+type ParamsList List
 type Function func(_ *Scope, params []interface{}) interface{}
 type NonEvaluatingFunction func(_ *Scope, params []interface{}) interface{}
 
@@ -59,47 +73,51 @@ func last(input []interface{}) interface{} {
     return nil
 }
 
+type Valuable interface {
+    Eval(*Scope) interface{}
+}
+
+type List []interface{}
+func (value List) Eval(scope *Scope) interface{} {
+    switch firstValue := value[0].(type) {
+    case NonEvaluatingFunction:
+        return firstValue(scope, rest(value))
+    case Function:
+        params := GetValues(scope, rest(value))
+        return firstValue(scope, params)
+    case Symbol:
+        switch symb := firstValue.Eval(scope).(type) {
+        case NonEvaluatingFunction:
+            return symb(scope, rest(value))
+        case Function:
+            params := GetValues(scope, rest(value))
+            return symb(scope, params)
+        default:
+            panic(fmt.Sprintf("A list should be either a function or a nested list (probably actually a high-order function) - found %T %v in %v\n", firstValue, firstValue, value))
+        }
+    case []interface{}:
+        return List(firstValue).Eval(scope)
+    }
+    panic(fmt.Sprintf("Could not evaluate list: %v\n", value))
+}
+
+
 func GetValue(scope *Scope, source interface{}) interface{} {
     switch value := source.(type) {
     case int64:
         return value
     case string:
         return value
-    case Symbol:
-        if resolved, ok := scope.lookup(value.name); ok {
-            return resolved
-        } else {
-            panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %v\n", value.name, scope))
-        }
+    case Valuable:
+        return value.Eval(scope)
     case []interface{}:
-        switch firstValue := value[0].(type) {
-        case NonEvaluatingFunction:
-            return firstValue(scope, rest(value))
-        case Function:
-            params := GetValues(scope, rest(value))
-            return firstValue(scope, params)
-        case Symbol:
-            if resolvedSymb, ok := scope.lookup(firstValue.name); ok {
-                switch symb := resolvedSymb.(type) {
-                case NonEvaluatingFunction:
-                    return symb(scope, rest(value))
-                case Function:
-                    params := GetValues(scope, rest(value))
-                    return symb(scope, params)
-                default:
-                    panic(fmt.Sprintf("A list should be either a function or a nested list (probably actually a high-order function) - found %T %v in %v\n", firstValue, firstValue, source))
-                }
-            } else {
-                panic(fmt.Sprintf("Could not resolve symbol %v in lookup %v\n", firstValue.name, scope))
-            }
-        case []interface{}:
-            return GetValue(scope, firstValue)
-        }
+        return List(value).Eval(scope)
     default:
         panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", value, value))
     }
     return nil
 }
+
 
 func quote(_ *Scope, params []interface{}) interface{} {
     if len(params) > 0 {
@@ -165,7 +183,7 @@ func cons(_ *Scope, params []interface{}) interface{} {
     return nil
 }
 
-func plus(_ *Scope, params[]interface{}) interface{} {
+func plus(_ *Scope, params []interface{}) interface{} {
     var sum int64 = 0
     for _, p := range params {
         switch x := p.(type) {
@@ -176,7 +194,7 @@ func plus(_ *Scope, params[]interface{}) interface{} {
     return sum
 }
 
-func if_(_ *Scope, params[]interface{}) interface{} {
+func if_(_ *Scope, params []interface{}) interface{} {
     if len(params) != 3 {
         panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %v parts - %v.", len(params), params))
     }
@@ -202,6 +220,7 @@ var builtins = map[string]interface{} {
     "plus" : Function(plus),
     "if"   : Function(if_),
     "eq"   : Function(eq),
+    // "apply" wouldn't suck...
 }
 
 
@@ -242,7 +261,7 @@ func Parse(source interface{}) interface{} {
         if len(node) > 1 && node[0] == "lambda" {
             body := ParseMany(rest(rest(node)))
             param_binding_fn := make_param_binding_fn(second(node))
-            return Function(func(scope *Scope, params[]interface{}) interface{} {
+            return Function(func(scope *Scope, params []interface{}) interface{} {
                 param_bindings := param_binding_fn(params)
                 return GetValue(&Scope{scope, param_bindings}, last(body))
             })
