@@ -32,9 +32,9 @@ func second(all []interface{}) interface{} {
     return first(rest(all))
 }
 
-func rest(all []interface{}) []interface{} {
+func rest(all []interface{}) List {
     if all != nil && len(all) > 0 {
-        return all[1:]
+        return List(all[1:])
     }
     return nil
 }
@@ -55,8 +55,8 @@ func (sym Symbol) Eval(scope *Scope) interface{} {
 
 
 type ParamsList List
-type Function func(_ *Scope, params []interface{}) interface{}
-type NonEvaluatingFunction func(_ *Scope, params []interface{}) interface{}
+type Function func(_ *Scope, params List) interface{}
+type NonEvaluatingFunction func(_ *Scope, params List) interface{}
 
 func GetValues(scope *Scope, things []interface{}) []interface{} {
     output := []interface{}{}
@@ -119,16 +119,20 @@ func GetValue(scope *Scope, source interface{}) interface{} {
 }
 
 
-func quote(_ *Scope, params []interface{}) interface{} {
+func quote(_ *Scope, params List) interface{} {
     if len(params) > 0 {
         return params[0]
     }
     panic(fmt.Sprintf("QUOTE takes exactly 1 argument; you have %v - %v\n", len(params), params))
 }
 
-func car(_ *Scope, params []interface{}) interface{} {
+func car(_ *Scope, params List) interface{} {
     if len(params) > 0 {
         switch x := params[0].(type) {
+        case List:
+            if len(x) > 0 {
+                return x[0]
+            }
         case []interface{}:
             if len(x) > 0 {
                 return x[0]
@@ -138,9 +142,13 @@ func car(_ *Scope, params []interface{}) interface{} {
     return nil
 }
 
-func cdr(_ *Scope, params []interface{}) interface{} {
+func cdr(_ *Scope, params List) interface{} {
     if len(params) > 0 {
         switch x := params[0].(type) {
+        case List:
+            if len(x) > 0 {
+                return rest(x)
+            }
         case []interface{}:
             if len(x) > 0 {
                 return rest(x)
@@ -150,9 +158,11 @@ func cdr(_ *Scope, params []interface{}) interface{} {
     return nil
 }
 
-func atom(_ *Scope, params []interface{}) interface{} {
+func atom(_ *Scope, params List) interface{} {
     if len(params) > 0 {
         switch params[0].(type) {
+        case List:
+            return false
         case []interface{}:
             return false
         default:
@@ -163,7 +173,7 @@ func atom(_ *Scope, params []interface{}) interface{} {
     }
 }
 
-func cons(_ *Scope, params []interface{}) interface{} {
+func cons(_ *Scope, params List) interface{} {
     if len(params) == 1 {
         return params
     } else if len(params) == 2 {
@@ -171,6 +181,12 @@ func cons(_ *Scope, params []interface{}) interface{} {
             return params
         } else {
             switch x := params[1].(type) {
+            case List:
+                output := []interface{}{params[0]}
+                for _, i := range x {
+                    output = append(output, i)
+                }
+                return output
             case []interface{}:
                 output := []interface{}{params[0]}
                 for _, i := range x {
@@ -183,7 +199,7 @@ func cons(_ *Scope, params []interface{}) interface{} {
     return nil
 }
 
-func plus(_ *Scope, params []interface{}) interface{} {
+func plus(_ *Scope, params List) interface{} {
     var sum int64 = 0
     for _, p := range params {
         switch x := p.(type) {
@@ -194,7 +210,7 @@ func plus(_ *Scope, params []interface{}) interface{} {
     return sum
 }
 
-func if_(_ *Scope, params []interface{}) interface{} {
+func if_(_ *Scope, params List) interface{} {
     if len(params) != 3 {
         panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %v parts - %v.", len(params), params))
     }
@@ -204,7 +220,7 @@ func if_(_ *Scope, params []interface{}) interface{} {
     return params[2]
 }
 
-func eq(_ *Scope, params []interface{}) interface{} {
+func eq(_ *Scope, params List) interface{} {
     if len(params) != 2 {
         panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %v - %v", len(params), params))
     }
@@ -261,7 +277,7 @@ func Parse(source interface{}) interface{} {
         if len(node) > 1 && node[0] == "lambda" {
             body := ParseMany(rest(rest(node)))
             param_binding_fn := make_param_binding_fn(second(node))
-            return Function(func(scope *Scope, params []interface{}) interface{} {
+            return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
                 return GetValue(&Scope{scope, param_bindings}, last(body))
             })
@@ -271,7 +287,7 @@ func Parse(source interface{}) interface{} {
     return source
 }
 
-func ParseMany(input []interface{}) []interface{} {
+func ParseMany(input List) []interface{} {
     output := []interface{}{}
     for _, i := range input {
         output = append(output, Parse(i))
@@ -285,5 +301,10 @@ func Process(input string)  interface{} {
     //fmt.Printf("Parsed: %v\n", parsed)
     value := GetValue(&Scope{nil, builtins}, parsed)
     //fmt.Printf("Value: %v\n", value)
-    return value
+    switch v := value.(type) {
+    case List:
+        return []interface{}(v)
+    default:
+        return value
+    }
 }
