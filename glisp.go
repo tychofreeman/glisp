@@ -87,14 +87,14 @@ func (value List) Eval(scope *Scope) interface{} {
     case NonEvaluatingFunction:
         return firstValue(scope, value.rest())
     case Function:
-        params := GetValues(scope, rest(value))
+        params := GetValues(scope, value.rest())
         return firstValue(scope, params)
     case Valuable:
         switch symb := firstValue.Eval(scope).(type) {
         case NonEvaluatingFunction:
-            return symb(scope, rest(value))
+            return symb(scope, value.rest())
         case Function:
-            params := GetValues(scope, rest(value))
+            params := GetValues(scope, value.rest())
             return symb(scope, params)
         default:
             panic(fmt.Sprintf("A list should be either a function or a nested list (probably actually a high-order function) - found %T %v in %v\n", firstValue, firstValue, value))
