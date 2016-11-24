@@ -21,24 +21,6 @@ func (scope *Scope) lookup(name string) (interface{}, bool) {
     return nil, false
 }
 
-func first(all List) interface{} {
-    if all != nil && len(all) > 0 {
-        return all[0]
-    }
-    return nil
-}
-
-func second(all List) interface{} {
-    return first(rest(all))
-}
-
-func rest(all []interface{}) List {
-    if all != nil && len(all) > 0 {
-        return List(all[1:])
-    }
-    return nil
-}
-
 
 //
 // It might not be a bad idea to move GetValues to a sum-type of {Symbol|Function|...}. Then,
@@ -78,10 +60,32 @@ type Valuable interface {
 }
 
 type List []interface{}
+
+func (all List) first() interface{} {
+    if all != nil && len(all) > 0 {
+        return all[0]
+    }
+    return nil
+}
+
+func (all List) second() interface{} {
+    return all.rest().first()
+}
+
+func (all List) rest() List {
+    return rest([]interface{}(all))
+}
+
+func rest(all []interface{}) List {
+    if all != nil && len(all) > 0 {
+        return List(all[1:])
+    }
+    return nil
+}
 func (value List) Eval(scope *Scope) interface{} {
     switch firstValue := value[0].(type) {
     case NonEvaluatingFunction:
-        return firstValue(scope, rest(value))
+        return firstValue(scope, value.rest())
     case Function:
         params := GetValues(scope, rest(value))
         return firstValue(scope, params)
@@ -276,7 +280,7 @@ func Parse(source interface{}) interface{} {
     case []interface{}:
         if len(node) > 1 && node[0] == "lambda" {
             body := ParseMany(rest(rest(node)))
-            param_binding_fn := make_param_binding_fn(second(List(node)))
+            param_binding_fn := make_param_binding_fn(List(node).second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
                 return GetValue(&Scope{scope, param_bindings}, last(body))
