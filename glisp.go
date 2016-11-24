@@ -85,7 +85,7 @@ func (value List) Eval(scope *Scope) interface{} {
     case Function:
         params := GetValues(scope, rest(value))
         return firstValue(scope, params)
-    case Symbol:
+    case Valuable:
         switch symb := firstValue.Eval(scope).(type) {
         case NonEvaluatingFunction:
             return symb(scope, rest(value))
