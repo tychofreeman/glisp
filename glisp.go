@@ -151,7 +151,7 @@ func cdr(_ *Scope, params List) interface{} {
         switch x := params[0].(type) {
         case List:
             if len(x) > 0 {
-                return rest(x)
+                return x.rest()
             }
         case []interface{}:
             if len(x) > 0 {
@@ -181,7 +181,7 @@ func cons(_ *Scope, params List) interface{} {
     if len(params) == 1 {
         return params
     } else if len(params) == 2 {
-        if atom(nil, rest(params)) == true {
+        if atom(nil, params.rest()) == true {
             return params
         } else {
             switch x := params[1].(type) {
@@ -279,7 +279,7 @@ func Parse(source interface{}) interface{} {
         }
     case []interface{}:
         if len(node) > 1 && node[0] == "lambda" {
-            body := ParseMany(rest(rest(node)))
+            body := ParseMany(List(node).rest().rest())
             param_binding_fn := make_param_binding_fn(List(node).second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
