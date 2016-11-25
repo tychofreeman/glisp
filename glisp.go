@@ -40,7 +40,7 @@ type ParamsList List
 type Function func(_ *Scope, params List) interface{}
 type NonEvaluatingFunction func(_ *Scope, params List) interface{}
 
-func GetValues(scope *Scope, things []interface{}) []interface{} {
+func GetValues(scope *Scope, things List) []interface{} {
     output := []interface{}{}
     for _, i := range things {
         output = append(output, GetValue(scope, i))
@@ -73,15 +73,12 @@ func (all List) second() interface{} {
 }
 
 func (all List) rest() List {
-    return rest([]interface{}(all))
-}
-
-func rest(all []interface{}) List {
     if all != nil && len(all) > 0 {
         return List(all[1:])
     }
     return nil
 }
+
 func (value List) Eval(scope *Scope) interface{} {
     switch firstValue := value[0].(type) {
     case NonEvaluatingFunction:
@@ -155,7 +152,7 @@ func cdr(_ *Scope, params List) interface{} {
             }
         case []interface{}:
             if len(x) > 0 {
-                return rest(x)
+                return List(x).rest()
             }
         }
     }
