@@ -22,10 +22,6 @@ func (scope *Scope) lookup(name string) (interface{}, bool) {
 }
 
 
-//
-// It might not be a bad idea to move GetValues to a sum-type of {Symbol|Function|...}. Then,
-// it might be good to add type info around that structure as well.
-//
 type Symbol struct { name string }
 func (sym Symbol) Eval(scope *Scope) interface{} {
     if resolved, ok := scope.lookup(sym.name); ok {
@@ -40,8 +36,8 @@ type ParamsList List
 type Function func(_ *Scope, params List) interface{}
 type NonEvaluatingFunction func(_ *Scope, params List) interface{}
 
-func GetValues(scope *Scope, things List) []interface{} {
-    output := []interface{}{}
+func (things List) GetValues(scope *Scope) List {
+    output := List{}
     for _, i := range things {
         output = append(output, GetValue(scope, i))
     }
@@ -84,14 +80,14 @@ func (value List) Eval(scope *Scope) interface{} {
     case NonEvaluatingFunction:
         return firstValue(scope, value.rest())
     case Function:
-        params := GetValues(scope, value.rest())
+        params := value.rest().GetValues(scope)
         return firstValue(scope, params)
     case Valuable:
         switch symb := firstValue.Eval(scope).(type) {
         case NonEvaluatingFunction:
             return symb(scope, value.rest())
         case Function:
-            params := GetValues(scope, value.rest())
+            params := value.rest().GetValues(scope)
             return symb(scope, params)
         default:
             panic(fmt.Sprintf("A list should be either a function or a nested list (probably actually a high-order function) - found %T %v in %v\n", firstValue, firstValue, value))
