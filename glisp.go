@@ -31,29 +31,13 @@ func (sym Symbol) Eval(scope *Scope) interface{} {
     }
 }
 
+type Valuable interface {
+    Eval(*Scope) interface{}
+}
 
 type ParamsList List
 type Function func(_ *Scope, params List) interface{}
 type NonEvaluatingFunction func(_ *Scope, params List) interface{}
-
-func (things List) GetValues(scope *Scope) List {
-    output := List{}
-    for _, i := range things {
-        output = append(output, GetValue(scope, i))
-    }
-    return output
-}
-
-func last(input []interface{}) interface{} {
-    if len(input) > 0 {
-        return input[len(input)-1]
-    }
-    return nil
-}
-
-type Valuable interface {
-    Eval(*Scope) interface{}
-}
 
 type List []interface{}
 
@@ -71,6 +55,20 @@ func (all List) second() interface{} {
 func (all List) rest() List {
     if all != nil && len(all) > 0 {
         return List(all[1:])
+    }
+    return nil
+}
+func (things List) GetValues(scope *Scope) List {
+    output := List{}
+    for _, i := range things {
+        output = append(output, GetValue(scope, i))
+    }
+    return output
+}
+
+func last(input []interface{}) interface{} {
+    if len(input) > 0 {
+        return input[len(input)-1]
     }
     return nil
 }
@@ -179,13 +177,13 @@ func cons(_ *Scope, params List) interface{} {
         } else {
             switch x := params[1].(type) {
             case List:
-                output := []interface{}{params[0]}
+                output := List{params[0]}
                 for _, i := range x {
                     output = append(output, i)
                 }
                 return output
             case []interface{}:
-                output := []interface{}{params[0]}
+                output := List{params[0]}
                 for _, i := range x {
                     output = append(output, i)
                 }
