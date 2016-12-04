@@ -66,6 +66,13 @@ func (things List) GetValues(scope *Scope) List {
     return output
 }
 
+func (input List) last() interface{} {
+    if len(input) > 0 {
+        return input[len(input)-1]
+    }
+    return nil
+}
+
 func last(input []interface{}) interface{} {
     if len(input) > 0 {
         return input[len(input)-1]
@@ -83,10 +90,12 @@ func (value List) Eval(scope *Scope) interface{} {
     case Valuable:
         switch symb := firstValue.Eval(scope).(type) {
         case NonEvaluatingFunction:
-            return symb(scope, value.rest())
+            x := symb(scope, value.rest())
+            return x
         case Function:
             params := value.rest().GetValues(scope)
-            return symb(scope, params)
+            x := symb(scope, params)
+            return x
         default:
             panic(fmt.Sprintf("A list should be either a function or a nested list (probably actually a high-order function) - found %T %v in %v\n", firstValue, firstValue, value))
         }
@@ -277,23 +286,35 @@ func Parse(source interface{}) interface{} {
                 return GetValue(&Scope{scope, param_bindings}, last(body))
             })
         }
-        return ParseMany(node)
+        x := ParseMany(node)
+        return x
+    case List:
+        if len(node) > 1 && node[0] == "lambda" {
+            body := ParseMany(node.rest().rest())
+            param_binding_fn := make_param_binding_fn(node.second())
+            return Function(func(scope *Scope, params List) interface{} {
+                param_bindings := param_binding_fn(params)
+                return GetValue(&Scope{scope, param_bindings}, last(body))
+            })
+        }
+        x :=  ParseMany(node)
+        return x
     }
     return source
 }
 
 func ParseMany(input List) []interface{} {
-    output := []interface{}{}
+    output := List{}
     for _, i := range input {
         output = append(output, Parse(i))
     }
+
     return output
 }
 
 func Process(input string)  interface{} {
     tokenized := TokenizeString(input)
     parsed := ParseMany(tokenized)
-    //fmt.Printf("Parsed: %v\n", parsed)
     value := GetValue(&Scope{nil, builtins}, parsed)
     //fmt.Printf("Value: %v\n", value)
     switch v := value.(type) {
