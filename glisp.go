@@ -244,9 +244,18 @@ var builtins = map[string]interface{} {
 }
 
 
-func make_param_binding_fn(param_decls interface{}) (func([]interface{}) map[string]interface{}) {
+func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[string]interface{}) {
     param_names := []string{}
     switch x := param_decls.(type) {
+    case List:
+        for _, y := range x {
+            switch z := y.(type) {
+            case string:
+                param_names = append(param_names, z)
+            default:
+                param_names = append(param_names, "")
+            }
+        }
     case []interface{}:
         for _, y := range x {
             switch z := y.(type) {
@@ -257,11 +266,17 @@ func make_param_binding_fn(param_decls interface{}) (func([]interface{}) map[str
             }
         }
     }
-    return func(params []interface{}) map[string]interface{} {
-
+    return func(theParams interface{}) map[string]interface{} {
         scope := map[string]interface{}{}
-        for i := 0; i < len(param_names); i++ {
-            scope[param_names[i]] = params[i]
+        switch params := theParams.(type) {
+        case List:
+            for i := 0; i < len(param_names); i++ {
+                scope[param_names[i]] = params[i]
+            }
+        case []interface{}:
+            for i := 0; i < len(param_names); i++ {
+                scope[param_names[i]] = params[i]
+            }
         }
         return scope
     }
