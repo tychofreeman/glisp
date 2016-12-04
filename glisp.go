@@ -309,7 +309,7 @@ func ParseMany(input List) []interface{} {
         output = append(output, Parse(i))
     }
 
-    return output
+    return List(output)
 }
 
 func Process(input string)  interface{} {
