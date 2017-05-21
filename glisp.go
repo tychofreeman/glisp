@@ -343,3 +343,7 @@ func Process(input string)  interface{} {
         return value
     }
 }
+
+func ProcessFile(fname string) interface{} {
+    return nil   
+}
