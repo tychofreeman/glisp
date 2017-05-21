@@ -73,6 +73,10 @@ func TestLambdasAreClosures(t *testing.T) {
     AssertThat(t, Process("((lambda (a) ((lambda () a))) 1)"), Equals(int64(1)))
 }
 
+func TestApplyCallsFunctions(t *testing.T) {
+    AssertThat(t, Process("(apply plus 1 1"), Equals(int64(2)))
+}
+
 func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
     AssertThat(t, Process("(let (a 1) a)"), Equals(int64(1)))
 }

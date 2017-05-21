@@ -231,6 +231,10 @@ func eq(_ *Scope, params List) interface{} {
     return params[0] == params[1]
 }
 
+func apply(scope *Scope, params List) interface{} {
+    return GetValue(scope, params)
+}
+
 var builtins = map[string]interface{} {
     "quote": NonEvaluatingFunction(quote),
     "car"  : Function(car),
@@ -240,7 +244,7 @@ var builtins = map[string]interface{} {
     "plus" : Function(plus),
     "if"   : Function(if_),
     "eq"   : Function(eq),
-    // "apply" wouldn't suck...
+    "apply": Function(apply),
 }
 
 
