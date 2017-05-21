@@ -3,35 +3,37 @@ package glisp
 import (
     "unicode"
     "bytes"
-    "errors"
+    "io/ioutil"
 )
 
 func TokenizeString(input string) []interface{} {
     b := bytes.NewBufferString(input)
-    next := func() (byte, error) {
-        if (b.Len() > 0) {
-            return b.Next(1)[0], nil;
-        }
-        return 0, errors.New("No More Content")
-    }
-    return Tokenize(next)
+    return Tokenize(b)
 }
 
-func Tokenize(next func() (byte, error)) []interface{} {
-    x, err := next();
-    if err != nil {
+func TokenizeFile(fname string) []interface{} {
+    fileBytes,err := ioutil.ReadFile(fname)
+    if err == nil {
+        return nil
+    }
+    b := bytes.NewBuffer(fileBytes)
+    return Tokenize(b)
+}
+
+func Tokenize(bs *bytes.Buffer) []interface{} {
+    if bs.Len() == 0 {
         return nil
     }
     r := []interface{}{}
 
     acc := ""
-    for ; err == nil; x, err = next() {
-        c := rune(x)
+    for ; bs.Len() > 0 ; {
+        c := rune(bs.Next(1)[0])
         
         if unicode.IsLetter(c) || unicode.IsNumber(c) || c == '"' {
             acc += string(c)
         } else if c == '(' {
-            var nested []interface{} = Tokenize(next)
+            var nested []interface{} = Tokenize(bs)
             r = append(r, nested)
         } else if c == ')' {
             break
