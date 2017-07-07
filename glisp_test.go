@@ -81,6 +81,10 @@ func TestGloballyNamesFunctions(t *testing.T) {
     AssertThat(t, Process("(def thing (lambda (a) (plus a a))) (thing 5)"), Equals(int64(10)))
 }
 
+func TestGloballyDefinedMacros(t *testing.T) {
+    AssertThat(t, Process("(defmacro five (lambda (xs) 5)) (five one two three)"), Equals(int64(5)))
+}
+
 func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
     AssertThat(t, Process("(let (a 1) a)"), Equals(int64(1)))
 }

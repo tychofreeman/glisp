@@ -9,6 +9,7 @@ import (
 type Scope struct {
     prev *Scope
     table map[string]interface{}
+    isMacroScope bool
 }
 
 func (scope *Scope) lookup(name string) (interface{}, bool) {
@@ -26,11 +27,17 @@ func (scope *Scope) add(name string, defn interface{}) {
     return
 }
 
+func (scope *Scope) createNonEvaluatingScope() *Scope {
+    return &Scope{scope, map[string]interface{}{}, true}
+}
+
 
 type Symbol struct { name string }
 
 func (sym Symbol) Eval(scope *Scope) interface{} {
-    if resolved, ok := scope.lookup(sym.name); ok {
+    if scope.isMacroScope {
+        return sym
+    } else if resolved, ok := scope.lookup(sym.name); ok {
         return resolved
     } else {
         panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %v\n", sym.name, scope))
@@ -87,6 +94,9 @@ func last(input []interface{}) interface{} {
 }
 
 func (value List) Eval(scope *Scope) interface{} {
+    if scope.isMacroScope {
+        return value
+    }
     switch firstValue := value[0].(type) {
     case NonEvaluatingFunction:
         return firstValue(scope, value.rest())
@@ -254,6 +264,16 @@ func define_(scope *Scope, params List) interface{} {
     return List{}
 }
 
+func macro(scope *Scope, params List) interface{} {
+    name := params.first().(Symbol).name
+    body := params.rest().first()
+    macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
+        return body.(Function)(macroScope, macroParams)
+    })
+    scope.add(name, macroFn)
+    return List{}
+}
+
 var builtins = map[string]interface{} {
     "quote": NonEvaluatingFunction(quote),
     "car"  : Function(car),
@@ -265,6 +285,7 @@ var builtins = map[string]interface{} {
     "eq"   : Function(eq),
     "apply": Function(apply),
     "def"  : NonEvaluatingFunction(define_),
+    "defmacro" : NonEvaluatingFunction(macro),
 }
 
 
@@ -323,7 +344,7 @@ func Parse(source interface{}) interface{} {
             param_binding_fn := make_param_binding_fn(List(node).second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
-                return GetValue(&Scope{scope, param_bindings}, last(body))
+                return GetValue(&Scope{scope, param_bindings, false}, last(body))
             })
         }
         x := ParseMany(node)
@@ -334,7 +355,7 @@ func Parse(source interface{}) interface{} {
             param_binding_fn := make_param_binding_fn(node.second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
-                return GetValue(&Scope{scope, param_bindings}, last(body))
+                return GetValue(&Scope{scope, param_bindings, false}, last(body))
             })
         }
         x :=  ParseMany(node)
@@ -354,7 +375,7 @@ func ParseMany(input List) []interface{} {
 
 func ProcessTokens(tokenized []interface{}) interface{} {
     parsed := ParseMany(tokenized)
-    value := GetValue(&Scope{nil, builtins}, parsed)
+    value := GetValue(&Scope{nil, builtins, false}, parsed)
     switch v := value.(type) {
     case List:
         return []interface{}(v)
