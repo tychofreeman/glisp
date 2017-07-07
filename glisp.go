@@ -23,7 +23,6 @@ func (scope *Scope) lookup(name string) (interface{}, bool) {
 
 func (scope *Scope) add(name string, defn interface{}) {
     scope.table[name] = defn
-    fmt.Printf("Added %v to %v\n", name, scope)
     return
 }
 
@@ -95,7 +94,6 @@ func (value List) Eval(scope *Scope) interface{} {
         params := value.rest().GetValues(scope)
         return firstValue(scope, params)
     case Valuable:
-        fmt.Printf("Evaluating Valuable %v in list %v\n", firstValue, value)
         switch symb := firstValue.Eval(scope).(type) {
         case NonEvaluatingFunction:
             x := symb(scope, value.rest())
@@ -252,7 +250,6 @@ func define_(scope *Scope, params List) interface{} {
     name := params.first().(Symbol).name
     body := params.rest().first()
 
-    fmt.Printf("Going to define %v as %v\n", name, body)
     scope.add(name, body)
     return List{}
 }
