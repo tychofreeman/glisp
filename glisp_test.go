@@ -85,6 +85,15 @@ func TestGloballyDefinedMacros(t *testing.T) {
     AssertThat(t, Process("(defmacro five (lambda (xs) 5)) (five one two three)"), Equals(int64(5)))
 }
 
+func TestGloballyDefinedMacrosCanCallFunctions(t *testing.T) {
+    AssertThat(t, Process("(def double (lambda (x) (plus x x))) (defmacro five (lambda (xs) (double 5))) (five one two three)"), Equals(int64(10)))
+}
+
+// Amusingly, macros need params. I don't feel like fixing this. :-)
+func TestMacrosCanNest(t *testing.T) {
+    AssertThat(t, Process("(defmacro five (lambda (xs) 5)) (defmacro ten (lambda (xs) (plus (five asdf) (five asdf)))) (ten asdf)"), Equals(int64(10)))
+}
+
 func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
     AssertThat(t, Process("(let (a 1) a)"), Equals(int64(1)))
 }
