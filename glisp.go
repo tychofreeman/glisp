@@ -21,8 +21,15 @@ func (scope *Scope) lookup(name string) (interface{}, bool) {
     return nil, false
 }
 
+func (scope *Scope) add(name string, defn interface{}) {
+    scope.table[name] = defn
+    fmt.Printf("Added %v to %v\n", name, scope)
+    return
+}
+
 
 type Symbol struct { name string }
+
 func (sym Symbol) Eval(scope *Scope) interface{} {
     if resolved, ok := scope.lookup(sym.name); ok {
         return resolved
@@ -88,6 +95,7 @@ func (value List) Eval(scope *Scope) interface{} {
         params := value.rest().GetValues(scope)
         return firstValue(scope, params)
     case Valuable:
+        fmt.Printf("Evaluating Valuable %v in list %v\n", firstValue, value)
         switch symb := firstValue.Eval(scope).(type) {
         case NonEvaluatingFunction:
             x := symb(scope, value.rest())
@@ -100,13 +108,18 @@ func (value List) Eval(scope *Scope) interface{} {
             panic(fmt.Sprintf("A list should be either a function or a nested list (probably actually a high-order function) - found %T %v in %v\n", firstValue, firstValue, value))
         }
     case []interface{}:
-        return List(firstValue).Eval(scope)
+        lastElement := interface{}(nil)
+        for _, element := range value {
+            lastElement = GetValue(scope, element)
+        }
+        return lastElement
     }
     panic(fmt.Sprintf("Could not evaluate list: %v\n", value))
 }
 
 
 func GetValue(scope *Scope, source interface{}) interface{} {
+
     switch value := source.(type) {
     case int64:
         return value
@@ -235,6 +248,15 @@ func apply(scope *Scope, params List) interface{} {
     return GetValue(scope, params)
 }
 
+func define_(scope *Scope, params List) interface{} {
+    name := params.first().(Symbol).name
+    body := params.rest().first()
+
+    fmt.Printf("Going to define %v as %v\n", name, body)
+    scope.add(name, body)
+    return List{}
+}
+
 var builtins = map[string]interface{} {
     "quote": NonEvaluatingFunction(quote),
     "car"  : Function(car),
@@ -245,7 +267,9 @@ var builtins = map[string]interface{} {
     "if"   : Function(if_),
     "eq"   : Function(eq),
     "apply": Function(apply),
+    "def"  : NonEvaluatingFunction(define_),
 }
+
 
 
 func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[string]interface{}) {
@@ -331,11 +355,9 @@ func ParseMany(input List) []interface{} {
     return List(output)
 }
 
-func Process(input string)  interface{} {
-    tokenized := TokenizeString(input)
+func ProcessTokens(tokenized []interface{}) interface{} {
     parsed := ParseMany(tokenized)
     value := GetValue(&Scope{nil, builtins}, parsed)
-    //fmt.Printf("Value: %v\n", value)
     switch v := value.(type) {
     case List:
         return []interface{}(v)
@@ -344,6 +366,10 @@ func Process(input string)  interface{} {
     }
 }
 
+func Process(input string)  interface{} {
+    return ProcessTokens(TokenizeString(input))
+}
+
 func ProcessFile(fname string) interface{} {
-    return nil   
+    return ProcessTokens(TokenizeFile(fname))   
 }
