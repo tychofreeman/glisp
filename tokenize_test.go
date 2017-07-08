@@ -66,3 +66,7 @@ func TestHandlesStringsWithSpaces(t *testing.T) {
     AssertThat(t, TokenizeString("\"abc def\" \"ghi jkl\""), HasExactly("\"abc def\"", "\"ghi jkl\""))
 }
 
+func TestHandlesNegativeNumbers(t *testing.T) {
+    AssertThat(t, TokenizeString("-1"), HasExactly("-1"))
+}
+
