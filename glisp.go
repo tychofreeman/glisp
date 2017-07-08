@@ -235,14 +235,14 @@ func plus(_ *Scope, params List) interface{} {
     return sum
 }
 
-func if_(_ *Scope, params List) interface{} {
+func if_(scope *Scope, params List) interface{} {
     if len(params) != 3 {
         panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %v parts - %v.", len(params), params))
     }
     if true == params[0] {
-        return params[1]
+        return GetValue(scope, params[1])
     }
-    return params[2]
+    return GetValue(scope, params[2])
 }
 
 func eq(_ *Scope, params List) interface{} {
@@ -268,9 +268,22 @@ func macro(scope *Scope, params List) interface{} {
     name := params.first().(Symbol).name
     body := params.rest().first()
     macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
-        return body.(Function)(macroScope, macroParams)
+        switch b := body.(type) {
+        case Function:
+        return b(macroScope, macroParams)
+        case NonEvaluatingFunction:
+        return b(macroScope, macroParams)
+        default:
+        fmt.Printf("Could nt execute a function: %t %v\n%v\n", b, b, macroScope)
+        return nil
+        }
     })
     scope.add(name, macroFn)
+    return List{}
+}
+
+func print(scope *Scope, params List) interface{} {
+    fmt.Printf("%v\n", params)
     return List{}
 }
 
@@ -281,14 +294,13 @@ var builtins = map[string]interface{} {
     "atom" : Function(atom),
     "cons" : Function(cons),
     "plus" : Function(plus),
-    "if"   : Function(if_),
+    "if"   : NonEvaluatingFunction(if_),
     "eq"   : Function(eq),
     "apply": Function(apply),
     "def"  : NonEvaluatingFunction(define_),
     "defmacro" : NonEvaluatingFunction(macro),
+    "p"    : Function(print),
 }
-
-
 
 func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[string]interface{}) {
     param_names := []string{}
@@ -373,9 +385,14 @@ func ParseMany(input List) []interface{} {
     return List(output)
 }
 
-func ProcessTokens(tokenized []interface{}) interface{} {
+var baseScope = &Scope{nil, builtins, false}
+
+func ProcessTokens(scope *Scope, tokenized []interface{}, includeStdLib bool) interface{} {
+    if includeStdLib {
+        ProcessTokens(scope, TokenizeFile("stdlib.glisp"), false)
+    }
     parsed := ParseMany(tokenized)
-    value := GetValue(&Scope{nil, builtins, false}, parsed)
+    value := GetValue(scope, parsed)
     switch v := value.(type) {
     case List:
         return []interface{}(v)
@@ -385,9 +402,9 @@ func ProcessTokens(tokenized []interface{}) interface{} {
 }
 
 func Process(input string)  interface{} {
-    return ProcessTokens(TokenizeString(input))
+    return ProcessTokens(baseScope, TokenizeString(input), true)
 }
 
 func ProcessFile(fname string) interface{} {
-    return ProcessTokens(TokenizeFile(fname))   
+    return ProcessTokens(baseScope, TokenizeFile(fname), true)
 }

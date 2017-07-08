@@ -13,7 +13,7 @@ func TokenizeString(input string) []interface{} {
 
 func TokenizeFile(fname string) []interface{} {
     fileBytes,err := ioutil.ReadFile(fname)
-    if err == nil {
+    if err != nil {
         return nil
     }
     b := bytes.NewBuffer(fileBytes)

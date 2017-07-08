@@ -94,6 +94,15 @@ func TestMacrosCanNest(t *testing.T) {
     AssertThat(t, Process("(defmacro five (lambda (xs) 5)) (defmacro ten (lambda (xs) (plus (five asdf) (five asdf)))) (ten asdf)"), Equals(int64(10)))
 }
 
+func COMPILE_IN_MULTIPLE_PASSES_TO_GET_THIS_TO_WORK_TestMutualRecursionWorks(t *testing.T) {
+    AssertThat(t, Process("(def x1 (lambda (x) (p x) (if (eq x 10) x (x2 (plus 1 x))))) (def x2 (p x) (lambda (x) (x1 x))) (x1 5)"), Equals(int64(0)))
+}
+
+func COMPILE_IN_MULTIPLE_PASSES_TO_GET_THIS_TO_WORK_TestFunctionsCanBeDefinedWithShortcuts(t *testing.T) {
+    AssertThat(t, Process("(defmacro defn (lambda (xs) (def (car (xs) (cdr xs))))) (defn x1 (x) (plus x 1)) (x1 4)"), Equals(5))
+    AssertThat(t, Process("(defn x1 (x) (plus x 1)) (x1 4)"), Equals(5))
+}
+
 func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
     AssertThat(t, Process("(let (a 1) a)"), Equals(int64(1)))
 }
