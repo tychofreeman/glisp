@@ -70,3 +70,6 @@ func TestHandlesNegativeNumbers(t *testing.T) {
     AssertThat(t, TokenizeString("-1"), HasExactly("-1"))
 }
 
+func TestHandlesUnderscoresInNames(t *testing.T) {
+    AssertThat(t, TokenizeString("\"a_b\""), HasExactly("\"a_b\""))
+}

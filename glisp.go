@@ -41,7 +41,7 @@ func (sym Symbol) Eval(scope *Scope) interface{} {
     } else if resolved, ok := scope.lookup(sym.name); ok {
         return resolved
     } else {
-        panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %v\n", sym.name, scope))
+        panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %#v\n", sym.name, scope))
     }
 }
 
