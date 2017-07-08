@@ -240,7 +240,7 @@ func if_(scope *Scope, params List) interface{} {
     if len(params) != 3 {
         panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %v parts - %v.", len(params), params))
     }
-    if true == params[0] {
+    if true == GetValue(scope, params[0]) {
         return GetValue(scope, params[1])
     }
     return GetValue(scope, params[2])

@@ -95,9 +95,7 @@ func TestMacrosCanNest(t *testing.T) {
 }
 
 func TestCanPullOffYCombinatorTypeTrick(t *testing.T) {
-    AssertThat(t, 
-        Process("(def r1 (lambda (x r) (p (eq 10 x)) (if (eq 10 x) \"true\" (r (plus 1 x) r)))) (r1 0 r1)"),
-        Equals("true"))
+    AssertThat(t, Process("(def r1 (lambda (x r) (if (eq 10 x) \"true\" (r (plus 1 x) r)))) (r1 0 r1)"), Equals("true"))
 }
 
 func COMPILE_IN_MULTIPLE_PASSES_TO_GET_THIS_TO_WORK_TestMutualRecursionWorks(t *testing.T) {
