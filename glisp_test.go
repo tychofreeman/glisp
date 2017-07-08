@@ -94,6 +94,12 @@ func TestMacrosCanNest(t *testing.T) {
     AssertThat(t, Process("(defmacro five (lambda (xs) 5)) (defmacro ten (lambda (xs) (plus (five asdf) (five asdf)))) (ten asdf)"), Equals(int64(10)))
 }
 
+func TestCanPullOffYCombinatorTypeTrick(t *testing.T) {
+    AssertThat(t, 
+        Process("(def r1 (lambda (x r) (p (eq 10 x)) (if (eq 10 x) \"true\" (r (plus 1 x) r)))) (r1 0 r1)"),
+        Equals("true"))
+}
+
 func COMPILE_IN_MULTIPLE_PASSES_TO_GET_THIS_TO_WORK_TestMutualRecursionWorks(t *testing.T) {
     AssertThat(t, Process("(def x1 (lambda (x) (p x) (if (eq x 10) x (x2 (plus 1 x))))) (def x2 (p x) (lambda (x) (x1 x))) (x1 5)"), Equals(int64(0)))
 }

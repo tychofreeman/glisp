@@ -4,6 +4,7 @@ import (
     "fmt"
     "strings"
     "strconv"
+    "os"
 )
 
 type Scope struct {
@@ -284,6 +285,7 @@ func macro(scope *Scope, params List) interface{} {
 
 func print(scope *Scope, params List) interface{} {
     fmt.Printf("%v\n", params)
+    os.Stdout.Sync()
     return List{}
 }
 
@@ -356,7 +358,11 @@ func Parse(source interface{}) interface{} {
             param_binding_fn := make_param_binding_fn(List(node).second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
-                return GetValue(&Scope{scope, param_bindings, false}, last(body))
+                var lastElement interface{} = nil
+                for _, element := range body {
+                    lastElement = GetValue(&Scope{scope, param_bindings, false}, element)
+                }
+                return lastElement
             })
         }
         x := ParseMany(node)
@@ -367,7 +373,11 @@ func Parse(source interface{}) interface{} {
             param_binding_fn := make_param_binding_fn(node.second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
-                return GetValue(&Scope{scope, param_bindings, false}, last(body))
+                var lastElement interface{} = nil
+                for _, element := range body {
+                    lastElement = GetValue(&Scope{scope, param_bindings, false}, element)
+                }
+                return lastElement
             })
         }
         x :=  ParseMany(node)
@@ -389,7 +399,7 @@ var baseScope = &Scope{nil, builtins, false}
 
 func ProcessTokens(scope *Scope, tokenized []interface{}, includeStdLib bool) interface{} {
     if includeStdLib {
-        ProcessTokens(scope, TokenizeFile("stdlib.glisp"), false)
+        ProcessTokens(scope, TokenizeFile("/Users/cwfreeman/dev/go/src/glisp/stdlib.glisp"), false)
     }
     parsed := ParseMany(tokenized)
     value := GetValue(scope, parsed)
