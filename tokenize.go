@@ -26,17 +26,24 @@ func Tokenize(bs *bytes.Buffer) []interface{} {
     }
     r := []interface{}{}
 
+    inQuote := false;
+
     acc := ""
     for ; bs.Len() > 0 ; {
         c := rune(bs.Next(1)[0])
         
-        if unicode.IsLetter(c) || unicode.IsNumber(c) || c == '"' {
+        if unicode.IsLetter(c) || unicode.IsNumber(c) {
             acc += string(c)
         } else if c == '(' {
             var nested []interface{} = Tokenize(bs)
             r = append(r, nested)
         } else if c == ')' {
             break
+        } else if c== '"' {
+            inQuote = !inQuote
+            acc += string(c)
+        } else if inQuote {
+            acc += string(c)
         } else {
             if acc != "" {
                 r = append(r, acc)

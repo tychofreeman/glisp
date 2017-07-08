@@ -61,3 +61,8 @@ func TestHandlesNumbersToo(t *testing.T) {
 func TestHandlesStringLiterals(t *testing.T) {
     AssertThat(t, TokenizeString("\"abc\""), HasExactly("\"abc\""))
 }
+
+func TestHandlesStringsWithSpaces(t *testing.T) {
+    AssertThat(t, TokenizeString("\"abc def\" \"ghi jkl\""), HasExactly("\"abc def\"", "\"ghi jkl\""))
+}
+
