@@ -86,13 +86,6 @@ func (input List) last() interface{} {
     return nil
 }
 
-func last(input []interface{}) interface{} {
-    if len(input) > 0 {
-        return input[len(input)-1]
-    }
-    return nil
-}
-
 func (value List) Eval(scope *Scope) interface{} {
     if scope.isMacroScope {
         return value
@@ -103,6 +96,12 @@ func (value List) Eval(scope *Scope) interface{} {
     case Function:
         params := value.rest().GetValues(scope)
         return firstValue(scope, params)
+    case List:
+        lastElement := interface{}(nil)
+        for _, element := range value {
+            lastElement = GetValue(scope, element)
+        }
+        return lastElement
     case Valuable:
         switch symb := firstValue.Eval(scope).(type) {
         case NonEvaluatingFunction:
@@ -115,12 +114,6 @@ func (value List) Eval(scope *Scope) interface{} {
         default:
             panic(fmt.Sprintf("A list should be either a function or a nested list (probably actually a high-order function) - found %T %v in %v\n", firstValue, firstValue, value))
         }
-    case []interface{}:
-        lastElement := interface{}(nil)
-        for _, element := range value {
-            lastElement = GetValue(scope, element)
-        }
-        return lastElement
     }
     panic(fmt.Sprintf("Could not evaluate list: %v\n", value))
 }
@@ -133,10 +126,10 @@ func GetValue(scope *Scope, source interface{}) interface{} {
         return value
     case string:
         return value
+    case List:
+        return value.Eval(scope)
     case Valuable:
         return value.Eval(scope)
-    case []interface{}:
-        return List(value).Eval(scope)
     default:
         panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", value, value))
     }
@@ -158,10 +151,6 @@ func car(_ *Scope, params List) interface{} {
             if len(x) > 0 {
                 return x[0]
             }
-        case []interface{}:
-            if len(x) > 0 {
-                return x[0]
-            }
         }
     }
     return nil
@@ -174,10 +163,6 @@ func cdr(_ *Scope, params List) interface{} {
             if len(x) > 0 {
                 return x.rest()
             }
-        case []interface{}:
-            if len(x) > 0 {
-                return List(x).rest()
-            }
         }
     }
     return nil
@@ -187,8 +172,6 @@ func atom(_ *Scope, params List) interface{} {
     if len(params) > 0 {
         switch params[0].(type) {
         case List:
-            return false
-        case []interface{}:
             return false
         default:
             return true
@@ -207,12 +190,6 @@ func cons(_ *Scope, params List) interface{} {
         } else {
             switch x := params[1].(type) {
             case List:
-                output := List{params[0]}
-                for _, i := range x {
-                    output = append(output, i)
-                }
-                return output
-            case []interface{}:
                 output := List{params[0]}
                 for _, i := range x {
                     output = append(output, i)
@@ -315,24 +292,11 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
                 param_names = append(param_names, "")
             }
         }
-    case []interface{}:
-        for _, y := range x {
-            switch z := y.(type) {
-            case string:
-                param_names = append(param_names, z)
-            default:
-                param_names = append(param_names, "")
-            }
-        }
     }
     return func(theParams interface{}) map[string]interface{} {
         scope := map[string]interface{}{}
         switch params := theParams.(type) {
         case List:
-            for i := 0; i < len(param_names); i++ {
-                scope[param_names[i]] = params[i]
-            }
-        case []interface{}:
             for i := 0; i < len(param_names); i++ {
                 scope[param_names[i]] = params[i]
             }
@@ -370,7 +334,7 @@ func Parse(source interface{}) interface{} {
     return source
 }
 
-func ParseMany(input List) []interface{} {
+func ParseMany(input List) List {
     output := List{}
     for _, i := range input {
         output = append(output, Parse(i))
@@ -381,18 +345,13 @@ func ParseMany(input List) []interface{} {
 
 var baseScope = &Scope{nil, builtins, false}
 
-func ProcessTokens(scope *Scope, tokenized []interface{}, includeStdLib bool) interface{} {
+func ProcessTokens(scope *Scope, tokenized List, includeStdLib bool) interface{} {
     if includeStdLib {
         ProcessTokens(scope, TokenizeFile("/Users/cwfreeman/dev/go/src/glisp/stdlib.glisp"), false)
     }
     parsed := ParseMany(tokenized)
     value := GetValue(scope, parsed)
-    switch v := value.(type) {
-    case List:
-        return []interface{}(v)
-    default:
-        return value
-    }
+    return value
 }
 
 func Process(input string)  interface{} {
