@@ -7,43 +7,6 @@ import (
     "os"
 )
 
-type Scope struct {
-    prev *Scope
-    table map[string]interface{}
-    isMacroScope bool
-}
-
-func (scope *Scope) lookup(name string) (interface{}, bool) {
-    if val, ok := scope.table[name]; ok {
-        return val, ok
-    }
-    if scope.prev != nil {
-        return scope.prev.lookup(name)
-    }
-    return nil, false
-}
-
-func (scope *Scope) add(name string, defn interface{}) {
-    scope.table[name] = defn
-    return
-}
-
-func (scope *Scope) createNonEvaluatingScope() *Scope {
-    return &Scope{scope, map[string]interface{}{}, true}
-}
-
-
-type Symbol struct { name string }
-
-func (sym Symbol) Eval(scope *Scope) interface{} {
-    if scope.isMacroScope {
-        return sym
-    } else if resolved, ok := scope.lookup(sym.name); ok {
-        return resolved
-    } else {
-        panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %#v\n", sym.name, scope))
-    }
-}
 
 type Valuable interface {
     Eval(*Scope) interface{}
@@ -54,6 +17,7 @@ type Function func(_ *Scope, params List) interface{}
 type NonEvaluatingFunction func(_ *Scope, params List) interface{}
 
 
+// TODO We want this to live on a different type than List. But first, we must tokenize->parse->pass1->pass2->...->eval
 func (things List) GetValues(scope *Scope) List {
     output := List{}
     for _, i := range things {
@@ -259,22 +223,31 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
     param_names := []string{}
     switch x := param_decls.(type) {
     case List:
+        fmt.Printf("Adding param decls %v\n", x)
         for _, y := range x {
             switch z := y.(type) {
             case string:
                 param_names = append(param_names, z)
+            case Sym:
+                param_names = append(param_names, z.Str())
             default:
                 param_names = append(param_names, "")
             }
         }
+    default:
+        panic(fmt.Sprintf("Cannot build param bindings with unknown declaration type %T (expected a List of symbols)\n", x))
     }
     return func(theParams interface{}) map[string]interface{} {
         scope := map[string]interface{}{}
+        fmt.Printf("Binding params %v to values...\n", param_names)
         switch params := theParams.(type) {
         case List:
             for i := 0; i < len(param_names); i++ {
+                fmt.Printf("Adding %v = %v\n", param_names[i], params[i])
                 scope[param_names[i]] = params[i]
             }
+        default:
+            panic(fmt.Sprintf("Cannot associate param names with values if values aren't in a List - found type %T\n", params))
         }
         return scope
     }
@@ -282,6 +255,8 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
 
 func Parse(source interface{}) interface{} {
     switch node := source.(type) {
+    case Sym:
+        return Parse(node.Str())
     case string:
         if strings.HasPrefix(node, "\"") {
             return node[1:len(node)-1]
@@ -291,11 +266,12 @@ func Parse(source interface{}) interface{} {
             return Symbol{node}
         }
     case List:
-        if len(node) > 1 && node[0] == "lambda" {
+        if len(node) > 1 && node[0] == Sym("lambda") {
             body := ParseMany(node.Rest().Rest())
             param_binding_fn := make_param_binding_fn(node.Second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
+                fmt.Printf("In Lambda, adding params %v\n", param_bindings)
                 var lastElement interface{} = nil
                 for _, element := range body {
                     lastElement = GetValue(&Scope{scope, param_bindings, false}, element)
