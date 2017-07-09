@@ -54,23 +54,6 @@ type Function func(_ *Scope, params List) interface{}
 type NonEvaluatingFunction func(_ *Scope, params List) interface{}
 
 
-func (all List) first() interface{} {
-    if all != nil && len(all) > 0 {
-        return all[0]
-    }
-    return nil
-}
-
-func (all List) second() interface{} {
-    return all.rest().first()
-}
-
-func (all List) rest() List {
-    if all != nil && len(all) > 0 {
-        return List(all[1:])
-    }
-    return nil
-}
 func (things List) GetValues(scope *Scope) List {
     output := List{}
     for _, i := range things {
@@ -79,22 +62,15 @@ func (things List) GetValues(scope *Scope) List {
     return output
 }
 
-func (input List) last() interface{} {
-    if len(input) > 0 {
-        return input[len(input)-1]
-    }
-    return nil
-}
-
 func (value List) Eval(scope *Scope) interface{} {
     if scope.isMacroScope {
         return value
     }
     switch firstValue := value[0].(type) {
     case NonEvaluatingFunction:
-        return firstValue(scope, value.rest())
+        return firstValue(scope, value.Rest())
     case Function:
-        params := value.rest().GetValues(scope)
+        params := value.Rest().GetValues(scope)
         return firstValue(scope, params)
     case List:
         lastElement := interface{}(nil)
@@ -105,10 +81,10 @@ func (value List) Eval(scope *Scope) interface{} {
     case Valuable:
         switch symb := firstValue.Eval(scope).(type) {
         case NonEvaluatingFunction:
-            x := symb(scope, value.rest())
+            x := symb(scope, value.Rest())
             return x
         case Function:
-            params := value.rest().GetValues(scope)
+            params := value.Rest().GetValues(scope)
             x := symb(scope, params)
             return x
         default:
@@ -120,7 +96,6 @@ func (value List) Eval(scope *Scope) interface{} {
 
 
 func GetValue(scope *Scope, source interface{}) interface{} {
-
     switch value := source.(type) {
     case int64:
         return value
@@ -161,7 +136,7 @@ func cdr(_ *Scope, params List) interface{} {
         switch x := params[0].(type) {
         case List:
             if len(x) > 0 {
-                return x.rest()
+                return x.Rest()
             }
         }
     }
@@ -185,7 +160,7 @@ func cons(_ *Scope, params List) interface{} {
     if len(params) == 1 {
         return params
     } else if len(params) == 2 {
-        if atom(nil, params.rest()) == true {
+        if atom(nil, params.Rest()) == true {
             return params
         } else {
             switch x := params[1].(type) {
@@ -234,16 +209,16 @@ func apply(scope *Scope, params List) interface{} {
 }
 
 func define_(scope *Scope, params List) interface{} {
-    name := params.first().(Symbol).name
-    body := params.rest().first()
+    name := params.First().(Symbol).name
+    body := params.Rest().First()
 
     scope.add(name, body)
     return List{}
 }
 
 func macro(scope *Scope, params List) interface{} {
-    name := params.first().(Symbol).name
-    body := params.rest().first()
+    name := params.First().(Symbol).name
+    body := params.Rest().First()
     macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
         switch b := body.(type) {
         case Function:
@@ -317,8 +292,8 @@ func Parse(source interface{}) interface{} {
         }
     case List:
         if len(node) > 1 && node[0] == "lambda" {
-            body := ParseMany(node.rest().rest())
-            param_binding_fn := make_param_binding_fn(node.second())
+            body := ParseMany(node.Rest().Rest())
+            param_binding_fn := make_param_binding_fn(node.Second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
                 var lastElement interface{} = nil
