@@ -4,8 +4,8 @@ import (
     "testing"
 
     // Use github version as soon as changes are uploaded.
-    //. "github.com/tychofreeman/go-matchers"
-    . "matchers"
+    . "github.com/tychofreeman/go-matchers"
+    //. "matchers"
 )
 
 func TestEmptyStringYieldsNilList(t *testing.T) {

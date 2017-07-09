@@ -53,7 +53,6 @@ type ParamsList List
 type Function func(_ *Scope, params List) interface{}
 type NonEvaluatingFunction func(_ *Scope, params List) interface{}
 
-type List []interface{}
 
 func (all List) first() interface{} {
     if all != nil && len(all) > 0 {
@@ -352,21 +351,6 @@ func Parse(source interface{}) interface{} {
         } else {
             return Symbol{node}
         }
-    case []interface{}:
-        if len(node) > 1 && node[0] == "lambda" {
-            body := ParseMany(List(node).rest().rest())
-            param_binding_fn := make_param_binding_fn(List(node).second())
-            return Function(func(scope *Scope, params List) interface{} {
-                param_bindings := param_binding_fn(params)
-                var lastElement interface{} = nil
-                for _, element := range body {
-                    lastElement = GetValue(&Scope{scope, param_bindings, false}, element)
-                }
-                return lastElement
-            })
-        }
-        x := ParseMany(node)
-        return x
     case List:
         if len(node) > 1 && node[0] == "lambda" {
             body := ParseMany(node.rest().rest())

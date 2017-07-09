@@ -6,12 +6,12 @@ import (
     "io/ioutil"
 )
 
-func TokenizeString(input string) []interface{} {
+func TokenizeString(input string) List {
     b := bytes.NewBufferString(input)
     return Tokenize(b)
 }
 
-func TokenizeFile(fname string) []interface{} {
+func TokenizeFile(fname string) List {
     fileBytes,err := ioutil.ReadFile(fname)
     if err != nil {
         return nil
@@ -20,11 +20,11 @@ func TokenizeFile(fname string) []interface{} {
     return Tokenize(b)
 }
 
-func Tokenize(bs *bytes.Buffer) []interface{} {
+func Tokenize(bs *bytes.Buffer) List {
     if bs.Len() == 0 {
         return nil
     }
-    r := []interface{}{}
+    r := List{}
 
     inQuote := false;
 
@@ -35,7 +35,7 @@ func Tokenize(bs *bytes.Buffer) []interface{} {
         if unicode.IsLetter(c) || unicode.IsNumber(c) || c == '-' || c == '_' || c == '?' {
             acc += string(c)
         } else if c == '(' {
-            var nested []interface{} = Tokenize(bs)
+            nested := Tokenize(bs)
             r = append(r, nested)
         } else if c == ')' {
             break
