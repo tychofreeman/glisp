@@ -190,7 +190,7 @@ func macro(scope *Scope, params List) interface{} {
         case NonEvaluatingFunction:
         return b(macroScope, macroParams)
         default:
-        fmt.Printf("Could nt execute a function: %t %v\n%v\n", b, b, macroScope)
+        panic(fmt.Sprintf("Could nt execute a function: %t %v\n%v\n", b, b, macroScope))
         return nil
         }
     })
@@ -223,7 +223,6 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
     param_names := []string{}
     switch x := param_decls.(type) {
     case List:
-        fmt.Printf("Adding param decls %v\n", x)
         for _, y := range x {
             switch z := y.(type) {
             case string:
@@ -239,11 +238,9 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
     }
     return func(theParams interface{}) map[string]interface{} {
         scope := map[string]interface{}{}
-        fmt.Printf("Binding params %v to values...\n", param_names)
         switch params := theParams.(type) {
         case List:
             for i := 0; i < len(param_names); i++ {
-                fmt.Printf("Adding %v = %v\n", param_names[i], params[i])
                 scope[param_names[i]] = params[i]
             }
         default:
@@ -271,7 +268,6 @@ func Parse(source interface{}) interface{} {
             param_binding_fn := make_param_binding_fn(node.Second())
             return Function(func(scope *Scope, params List) interface{} {
                 param_bindings := param_binding_fn(params)
-                fmt.Printf("In Lambda, adding params %v\n", param_bindings)
                 var lastElement interface{} = nil
                 for _, element := range body {
                     lastElement = GetValue(&Scope{scope, param_bindings, false}, element)

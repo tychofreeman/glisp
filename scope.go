@@ -1,5 +1,4 @@
 package glisp
-import ( "fmt" )
 
 type Scope struct {
     prev *Scope
@@ -8,7 +7,6 @@ type Scope struct {
 }
 
 func (scope *Scope) lookup(name Sym) (interface{}, bool) {
-    fmt.Printf("Looking up %T %v\n", name, name)
     if val, ok := scope.table[name.Str()]; ok {
         return val, ok
     }
