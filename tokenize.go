@@ -28,12 +28,12 @@ func Tokenize(bs *bytes.Buffer) List {
 
     inQuote := false;
 
-    acc := Sym("")
+    acc := symbol("")
     for ; bs.Len() > 0 ; {
         c := rune(bs.Next(1)[0])
         
         if unicode.IsLetter(c) || unicode.IsNumber(c) || c == '-' || c == '_' || c == '?' {
-            acc += Sym(c)
+            acc = acc.Append(c)
         } else if c == '(' {
             nested := Tokenize(bs)
             r = append(r, nested)
@@ -41,18 +41,18 @@ func Tokenize(bs *bytes.Buffer) List {
             break
         } else if c== '"' {
             inQuote = !inQuote
-            acc += Sym(c)
+            acc = acc.Append(c)
         } else if inQuote {
-            acc += Sym(c)
+            acc = acc.Append(c)
         } else {
             if acc != "" {
                 r = append(r, acc)
             }
-            acc = Sym("")
+            acc = symbol("")
         }
 
     }
-    if acc != Sym("") {
+    if acc != symbol("") {
         r = append(r, acc)
     }
     return r

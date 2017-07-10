@@ -263,7 +263,7 @@ func Parse(source interface{}) interface{} {
             return Symbol{node}
         }
     case List:
-        if len(node) > 1 && node[0] == Sym("lambda") {
+        if len(node) > 1 && node[0] == symbol("lambda") {
             body := ParseMany(node.Rest().Rest())
             param_binding_fn := make_param_binding_fn(node.Second())
             return Function(func(scope *Scope, params List) interface{} {
