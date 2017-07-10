@@ -225,8 +225,6 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
     case List:
         for _, y := range x {
             switch z := y.(type) {
-            case string:
-                param_names = append(param_names, z)
             case Symbol:
                 param_names = append(param_names, z.Str())
             default:
@@ -253,14 +251,12 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
 func Parse(source interface{}) interface{} {
     switch node := source.(type) {
     case Symbol:
-        return Parse(node.Str())
-    case string:
-        if strings.HasPrefix(node, "\"") {
-            return node[1:len(node)-1]
-        } else if num, err := strconv.ParseInt(strings.TrimSpace(node), 10, 64); err == nil {
+        if strings.HasPrefix(node.Str(), "\"") {
+            return node.Str()[1:len(node.Str())-1]
+        } else if num, err := strconv.ParseInt(strings.TrimSpace(node.Str()), 10, 64); err == nil {
             return num
         } else {
-            return Symbol{node}
+            return node
         }
     case List:
         if len(node) > 1 && node[0] == symbol("lambda") {
