@@ -45,14 +45,14 @@ func Tokenize(bs *bytes.Buffer) List {
         } else if inQuote {
             acc = acc.Append(c)
         } else {
-            if acc != "" {
+            if !acc.IsEmpty() {
                 r = append(r, acc)
             }
             acc = symbol("")
         }
 
     }
-    if acc != symbol("") {
+    if !acc.IsEmpty() {
         r = append(r, acc)
     }
     return r

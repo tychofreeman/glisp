@@ -9,10 +9,6 @@ func (sym Symbol) Str() string {
     return sym.name
 }
 
-func (sym Symbol) Sym() Sym {
-    return Sym(sym.name)
-}
-
 func (sym Symbol) Eval(scope *Scope) interface{} {
     if scope.isMacroScope {
         return sym
@@ -23,11 +19,24 @@ func (sym Symbol) Eval(scope *Scope) interface{} {
     }
 }
 
-type Sym string
-func (sym Sym) Str() string { return string(sym) }
-func symbol(s string) Sym {
-    return Sym(s)
+func (sym Symbol) Sym() Sym {
+    return Sym(sym)
 }
+
+type Sym Symbol
+func symbol(s string) Sym {
+    return Sym(Symbol{s})
+}
+
+func (sym Sym) Str() string {
+    return Symbol(sym).Str()
+}
+
 func (sym Sym) Append(c rune) Sym {
-    return Sym(string(sym) + string(c))
+    sym.name += string(c)
+    return sym
+}
+
+func (sym Sym) IsEmpty() bool {
+    return sym.name == ""
 }
