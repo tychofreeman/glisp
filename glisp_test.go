@@ -6,7 +6,7 @@ import (
 )
 
 func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
-    AssertThat(t, Process("(quote (\"a\" \"b\" \"c\"))"), HasExactly("a", "b", "c"))
+    AssertThat(t, Process("(quote (\"a\" \"b\" \"c\"))"), HasExactly(str_token("a"), str_token("b"), str_token("c")))
 }
 
 func TestQuotePreventsEvaluationOfParams(t *testing.T) {
@@ -14,11 +14,11 @@ func TestQuotePreventsEvaluationOfParams(t *testing.T) {
 }
 
 func TestCarGrabsFirstItem(t *testing.T) {
-    AssertThat(t, Process("(car (quote (\"a\" \"b\")))"), Equals("a"))
+    AssertThat(t, Process("(car (quote (\"a\" \"b\")))"), Equals(str_token("a")))
 }
 
 func TestCdrGrabsTail(t *testing.T) {
-    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\")))"), HasExactly("b", "c", HasExactly("d")))
+    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\")))"), HasExactly(str_token("b"), str_token("c"), HasExactly(str_token("d"))))
 }
 
 func TestAtomIsTrueForSymbols(t *testing.T) {
@@ -34,11 +34,12 @@ func TestIntegerLiteralsAreImplemented(t *testing.T) {
 }
 
 func TestCorrectlyHandlesNestedCalls(t *testing.T) {
-    AssertThat(t, Process("(car (cdr (quote (\"a\" \"b\" \"c\"))))"), Equals("b"))
+    AssertThat(t, Process("(car (cdr (quote (\"a\" \"b\" \"c\"))))"), Equals(str_token("b")))
 }
 
+// FIXME - This seems wrong...
 func TestConsCreatesLists(t *testing.T) {
-    AssertThat(t, Process("(cons \"a\" (quote (\"b\")))"), HasExactly("a", "b"))
+    AssertThat(t, Process("(cons \"a\" (quote (\"b\")))"), HasExactly("a", str_token("b")))
 }
 
 func TestOnePlusOneEqualsTwo(t *testing.T) {

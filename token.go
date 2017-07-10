@@ -1,5 +1,10 @@
 package glisp
 
+import (
+    "strings"
+    "strconv"
+)
+
 type TokenType int8
 const (
     STRING TokenType = iota
@@ -10,6 +15,16 @@ const (
 type Token interface {
     Str() string
     Type() TokenType
+}
+
+func token(s string) Token {
+    if strings.HasPrefix(s, "\"") {
+        return StringToken{s[1:len(s)-1]}
+    //} else if num, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64); err == nil {
+    } else if _, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64); err == nil {
+        return NumberToken{s}
+    }
+    return Symbol{s}
 }
 
 type StringToken struct {

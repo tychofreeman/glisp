@@ -46,14 +46,14 @@ func Tokenize(bs *bytes.Buffer) List {
             acc += string(c)
         } else {
             if acc != "" {
-                r = append(r, symbol(acc))
+                r = append(r, token(acc))
             }
             acc = ""
         }
 
     }
     if acc != "" {
-        r = append(r, symbol(acc))
+        r = append(r, token(acc))
     }
     return r
 }

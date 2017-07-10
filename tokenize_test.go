@@ -55,21 +55,21 @@ func TestMultipleFirstLevelExprsPossible(t *testing.T) {
 }
 
 func TestHandlesNumbersToo(t *testing.T) {
-    AssertThat(t, TokenizeString("1"), HasExactly(symbol("1")))
+    AssertThat(t, TokenizeString("1"), HasExactly(token("1")))
 }
 
 func TestHandlesStringLiterals(t *testing.T) {
-    AssertThat(t, TokenizeString("\"abc\""), HasExactly(symbol("\"abc\"")))
+    AssertThat(t, TokenizeString("\"abc\""), HasExactly(token("\"abc\"")))
 }
 
 func TestHandlesStringsWithSpaces(t *testing.T) {
-    AssertThat(t, TokenizeString("\"abc def\" \"ghi jkl\""), HasExactly(symbol("\"abc def\""), symbol("\"ghi jkl\"")))
+    AssertThat(t, TokenizeString("\"abc def\" \"ghi jkl\""), HasExactly(token("\"abc def\""), token("\"ghi jkl\"")))
 }
 
 func TestHandlesNegativeNumbers(t *testing.T) {
-    AssertThat(t, TokenizeString("-1"), HasExactly(symbol("-1")))
+    AssertThat(t, TokenizeString("-1"), HasExactly(token("-1")))
 }
 
 func TestHandlesUnderscoresInNames(t *testing.T) {
-    AssertThat(t, TokenizeString("\"a_b\""), HasExactly(symbol("\"a_b\"")))
+    AssertThat(t, TokenizeString("\"a_b\""), HasExactly(token("\"a_b\"")))
 }
