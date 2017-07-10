@@ -2,7 +2,6 @@ package glisp
 
 import (
     "fmt"
-    "strings"
     "os"
 )
 
@@ -152,12 +151,12 @@ func macro(scope *Scope, params List) interface{} {
     macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
         switch b := body.(type) {
         case Function:
-        return b(macroScope, macroParams)
+            return b(macroScope, macroParams)
         case NonEvaluatingFunction:
-        return b(macroScope, macroParams)
+            return b(macroScope, macroParams)
         default:
-        panic(fmt.Sprintf("Could nt execute a function: %t %v\n%v\n", b, b, macroScope))
-        return nil
+            panic(fmt.Sprintf("Could nt execute a function: %t %v\n%v\n", b, b, macroScope))
+            return nil
         }
     })
     scope.add(name, macroFn)
