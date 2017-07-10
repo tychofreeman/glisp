@@ -3,7 +3,6 @@ package glisp
 import (
     "fmt"
     "strings"
-    "strconv"
     "os"
 )
 
@@ -217,11 +216,11 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
 
 func Parse(source interface{}) interface{} {
     switch node := source.(type) {
+    case NumberToken:
+        return node.Value()
     case Token:
         if strings.HasPrefix(node.Str(), "\"") {
             return node.Str()[1:len(node.Str())-1]
-        } else if num, err := strconv.ParseInt(strings.TrimSpace(node.Str()), 10, 64); err == nil {
-            return num
         } else {
             return node
         }

@@ -3,6 +3,7 @@ package glisp
 import (
     "strings"
     "strconv"
+    "fmt"
 )
 
 type TokenType int8
@@ -20,7 +21,6 @@ type Token interface {
 func token(s string) Token {
     if strings.HasPrefix(s, "\"") {
         return StringToken{s[1:len(s)-1]}
-    //} else if num, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64); err == nil {
     } else if _, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64); err == nil {
         return NumberToken{s}
     }
@@ -49,6 +49,18 @@ type NumberToken struct {
 
 func (n NumberToken) Str() string {
     return n.value
+}
+
+func (n NumberToken) Value() interface{} {
+    num, err := strconv.ParseInt(strings.TrimSpace(n.value), 10, 64)
+    if err == nil {
+        return num
+    }
+    panic(fmt.Sprintf("Could not parse %v as a number!!", n.value))
+}
+
+func (n NumberToken) Eval(scope *Scope) interface{} {
+    return n.Value()
 }
 
 func (n NumberToken) Type() TokenType {
