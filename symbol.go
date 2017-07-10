@@ -31,3 +31,7 @@ func (sym Symbol) Append(c rune) Symbol {
 func (sym Symbol) IsEmpty() bool {
     return sym.name == ""
 }
+
+func (sym Symbol) Type() TokenType {
+    return SYMBOL
+}
