@@ -173,7 +173,7 @@ func apply(scope *Scope, params List) interface{} {
 }
 
 func define_(scope *Scope, params List) interface{} {
-    name := params.First().(Symbol).name
+    name := params.First().(Token).Str()
     body := params.Rest().First()
 
     scope.add(name, body)
@@ -181,7 +181,7 @@ func define_(scope *Scope, params List) interface{} {
 }
 
 func macro(scope *Scope, params List) interface{} {
-    name := params.First().(Symbol).name
+    name := params.First().(Token).Str()
     body := params.Rest().First()
     macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
         switch b := body.(type) {
@@ -225,7 +225,7 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
     case List:
         for _, y := range x {
             switch z := y.(type) {
-            case Symbol:
+            case Token:
                 param_names = append(param_names, z.Str())
             default:
                 param_names = append(param_names, "")
@@ -250,7 +250,7 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
 
 func Parse(source interface{}) interface{} {
     switch node := source.(type) {
-    case Symbol:
+    case Token:
         if strings.HasPrefix(node.Str(), "\"") {
             return node.Str()[1:len(node.Str())-1]
         } else if num, err := strconv.ParseInt(strings.TrimSpace(node.Str()), 10, 64); err == nil {
