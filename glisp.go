@@ -220,12 +220,8 @@ func Parse(source interface{}) interface{} {
         return node.Value()
     case StringToken:
         return node.Value()
-    case Token:
-        if strings.HasPrefix(node.Str(), "\"") {
-            return node.Str()[1:len(node.Str())-1]
-        } else {
-            return node
-        }
+    case Symbol:
+        return node
     case List:
         if node.IsLambda() {
             body := ParseMany(node.Rest().Rest())
