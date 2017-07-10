@@ -227,7 +227,7 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
             switch z := y.(type) {
             case string:
                 param_names = append(param_names, z)
-            case Sym:
+            case Symbol:
                 param_names = append(param_names, z.Str())
             default:
                 param_names = append(param_names, "")
@@ -252,7 +252,7 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
 
 func Parse(source interface{}) interface{} {
     switch node := source.(type) {
-    case Sym:
+    case Symbol:
         return Parse(node.Str())
     case string:
         if strings.HasPrefix(node, "\"") {

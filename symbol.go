@@ -12,31 +12,22 @@ func (sym Symbol) Str() string {
 func (sym Symbol) Eval(scope *Scope) interface{} {
     if scope.isMacroScope {
         return sym
-    } else if resolved, ok := scope.lookup(sym.Sym()); ok {
+    } else if resolved, ok := scope.lookup(sym); ok {
         return resolved
     } else {
         panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %#v\n", sym.name, scope))
     }
 }
 
-func (sym Symbol) Sym() Sym {
-    return Sym(sym)
+func symbol(s string) Symbol {
+    return Symbol{s}
 }
 
-type Sym Symbol
-func symbol(s string) Sym {
-    return Sym(Symbol{s})
-}
-
-func (sym Sym) Str() string {
-    return Symbol(sym).Str()
-}
-
-func (sym Sym) Append(c rune) Sym {
+func (sym Symbol) Append(c rune) Symbol {
     sym.name += string(c)
     return sym
 }
 
-func (sym Sym) IsEmpty() bool {
+func (sym Symbol) IsEmpty() bool {
     return sym.name == ""
 }

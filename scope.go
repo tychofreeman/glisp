@@ -6,7 +6,7 @@ type Scope struct {
     isMacroScope bool
 }
 
-func (scope *Scope) lookup(name Sym) (interface{}, bool) {
+func (scope *Scope) lookup(name Symbol) (interface{}, bool) {
     if val, ok := scope.table[name.Str()]; ok {
         return val, ok
     }
