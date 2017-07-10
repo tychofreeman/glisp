@@ -19,3 +19,11 @@ func (all List) Rest() List {
     }
     return nil
 }
+
+func (node List) IsLambda() bool {
+    if len(node) > 1 {
+        token, isToken := node[0].(Token)
+        return isToken && token.Str() == "lambda"
+    }
+    return false
+}
