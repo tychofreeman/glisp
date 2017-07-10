@@ -218,6 +218,8 @@ func Parse(source interface{}) interface{} {
     switch node := source.(type) {
     case NumberToken:
         return node.Value()
+    case StringToken:
+        return node.Value()
     case Token:
         if strings.HasPrefix(node.Str(), "\"") {
             return node.Str()[1:len(node.Str())-1]

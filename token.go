@@ -35,6 +35,10 @@ func (s StringToken) Str() string {
     return s.value
 }
 
+func (s StringToken) Value() string {
+    return s.value
+}
+
 func (s StringToken) Eval(scope *Scope) interface{} {
     return s.value
 }
@@ -51,7 +55,7 @@ func (n NumberToken) Str() string {
     return n.value
 }
 
-func (n NumberToken) Value() interface{} {
+func (n NumberToken) Value() int64 {
     num, err := strconv.ParseInt(strings.TrimSpace(n.value), 10, 64)
     if err == nil {
         return num
