@@ -26,11 +26,8 @@ func (things List) GetValues(scope *Scope) List {
     return output
 }
 
-
 func GetValue(scope *Scope, source interface{}) interface{} {
     switch value := source.(type) {
-    case StringToken:
-        return value.Str()
     case int64:
         return value
     case string:

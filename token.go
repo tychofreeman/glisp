@@ -35,6 +35,10 @@ func (s StringToken) Str() string {
     return s.value
 }
 
+func (s StringToken) Eval(scope *Scope) interface{} {
+    return s.value
+}
+
 func (s StringToken) Type() TokenType {
     return STRING
 }
