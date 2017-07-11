@@ -6,19 +6,19 @@ import (
 )
 
 func TestQuoteSpitsOutRemainderOfExpression(t *testing.T) {
-    AssertThat(t, Process("(quote (\"a\" \"b\" \"c\"))"), HasExactly("a", "b", "c"))
+    AssertThat(t, Process("(quote (\"a\" \"b\" \"c\"))"), HasExactly(str("a"), str("b"), str("c")))
 }
 
 func TestQuotePreventsEvaluationOfParams(t *testing.T) {
-    AssertThat(t, Process("(quote (plus 1 2))"), HasExactly(Symbol{"plus"}, int64(1), int64(2)))
+    AssertThat(t, Process("(quote (plus 1 2))"), HasExactly(symbol("plus"), num(1), num(2)))
 }
 
 func TestCarGrabsFirstItem(t *testing.T) {
-    AssertThat(t, Process("(car (quote (\"a\" \"b\")))"), Equals("a"))
+    AssertThat(t, Process("(car (quote (\"a\" \"b\")))"), Equals(str("a")))
 }
 
 func TestCdrGrabsTail(t *testing.T) {
-    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\")))"), HasExactly("b", "c", HasExactly("d")))
+    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\")))"), HasExactly(str("b"), str("c"), HasExactly(str("d"))))
 }
 
 func TestAtomIsTrueForSymbols(t *testing.T) {
@@ -30,15 +30,15 @@ func TestAtomIsFalseForComplexExpres(t *testing.T) {
 }
 
 func TestIntegerLiteralsAreImplemented(t *testing.T) {
-    AssertThat(t, Process("(car (quote (1)))"), Equals(int64(1)))
+    AssertThat(t, Process("(car (quote (1)))"), Equals(num(1)))
 }
 
 func TestCorrectlyHandlesNestedCalls(t *testing.T) {
-    AssertThat(t, Process("(car (cdr (quote (\"a\" \"b\" \"c\"))))"), Equals("b"))
+    AssertThat(t, Process("(car (cdr (quote (\"a\" \"b\" \"c\"))))"), Equals(str("b")))
 }
 
 func TestConsCreatesLists(t *testing.T) {
-    AssertThat(t, Process("(cons \"a\" (quote (\"b\")))"), HasExactly("a", "b"))
+    AssertThat(t, Process("(cons \"a\" (quote (\"b\")))"), HasExactly(str("a"), str("b")))
 }
 
 func TestOnePlusOneEqualsTwo(t *testing.T) {
@@ -62,7 +62,7 @@ func TestSupportsLambdas(t *testing.T) {
 }
 
 func TestSupportsExpressionsInLambdas(t *testing.T) {
-    AssertThat(t, Process("((lambda () (quote (1 2 3))))"), HasExactly(Equals(int64(1)), Equals(int64(2)), Equals(int64(3))))
+    AssertThat(t, Process("((lambda () (quote (1 2 3))))"), HasExactly(num(1), num(2), num(3)))
 }
 
 func TestSupportsLambdaParameters(t *testing.T) {

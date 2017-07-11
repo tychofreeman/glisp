@@ -61,3 +61,11 @@ func (value List) Eval(scope *Scope) interface{} {
     }
     panic(fmt.Sprintf("Could not evaluate list: %v\n", value))
 }
+
+func (things List) GetValues(scope *Scope) List {
+    output := List{}
+    for _, i := range things {
+        output = append(output, GetValue(scope, i))
+    }
+    return output
+}

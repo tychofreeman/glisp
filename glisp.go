@@ -5,7 +5,6 @@ import (
     "os"
 )
 
-
 type Valuable interface {
     Eval(*Scope) interface{}
 }
@@ -13,16 +12,6 @@ type Valuable interface {
 type ParamsList List
 type Function func(_ *Scope, params List) interface{}
 type NonEvaluatingFunction func(_ *Scope, params List) interface{}
-
-
-// TODO We want this to live on a different type than List. But first, we must tokenize->parse->pass1->pass2->...->eval
-func (things List) GetValues(scope *Scope) List {
-    output := List{}
-    for _, i := range things {
-        output = append(output, GetValue(scope, i))
-    }
-    return output
-}
 
 func GetValue(scope *Scope, source interface{}) interface{} {
     switch value := source.(type) {
@@ -39,7 +28,6 @@ func GetValue(scope *Scope, source interface{}) interface{} {
     }
     return nil
 }
-
 
 func quote(_ *Scope, params List) interface{} {
     if len(params) > 0 {
@@ -216,9 +204,9 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
 func Parse(source interface{}) interface{} {
     switch node := source.(type) {
     case NumberToken:
-        return node.Value()
+        return node
     case StringToken:
-        return node.Value()
+        return node
     case Symbol:
         return node
     case List:

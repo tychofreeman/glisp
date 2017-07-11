@@ -4,6 +4,7 @@ import (
     "strings"
     "strconv"
     "fmt"
+    "reflect"
 )
 
 type TokenType int8
@@ -43,6 +44,22 @@ func (s StringToken) Eval(scope *Scope) interface{} {
     return s.value
 }
 
+func (s StringToken) Equals(other interface{}) (bool, string) {
+    switch o := other.(type) {
+    case string:
+        return o == s.value, fmt.Sprintf("Expected %v, actual %v\n", s.value, o)
+    case StringToken:
+        return o.value == s.value, fmt.Sprintf("Expected %v, actual %v\n", s.value, o.value)
+    case reflect.Value:
+        if o.CanInterface() {
+            return s.Equals(o.Interface())
+        }
+        return false, fmt.Sprintf("Cannot coerce Value %v to string (%v)\n", o, s.Value())
+    default:
+        return false, fmt.Sprintf("Expected string (%v), found %T %v\n", s.value, o, o)
+    }
+}
+
 func (s StringToken) Type() TokenType {
     return STRING
 }
@@ -69,6 +86,30 @@ func (n NumberToken) Eval(scope *Scope) interface{} {
 
 func (n NumberToken) Type() TokenType {
     return NUM
+}
+
+func (n NumberToken) Equals(other interface{}) (bool, string) {
+    switch o := other.(type) {
+    case NumberToken:
+        return o.Value() == n.Value(), fmt.Sprintf("Expected %v, found %v\n", n.Value(), o.Value())
+    case int64:
+        return o == n.Value(), fmt.Sprintf("Expected %v, found %v\n", n.Value(), o)
+    case reflect.Value:
+        if o.CanInterface() {
+            return n.Equals(o.Interface())
+        }
+        return false, fmt.Sprintf("Cannot coerce Value %v to int (%v)\n", o, n.Value())
+    default:
+        return false, fmt.Sprintf("Expected number (%v), found %T %v\n", n.Value(), o, o)
+    }
+}
+
+func num(n int64) NumberToken {
+    return NumberToken{fmt.Sprintf("%v", n)}
+}
+
+func str(s string) StringToken {
+    return StringToken{s}
 }
 
 func str_token(s string) StringToken {
