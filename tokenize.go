@@ -3,7 +3,7 @@ package glisp
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"unicode"
 )
 
@@ -13,7 +13,7 @@ func TokenizeString(input string) List {
 }
 
 func TokenizeFile(fname string) List {
-	fileBytes, err := ioutil.ReadFile(fname)
+	fileBytes, err := os.ReadFile(fname)
 	if err != nil {
 		return nil
 	}
@@ -40,6 +40,16 @@ func tokenizeList(bs *bytes.Buffer, nested bool) List {
 	for bs.Len() > 0 {
 		c, _, _ := bs.ReadRune()
 
+		// A comment runs from ; to the end of the line and separates tokens
+		// like the newline it ends with.
+		if !inQuote && c == ';' {
+			for bs.Len() > 0 {
+				if next, _, _ := bs.ReadRune(); next == '\n' {
+					break
+				}
+			}
+			c = '\n'
+		}
 		if inQuote && c != '"' {
 			acc += string(c)
 		} else if !unicode.IsSpace(c) && c != '(' && c != ')' && c != '"' {
