@@ -50,7 +50,7 @@ loaded before every program; it defines `mult`.
   a minute; it now takes well under a second).
 - [x] `true`, `false` and `nil` literals; programs defined them as
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
-- [ ] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists have to be built on
+- [x] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists had to be built on
   `(quote ())`.
 - [x] Quoted numbers stay tokens: `plus` accepts them, but
   `(eq (car (quote (1))) 1)` is false.

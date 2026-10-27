@@ -299,3 +299,13 @@ func TestTrueFalseAndNilAreDefined(t *testing.T) {
 	AssertThat(t, Process("(if true 1 2)"), Equals(int64(1)))
 	AssertThat(t, Process("(eq (car (quote ())) nil)"), IsTrue)
 }
+
+func TestConsOntoNilMakesAOneElementList(t *testing.T) {
+	AssertThat(t, Process("(cons 1 nil)"), HasExactly(num(1)))
+	AssertThat(t, Process("(cons 1 (cons 2 nil))"), HasExactly(num(1), num(2)))
+}
+
+func TestConsWithTheWrongNumberOfArgumentsFails(t *testing.T) {
+	assertPanicsWith(t, "(cons)", "cons: expects 1 or 2 arguments, got 0")
+	assertPanicsWith(t, "(cons 1 2 3)", "cons: expects 1 or 2 arguments, got 3")
+}

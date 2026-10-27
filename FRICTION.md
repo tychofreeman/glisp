@@ -320,3 +320,11 @@ One entry per PR, written before committing it.
 - No tool issues: three `add_element` steps (no `after`, so each went at the
   end of the `builtins` map), and gofmt-style alignment of the map came out
   right. One `replace_text` removed the example's own definitions.
+
+### PR: `cons` onto `nil`
+
+- No tool issues. `replace_statements` by `function` rewrote `cons`'s body;
+  with the file gofmt'd, its tab indentation now matches.
+- `replace_text` has an `all_occurrences` option (it's in the description; I
+  hadn't noticed it before), which replaced the example's six uses of `empty`
+  in one step.

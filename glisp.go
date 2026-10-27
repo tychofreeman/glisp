@@ -80,23 +80,20 @@ func atom(_ *Scope, params List) interface{} {
 }
 
 func cons(_ *Scope, params List) interface{} {
-	if len(params) == 1 {
-		return params
-	} else if len(params) == 2 {
-		if atom(nil, params.Rest()) == true {
-			return params
-		} else {
-			switch x := params[1].(type) {
-			case List:
-				output := List{params[0]}
-				for _, i := range x {
-					output = append(output, i)
-				}
-				return output
-			}
+	switch len(params) {
+	case 1:
+		return List{params[0]}
+	case 2:
+		switch rest := params[1].(type) {
+		case nil:
+			return List{params[0]}
+		case List:
+			return append(List{params[0]}, rest...)
+		default:
+			return List{params[0], rest}
 		}
 	}
-	return nil
+	panic(fmt.Sprintf("cons: expects 1 or 2 arguments, got %d", len(params)))
 }
 
 func plus(_ *Scope, params List) interface{} {

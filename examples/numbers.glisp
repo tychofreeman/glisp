@@ -2,8 +2,6 @@
 ; built from the handful of builtins.  Run it with
 ;   go run ./cmd/glisp examples/numbers.glisp
 
-(def empty (quote ()))
-
 (def null (lambda (l) (eq (car l) nil)))
 (def not (lambda (b) (if b false true)))
 (def inc (lambda (n) (plus n 1)))
@@ -17,18 +15,18 @@
 (def half (lambda (n) (half_walk n 0)))
 
 (def range (lambda (a b)
-  (if (eq a (inc b)) empty
+  (if (eq a (inc b)) nil
     (cons a (range (inc a) b)))))
 
 (def length (lambda (l)
   (if (null l) 0 (inc (length (cdr l))))))
 
 (def map (lambda (f l)
-  (if (null l) empty
+  (if (null l) nil
     (cons (f (car l)) (map f (cdr l))))))
 
 (def filter (lambda (pred l)
-  (if (null l) empty
+  (if (null l) nil
     (if (pred (car l))
       (cons (car l) (filter pred (cdr l)))
       (filter pred (cdr l))))))
@@ -41,19 +39,19 @@
 (def sum (lambda (l) (fold add 0 l)))
 
 (def push (lambda (acc x) (cons x acc)))
-(def reverse (lambda (l) (fold push empty l)))
+(def reverse (lambda (l) (fold push nil l)))
 
 (def append (lambda (a b)
   (if (null a) b
     (cons (car a) (append (cdr a) b)))))
 
 (def insert (lambda (x sorted)
-  (if (null sorted) (cons x empty)
+  (if (null sorted) (cons x nil)
     (if (< x (car sorted))
       (cons x sorted)
       (cons (car sorted) (insert x (cdr sorted)))))))
 (def insert_into (lambda (acc x) (insert x acc)))
-(def sort (lambda (l) (fold insert_into empty l)))
+(def sort (lambda (l) (fold insert_into nil l)))
 
 (def square (lambda (n) (mult n n)))
 (def even (lambda (n) (eq (mod n 2) 0)))
