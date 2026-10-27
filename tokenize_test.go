@@ -77,3 +77,8 @@ func TestHandlesUnderscoresInNames(t *testing.T) {
 func TestParensInsideStringsArePartOfTheString(t *testing.T) {
     AssertThat(t, TokenizeString("(quote \"a(b)c\")"), HasExactly(HasExactly(symbol("quote"), token("\"a(b)c\""))))
 }
+
+func TestOperatorCharactersAreSymbols(t *testing.T) {
+    AssertThat(t, TokenizeString("(+ 1 2)"), HasExactly(HasExactly(symbol("+"), token("1"), token("2"))))
+    AssertThat(t, TokenizeString("(<= a.b *x*)"), HasExactly(HasExactly(symbol("<="), symbol("a.b"), symbol("*x*"))))
+}
