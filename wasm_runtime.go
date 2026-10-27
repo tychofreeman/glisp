@@ -730,10 +730,7 @@ func (c *wasmCompiler) equalBody(b *wasmBody) {
 // args. site is the call, printed if f isn't a function.
 func (c *wasmCompiler) invokeBody(b *wasmBody) {
 	f, args, argc, site, r, entry, i := b.param(0), b.param(1), b.param(2), b.param(3), b.local(i64), b.local(i32), b.local(i32)
-	b.GlobalGet(gSP)
-	b.GlobalGet(gStackEnd)
-	b.Op(wasm.I32GtU)
-	c.failIf(b, "stack overflow", nil)
+	c.checkStack(b)
 	c.tagIs(b, f, tagClosure)
 	b.Op(wasm.I32Eqz)
 	c.failIf(b, "Cannot call ", func() {
@@ -744,13 +741,7 @@ func (c *wasmCompiler) invokeBody(b *wasmBody) {
 	})
 	b.GlobalGet(gSP)
 	b.LocalSet(entry)
-	b.LocalGet(f)
-	b.LocalGet(args)
-	b.LocalGet(argc)
-	b.LocalGet(f)
-	b.Op(wasm.I32WrapI64)
-	b.I32Load(4)
-	b.CallIndirect(c.fnType)
+	c.callValue(b, f, args, argc)
 	b.LocalSet(r)
 	// While the function called made a tail call, make that call: move its
 	// arguments down to where this invoke's stack starts, so a chain of tail
@@ -790,22 +781,39 @@ func (c *wasmCompiler) invokeBody(b *wasmBody) {
 		b.I32Const(3)
 		b.Op(wasm.I32Shl, wasm.I32Add)
 		b.GlobalSet(gSP)
-		b.GlobalGet(gSP)
-		b.GlobalGet(gStackEnd)
-		b.Op(wasm.I32GtU)
-		c.failIf(b, "stack overflow", nil)
-		b.LocalGet(f)
-		b.LocalGet(args)
-		b.LocalGet(argc)
-		b.LocalGet(f)
-		b.Op(wasm.I32WrapI64)
-		b.I32Load(4)
-		b.CallIndirect(c.fnType)
+		c.checkStack(b)
+		c.callValue(b, f, args, argc)
 		b.LocalSet(r)
 		b.LocalGet(entry)
 		b.GlobalSet(gSP)
 	})
 	b.LocalGet(r)
+}
+
+// callValue calls the function value in local f, a closure, with argc
+// arguments at args: through the table, at the closure's index.
+func (c *wasmCompiler) callValue(b *wasmBody, f, args, argc uint32) {
+	b.LocalGet(f)
+	b.LocalGet(args)
+	b.LocalGet(argc)
+	b.LocalGet(f)
+	b.tableIndex()
+	b.CallIndirect(c.fnType)
+}
+
+// tableIndex turns the closure on the stack into the table index of its
+// function.
+func (b *wasmBody) tableIndex() {
+	b.Op(wasm.I32WrapI64)
+	b.I32Load(4)
+}
+
+// checkStack fails if the argument stack has grown past its end.
+func (c *wasmCompiler) checkStack(b *wasmBody) {
+	b.GlobalGet(gSP)
+	b.GlobalGet(gStackEnd)
+	b.Op(wasm.I32GtU)
+	c.failIf(b, "stack overflow", nil)
 }
 
 // checkArgs fails, as the interpreter does, unless the builtin's arguments

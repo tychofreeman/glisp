@@ -423,23 +423,40 @@ type wasmFunc struct {
 // A lambda keeps its values in a frame on the argument stack, where the
 // collector finds them: its closure, then its slots.
 
+// A call on the argument stack and a lambda's frame have one layout: a
+// function, then values (the arguments, or the frame's slots).
+// valueOffset is the offset of value i.
+func valueOffset(i int) uint32 { return uint32(8 * (1 + i)) }
+
 // slotLoad leaves slot i of the lambda's frame.
 func (f *wasmFunc) slotLoad(i int) {
 	f.LocalGet(f.frame)
-	f.I64Load(uint32(8 * (1 + i)))
+	f.I64Load(valueOffset(i))
 }
 
 // slotStore stores the value in local v in slot i of the lambda's frame.
 func (f *wasmFunc) slotStore(i int, v uint32) {
+	f.slotSet(i, func() { f.LocalGet(v) })
+}
+
+// slotSet stores what value leaves in slot i of the lambda's frame.
+func (f *wasmFunc) slotSet(i int, value func()) {
 	f.LocalGet(f.frame)
-	f.LocalGet(v)
-	f.I64Store(uint32(8 * (1 + i)))
+	value()
+	f.I64Store(valueOffset(i))
 }
 
 // selfLoad leaves the lambda's closure.
 func (f *wasmFunc) selfLoad() {
 	f.LocalGet(f.frame)
 	f.I64Load(0)
+}
+
+// selfSet stores what value leaves as the lambda's closure in its frame.
+func (f *wasmFunc) selfSet(value func()) {
+	f.LocalGet(f.frame)
+	value()
+	f.I64Store(0)
 }
 
 // at records, for errors, that the program is making the call on line, if
@@ -587,12 +604,11 @@ func (f *wasmFunc) apply(n Apply) {
 }
 
 // pushCall pushes the function n calls, then its arguments, onto the
-// argument stack, where they stay while the call is made, and returns a
-// local holding the function's address there.
-func (f *wasmFunc) pushCall(n Apply) uint32 {
-	base := f.local(wasm.I32)
+// argument stack, where they stay while the call is made.
+func (f *wasmFunc) pushCall(n Apply) stackCall {
+	call := stackCall{f.wasmBody, f.local(wasm.I32), len(n.Args)}
 	f.GlobalGet(gSP)
-	f.LocalSet(base)
+	f.LocalSet(call.base)
 	for _, node := range append([]Node{n.Fn}, n.Args...) {
 		f.GlobalGet(gSP)
 		f.expr(node)
@@ -602,44 +618,68 @@ func (f *wasmFunc) pushCall(n Apply) uint32 {
 		f.Op(wasm.I32Add)
 		f.GlobalSet(gSP)
 	}
-	return base
+	return call
 }
 
-// invoke calls the function at base with n's arguments, all on the argument
-// stack, and pops them. A builtin with an inline path runs inline when the
+// A stackCall is a call on the argument stack, from the address in local
+// base: the function, then argc arguments.
+type stackCall struct {
+	b    *wasmBody
+	base uint32
+	argc int
+}
+
+// fn leaves the function called.
+func (s stackCall) fn() {
+	s.b.LocalGet(s.base)
+	s.b.I64Load(0)
+}
+
+// arg leaves argument i.
+func (s stackCall) arg(i int) {
+	s.b.LocalGet(s.base)
+	s.b.I64Load(valueOffset(i))
+}
+
+// args leaves the address of the arguments.
+func (s stackCall) args() {
+	s.b.LocalGet(s.base)
+	s.b.I32Const(8)
+	s.b.Op(wasm.I32Add)
+}
+
+// pop takes the call off the stack.
+func (s stackCall) pop() {
+	s.b.LocalGet(s.base)
+	s.b.GlobalSet(gSP)
+}
+
+// invoke makes call, n, and pops it. A builtin with an inline path runs inline when the
 // function is still that builtin. Otherwise the call is a safe point: the
 // collector may run first, so the function is read from the stack after it.
-func (f *wasmFunc) invoke(base uint32, n Apply) {
+func (f *wasmFunc) invoke(call stackCall, n Apply) {
 	f.at(n.Line) // again, after the arguments' calls
-	call := func() {
+	slow := func() {
 		f.c.safePoint(f.wasmBody)
-		f.LocalGet(base)
-		f.I64Load(0)
-		f.LocalGet(base)
-		f.I32Const(8)
-		f.Op(wasm.I32Add)
-		f.I32Const(int32(len(n.Args)))
+		call.fn()
+		call.args()
+		f.I32Const(int32(call.argc))
 		f.I32Const(int32(f.c.str(unresolved(n).String())))
 		f.Call(f.c.rt.invoke)
 	}
 	if name, inline, found := f.c.inlineFor(n); found {
-		f.LocalGet(base)
-		f.I64Load(0)
+		call.fn()
 		f.I64Const(int64(f.c.closure(f.c.rt.builtins[name])))
 		f.Op(wasm.I64Eq)
 		f.ifElse(wasm.BlockI64, func() {
-			inline.emit(f.wasmBody, &f.c.rt, func(i int) {
-				f.LocalGet(base)
-				f.I64Load(uint32(8 * (1 + i)))
-			}, call)
+			inline.emit(f.wasmBody, &f.c.rt, call.arg, slow)
 		}, func() {
-			call()
+			slow()
 		})
 	} else {
-		call()
+		slow()
 	}
-	f.LocalGet(base)
-	f.GlobalSet(gSP)
+	call.pop()
 }
 
 // tailExpr compiles node, whose value the lambda returns. In tail position,
@@ -670,70 +710,57 @@ func (f *wasmFunc) tailExpr(node Node) {
 // back to the top of the loop; otherwise tailCall makes it.
 func (f *wasmFunc) tailApply(n Apply) {
 	f.at(n.Line)
-	base := f.pushCall(n)
+	call := f.pushCall(n)
 	f.at(n.Line)
 	if len(n.Args) != len(f.lambda.Params) {
-		f.tailCall(base, n)
+		f.tailCall(call, n)
 		return
 	}
-	f.LocalGet(base)
-	f.I64Load(0)
+	call.fn()
 	f.selfLoad()
 	f.Op(wasm.I64Eq)
 	f.ifElse(wasm.BlockI64, func() {
 		for i := range n.Args {
-			f.LocalGet(f.frame)
-			f.LocalGet(base)
-			f.I64Load(uint32(8 * (1 + i)))
-			f.I64Store(uint32(8 * (1 + i)))
+			f.slotSet(i, func() { call.arg(i) })
 		}
-		f.LocalGet(base)
-		f.GlobalSet(gSP)
+		call.pop()
 		f.Br(uint32(f.blocks + 1))
 	}, func() {
-		f.tailCall(base, n)
+		f.tailCall(call, n)
 	})
 }
 
-// tailCall calls the function at base, in tail position, with the arguments
-// after it. A lambda's closure is left pending for invoke, which calls it
+// tailCall makes call, n, in tail position. A lambda's closure is left pending for invoke, which calls it
 // once this frame is gone, so tail calls between functions use no stack:
 // the arguments stay where they are, above the popped frame, until invoke
 // moves them down. Builtins, and values that aren't functions, are called
 // (or reported) as usual.
-func (f *wasmFunc) tailCall(base uint32, n Apply) {
-	fn := func() {
-		f.LocalGet(base)
-		f.I64Load(0)
-	}
-	fn()
+func (f *wasmFunc) tailCall(call stackCall, n Apply) {
+	call.fn()
 	f.Call(f.c.rt.tagOf)
 	f.I32Const(tagClosure)
 	f.Op(wasm.I32Eq)
 	f.ifElse(wasm.BlockI32, func() {
-		fn()
-		f.Op(wasm.I32WrapI64)
-		f.I32Load(4)
+		call.fn()
+		f.tableIndex()
 		f.I32Const(int32(len(builtinSpecs)))
 		f.Op(wasm.I32GeU)
 	}, func() {
 		f.I32Const(0)
 	})
 	f.ifElse(wasm.BlockI64, func() {
-		fn()
+		call.fn()
 		f.GlobalSet(gPendingFn)
-		f.LocalGet(base)
-		f.I32Const(8)
-		f.Op(wasm.I32Add)
+		call.args()
 		f.GlobalSet(gPendingArgs)
-		f.I32Const(int32(len(n.Args)))
+		f.I32Const(int32(call.argc))
 		f.GlobalSet(gPendingArgc)
 		f.LocalGet(f.frame)
 		f.GlobalSet(gSP)
 		f.I64Const(pending)
 		f.Op(wasm.Return)
 	}, func() {
-		f.invoke(base, n)
+		f.invoke(call, n)
 	})
 }
 
@@ -786,11 +813,7 @@ func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 	f.I32Const(int32(len(n.Params)))
 	f.Op(wasm.I32Ne)
 	f.when(func() {
-		arguments := "arguments"
-		if len(n.Params) == 1 {
-			arguments = "argument"
-		}
-		msg := fmt.Sprintf("lambda (%s) expects %d %s, got ", strings.Join(n.Params, " "), len(n.Params), arguments)
+		msg := fmt.Sprintf("lambda (%s) expects %s, got ", strings.Join(n.Params, " "), arguments(len(n.Params)))
 		c.fail(f.wasmBody, msg, func() {
 			f.LocalGet(paramArgc)
 			f.Op(wasm.I64ExtendI32U)
@@ -808,33 +831,28 @@ func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 	// closure made in one pass keeps its own, and starts local defs unbound.
 	f.GlobalGet(gSP)
 	f.LocalTee(f.frame)
-	f.I32Const(int32(8 * (1 + len(f.slots))))
+	f.I32Const(int32(valueOffset(len(f.slots))))
 	f.Op(wasm.I32Add)
 	f.GlobalSet(gSP)
-	f.LocalGet(f.frame)
-	f.LocalGet(paramSelf)
-	f.I64Store(0)
+	f.selfSet(func() { f.LocalGet(paramSelf) })
 	for i := range n.Params {
-		f.LocalGet(f.frame)
-		f.LocalGet(paramArgs)
-		f.I64Load(uint32(8 * i))
-		f.I64Store(uint32(8 * (1 + i)))
+		f.slotSet(i, func() { f.arg(uint32(i)) })
 	}
 	f.Loop(wasm.BlockI64)
 	for i := range f.slots {
 		if i < len(n.Params) && !f.boxed[i] {
 			continue
 		}
-		f.LocalGet(f.frame)
-		if i < len(n.Params) {
-			f.slotLoad(i)
-		} else {
-			f.I64Const(0)
-		}
-		if f.boxed[i] {
-			f.Call(c.rt.cell)
-		}
-		f.I64Store(uint32(8 * (1 + i)))
+		f.slotSet(i, func() {
+			if i < len(n.Params) {
+				f.slotLoad(i)
+			} else {
+				f.I64Const(0)
+			}
+			if f.boxed[i] {
+				f.Call(c.rt.cell)
+			}
+		})
 	}
 	f.body(n.Body)
 	f.Op(wasm.End)
