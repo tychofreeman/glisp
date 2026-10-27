@@ -275,10 +275,15 @@ by hand. In the order to do them; each makes the next cheaper.
   what's needed if that much isn't there, and all three call it. Building
   a long string with `str` now doubles memory too; a test that does so
   failed on the page-at-a-time growth.
-- [ ] **Tail position and lines as facts of the AST.** The interpreter's
-  loop and the compiler's `tailExpr` each decide what is in tail position,
-  and both record a call's line twice. Resolve could mark `Apply.Tail` as
-  it marks `Loc` and `Captured`.
-- [ ] **A parity case.** The compiled-vs-interpreted tests are a list of
-  programs; GC thresholds, expected errors and known differences (63-bit
-  integers) are handled case by case. Wanted: a case type with options.
+- [ ] **Tail position and lines as facts of the AST.** Not done, on a
+  closer look: the interpreter never decides tail position (whatever its
+  `Eval` loop evaluates last is in tail position by construction), so
+  only the compiler would read an `Apply.Tail`; and recording a call's
+  line before and after its arguments is each backend's own way of
+  tracking the call being made. Worth doing with a third backend.
+- [x] **A parity check.** "Compile it, interpret it, compare" was written
+  out in eight tests, and wazero's setup in three. Now `assertSameOutput`
+  makes the comparison and reports the first line that differs, and
+  `instantiate` sets up a module for tests that look inside it (memory
+  size). A case type with options turned out not to be needed:
+  `withGCThreshold` is the only option, and it is per test.

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/tetratelabs/wazero"
+	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 	"github.com/tetratelabs/wazero/sys"
 )
@@ -22,18 +23,76 @@ func runCompiled(t *testing.T, program string) string {
 	if err != nil {
 		return "compile error: " + err.Error()
 	}
+	m := instantiate(t, module)
+	defer m.close()
+	if err := m.start(); err != nil {
+		return m.out.String() + "wasm error: " + err.Error()
+	}
+	return m.out.String()
+}
+
+// A compiledModule is a compiled program instantiated under WASI, not yet
+// started. out collects what it prints on stdout and stderr.
+type compiledModule struct {
+	ctx   context.Context
+	mod   api.Module
+	out   *bytes.Buffer
+	close func()
+}
+
+func instantiate(t *testing.T, module []byte) compiledModule {
+	t.Helper()
 	ctx := context.Background()
 	r := wazero.NewRuntime(ctx)
-	defer r.Close(ctx)
 	wasi_snapshot_preview1.MustInstantiate(ctx, r)
-	var out bytes.Buffer
-	config := wazero.NewModuleConfig().WithStdout(&out).WithStderr(&out)
-	_, err = r.InstantiateWithConfig(ctx, module, config)
-	var exit *sys.ExitError
-	if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
-		return out.String() + "wasm error: " + err.Error()
+	out := &bytes.Buffer{}
+	config := wazero.NewModuleConfig().WithStdout(out).WithStderr(out).WithStartFunctions()
+	mod, err := r.InstantiateWithConfig(ctx, module, config)
+	if err != nil {
+		r.Close(ctx)
+		t.Fatal(err)
 	}
-	return out.String()
+	return compiledModule{ctx, mod, out, func() { r.Close(ctx) }}
+}
+
+// start runs the program. Ending by reporting an error (exit code 1) counts
+// as running normally.
+func (m compiledModule) start() error {
+	_, err := m.mod.ExportedFunction("_start").Call(m.ctx)
+	var exit *sys.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return nil
+	}
+	return err
+}
+
+// assertSameOutput checks that program prints the same compiled as
+// interpreted, reporting the first line where they differ.
+func assertSameOutput(t *testing.T, program string) {
+	t.Helper()
+	got, want := runCompiled(t, program), runInterpreted(t, program)
+	if got == want {
+		return
+	}
+	name, _, cut := strings.Cut(program, "\n")
+	if cut {
+		name += " …"
+	}
+	g, w := strings.Split(got, "\n"), strings.Split(want, "\n")
+	for i := 0; ; i++ {
+		if i >= len(g) || i >= len(w) || g[i] != w[i] {
+			t.Errorf("%s\nline %d of the output differs\ncompiled:    %q\ninterpreted: %q", name, i+1, lineOf(g, i), lineOf(w, i))
+			return
+		}
+	}
+}
+
+// lineOf is lines[i], or "" past the end.
+func lineOf(lines []string, i int) string {
+	if i < len(lines) {
+		return lines[i]
+	}
+	return ""
 }
 
 // runInterpreted runs program in the interpreter and returns what
@@ -191,10 +250,7 @@ var wasmPrograms = []string{
 
 func TestCompiledProgramsPrintWhatTheInterpreterDoes(t *testing.T) {
 	for _, program := range wasmPrograms {
-		want := runInterpreted(t, program)
-		if got := runCompiled(t, program); got != want {
-			t.Errorf("%s\ncompiled:    %q\ninterpreted: %q", program, got, want)
-		}
+		assertSameOutput(t, program)
 	}
 }
 
@@ -203,10 +259,7 @@ func TestCompiledExampleMatchesTheInterpreter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := runInterpreted(t, string(program))
-	if got := runCompiled(t, string(program)); got != want {
-		t.Errorf("compiled:\n%s\ninterpreted:\n%s", got, want)
-	}
+	assertSameOutput(t, string(program))
 }
 
 func TestCompiledFunctionsPrintAsFunctions(t *testing.T) {
@@ -262,9 +315,7 @@ func TestCompiledBuiltinCallsAreDirect(t *testing.T) {
 	if len(direct) <= len(indirect) {
 		t.Errorf("with inline paths: %d bytes; without: %d", len(direct), len(indirect))
 	}
-	if got, want := runCompiled(t, program), runInterpreted(t, program); got != want {
-		t.Errorf("compiled: %q\ninterpreted: %q", got, want)
-	}
+	assertSameOutput(t, program)
 }
 
 // Memory grows by doubling, so a program that allocates a lot grows it a few
@@ -282,22 +333,15 @@ func TestCompiledMemoryGrowsByDoubling(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			ctx := context.Background()
-			r := wazero.NewRuntime(ctx)
-			defer r.Close(ctx)
-			wasi_snapshot_preview1.MustInstantiate(ctx, r)
-			var out bytes.Buffer
-			mod, err := r.InstantiateWithConfig(ctx, module, wazero.NewModuleConfig().WithStdout(&out).WithStartFunctions())
-			if err != nil {
+			m := instantiate(t, module)
+			defer m.close()
+			initial := m.mod.Memory().Size()
+			if err := m.start(); err != nil {
 				t.Fatal(err)
 			}
-			initial := mod.Memory().Size()
-			if _, err := mod.ExportedFunction("_start").Call(ctx); err != nil {
-				t.Fatal(err)
-			}
-			final := mod.Memory().Size()
-			if out.String() != tc.want {
-				t.Errorf("printed %q", out.String())
+			final := m.mod.Memory().Size()
+			if m.out.String() != tc.want {
+				t.Errorf("printed %q", m.out.String())
 			}
 			if ratio := final / initial; final <= initial || final%initial != 0 || ratio&(ratio-1) != 0 {
 				t.Errorf("memory grew from %d to %d bytes, not by doubling", initial, final)

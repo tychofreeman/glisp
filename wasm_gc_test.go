@@ -1,13 +1,8 @@
 package glisp
 
 import (
-	"bytes"
-	"context"
 	"os"
 	"testing"
-
-	"github.com/tetratelabs/wazero"
-	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
 )
 
 // withGCThreshold compiles with the collector running once the heap grows
@@ -32,9 +27,7 @@ func TestCompiledProgramsSurviveConstantCollection(t *testing.T) {
 		programs = append(programs, c.src)
 	}
 	for _, program := range programs {
-		if got, want := runCompiled(t, program), runInterpreted(t, program); got != want {
-			t.Errorf("%s\ncompiled:    %q\ninterpreted: %q", program, got, want)
-		}
+		assertSameOutput(t, program)
 	}
 }
 
@@ -45,9 +38,7 @@ func TestCompiledExamplesSurviveFrequentCollection(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got, want := runCompiled(t, string(program)), runInterpreted(t, string(program)); got != want {
-			t.Errorf("%s: compiled and interpreted output differ\ncompiled:\n%s\ninterpreted:\n%s", file, got, want)
-		}
+		assertSameOutput(t, string(program))
 	}
 }
 
@@ -64,22 +55,18 @@ func TestCompiledGarbageIsCollected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
-	r := wazero.NewRuntime(ctx)
-	defer r.Close(ctx)
-	wasi_snapshot_preview1.MustInstantiate(ctx, r)
-	var out bytes.Buffer
-	mod, err := r.InstantiateWithConfig(ctx, module, wazero.NewModuleConfig().WithStdout(&out).WithStderr(&out))
-	if err != nil {
-		t.Fatalf("%v: %s", err, out.String())
+	m := instantiate(t, module)
+	defer m.close()
+	if err := m.start(); err != nil {
+		t.Fatalf("%v: %s", err, m.out.String())
 	}
-	if out.String() != "=> true\n" {
-		t.Errorf("printed %q", out.String())
+	if m.out.String() != "=> true\n" {
+		t.Errorf("printed %q", m.out.String())
 	}
 	// 50,000 lists of 100 pairs is 120MB allocated; what's kept is a list
 	// of 50,000, about 1MB. Memory holds the 32MB argument stack and a heap
 	// that doubles as it grows.
-	if size := mod.Memory().Size(); size > 80<<20 {
+	if size := m.mod.Memory().Size(); size > 80<<20 {
 		t.Errorf("memory grew to %d MB", size>>20)
 	}
 }

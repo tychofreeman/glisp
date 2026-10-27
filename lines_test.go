@@ -34,8 +34,6 @@ func TestParseErrorsGiveTheirLine(t *testing.T) {
 
 func TestCompiledErrorsGiveTheSameLine(t *testing.T) {
 	for _, c := range lineErrors {
-		if got, want := runCompiled(t, c.src), runInterpreted(t, c.src); got != want {
-			t.Errorf("%q\ncompiled:    %q\ninterpreted: %q", c.src, got, want)
-		}
+		assertSameOutput(t, c.src)
 	}
 }

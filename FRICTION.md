@@ -783,3 +783,17 @@ One entry per PR, written before committing it.
   test against the old code (`git stash` of the two source files) showed
   that, and the third program fails on the old code and passes on the new.
 - By hand: this entry.
+
+### PR: a parity check (`assertSameOutput`), and item 6 set aside
+
+- One 14-step batch. The first try was refused at step 2: step 1 had
+  replaced `runCompiled`, whose old body was the only user of the `sys`
+  import, so the tool removed the import, and the new helpers in step 2
+  needed it back. The refusal named `imports`; passing the two import
+  paths and putting the helpers first fixed it. Tidying imports after
+  every step is right on its own, but in a batch checked at its end it
+  could wait for the end.
+- `fix_imports` ran by itself at the end and removed the five imports
+  wasm_gc_test.go no longer used.
+- By hand: this entry, and a throwaway test (deleted) to see what a parity
+  failure now reports.
