@@ -123,6 +123,9 @@ var wasmPrograms = []string{
 	`(def p (lambda (x) x)) (p 5)`,
 	`(cons (lambda (x) x) nil) 1`,
 	`(defn count (n) (if (eq n 0) 0 (plus 1 (count (- n 1))))) (count 3000)`,
+	`(p (* 2 3 7) (*) (/ 17 5) (/ -17 5) (mod 17 5) (mod -17 5) (mult 6 7))`,
+	`(p (<= 1 2) (<= 2 2) (<= 3 2) (>= 2 2) (>= 1 2))`,
+	`(p (apply * 1 2 3 4) (apply / 9 2))`,
 	// Errors.
 	`(car 1)`,
 	`(cdr "s")`,
@@ -143,6 +146,11 @@ var wasmPrograms = []string{
 	`(defn f () (g)) (f)`,
 	`(p defn)`,
 	`(defn f () (p h) (def h 1)) (f)`,
+	`(* 2 "a")`,
+	`(/ 1 0)`,
+	`(mod 1 0)`,
+	`(/ 1)`,
+	`(>= 1 2 3)`,
 }
 
 func TestCompiledProgramsPrintWhatTheInterpreterDoes(t *testing.T) {

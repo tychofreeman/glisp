@@ -875,7 +875,7 @@ func (c *wasmCompiler) builtinBody(name string) ([]wasm.ValType, wasm.Code) {
 		b.Call(c.rt.pair)
 		b.Call(c.rt.pair)
 		return vals(i64), b
-	case "plus", "-":
+	case "plus", "-", "*":
 		const sum, i = 3, 4
 		fn := int32(c.str(name))
 		number := func() {
@@ -884,6 +884,11 @@ func (c *wasmCompiler) builtinBody(name string) ([]wasm.ValType, wasm.Code) {
 			b.Call(c.rt.num)
 		}
 		op := wasm.I64Add
+		if name == "*" {
+			op = wasm.I64Mul
+			b.I64Const(1)
+			b.LocalSet(sum)
+		}
 		if name == "-" {
 			op = wasm.I64Sub
 			argcIs(0, wasm.I32Eq)
@@ -918,7 +923,34 @@ func (c *wasmCompiler) builtinBody(name string) ([]wasm.ValType, wasm.Code) {
 		b.LocalGet(sum)
 		encode(&b)
 		return vals(i64, i32), b
-	case "<", ">":
+	case "/", "mod":
+		const a, d = 3, 4
+		fn := int32(c.str(name))
+		argcIs(2, wasm.I32Ne)
+		b.If(wasm.BlockVoid)
+		c.fail(&b, name+": expects 2 arguments, got ", putArgc)
+		b.Op(wasm.End)
+		for i, local := range []uint32{a, d} {
+			arg(&b, uint32(i))
+			b.I32Const(fn)
+			b.Call(c.rt.num)
+			b.LocalSet(local)
+		}
+		b.LocalGet(d)
+		b.Op(wasm.I64Eqz)
+		b.If(wasm.BlockVoid)
+		c.fail(&b, name+": division by zero", nil)
+		b.Op(wasm.End)
+		b.LocalGet(a)
+		b.LocalGet(d)
+		if name == "/" {
+			b.Op(wasm.I64DivS)
+		} else {
+			b.Op(wasm.I64RemS)
+		}
+		encode(&b)
+		return vals(i64, i64), b
+	case "<", ">", "<=", ">=":
 		fn := int32(c.str(name))
 		argcIs(2, wasm.I32Ne)
 		b.If(wasm.BlockVoid)
@@ -929,11 +961,7 @@ func (c *wasmCompiler) builtinBody(name string) ([]wasm.ValType, wasm.Code) {
 			b.I32Const(fn)
 			b.Call(c.rt.num)
 		}
-		if name == "<" {
-			b.Op(wasm.I64LtS)
-		} else {
-			b.Op(wasm.I64GtS)
-		}
+		b.Op(map[string]byte{"<": wasm.I64LtS, ">": wasm.I64GtS, "<=": wasm.I64LeS, ">=": wasm.I64GeS}[name])
 		boolean(&b)
 		return nil, b
 	case "eq":

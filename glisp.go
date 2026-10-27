@@ -98,6 +98,30 @@ func minus(_ *Scope, params List) interface{} {
 	return result
 }
 
+// times is (* a b c ...), the product; (*) is 1.
+func times(_ *Scope, params List) interface{} {
+	var product int64 = 1
+	for _, p := range params {
+		product *= number("*", p)
+	}
+	return product
+}
+
+// divide returns a builtin (op a b) that divides two numbers with div, as
+// Go does: / truncates toward zero, and mod's result has a's sign.
+func divide(op string, div func(a, b int64) int64) Function {
+	return func(_ *Scope, params List) interface{} {
+		if len(params) != 2 {
+			panic(fmt.Sprintf("%s: expects 2 arguments, got %d", op, len(params)))
+		}
+		a, b := number(op, params[0]), number(op, params[1])
+		if b == 0 {
+			panic(op + ": division by zero")
+		}
+		return div(a, b)
+	}
+}
+
 // compare returns a builtin (op a b) that compares two numbers with less.
 func compare(op string, less func(a, b int64) bool) Function {
 	return func(_ *Scope, params List) interface{} {
@@ -189,6 +213,11 @@ var builtins = map[string]interface{}{
 	"-":     Function(minus),
 	"<":     compare("<", func(a, b int64) bool { return a < b }),
 	">":     compare(">", func(a, b int64) bool { return a > b }),
+	"<=":    compare("<=", func(a, b int64) bool { return a <= b }),
+	">=":    compare(">=", func(a, b int64) bool { return a >= b }),
+	"*":     Function(times),
+	"/":     divide("/", func(a, b int64) int64 { return a / b }),
+	"mod":   divide("mod", func(a, b int64) int64 { return a % b }),
 	"eq":    Function(eq),
 	"apply": Function(apply),
 	"p":     Function(printValues),
