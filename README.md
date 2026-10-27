@@ -110,7 +110,7 @@ ordinary functions, called through `Ref` and `Apply`.
 - [x] Add the `Node` types.
 - [x] Write the `Expander`: special forms become nodes; `defmacro` registers a
   macro; macro calls are expanded, recursively, until only core forms remain.
-- [ ] Make the interpreter evaluate `Node`s, so every existing test runs
+- [x] Make the interpreter evaluate `Node`s, so every existing test runs
   through the expander. Macros then expand once, not on every call.
 - [ ] Remove the old `List`-walking evaluator and the `quote`, `if`,
   `lambda`, `def` and `defmacro` builtins it needed.

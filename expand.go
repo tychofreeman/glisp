@@ -112,7 +112,7 @@ func (e *Expander) macro(sym Symbol) (Macro, bool) {
 
 // evalMacroBody evaluates the value of a defmacro, which should be a function.
 func (e *Expander) evalMacroBody(form interface{}) interface{} {
-	return GetValue(e.scope, Parse(form))
+	return Eval(e.Expand(form), e.scope)
 }
 
 // paramNames returns the names in a lambda's parameter list.

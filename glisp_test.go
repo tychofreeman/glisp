@@ -382,3 +382,14 @@ func TestRunReportsArityErrors(t *testing.T) {
 		t.Errorf("Run of a call with too few arguments: got %v", err)
 	}
 }
+
+func TestMacrosAreNotValues(t *testing.T) {
+	assertPanicsWith(t, "(defmacro m (lambda (xs) 1)) (def f m)", "m is a macro, not a value")
+}
+
+// A macro applies to the forms expanded after its definition: f's body was
+// expanded before later was a macro, so (later 1) is a call, and later is not
+// a function.
+func TestMacrosMustBeDefinedBeforeTheyAreUsed(t *testing.T) {
+	assertPanicsWith(t, "(defn f () (later 1)) (defmacro later (lambda (xs) 2)) (f)", "later is a macro, not a value")
+}

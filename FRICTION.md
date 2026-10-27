@@ -412,3 +412,11 @@ One entry per PR, written before committing it.
   batch added a third step on its own, `fix_imports`, for the `fmt` the test
   file used but I'd left out — reported as a step with a note, which is the
   right amount of visibility.
+
+### PR: the interpreter on `Node`s
+
+- No tool issues. A five-step `batch`: `create_file` for the evaluator,
+  `replace_statements` by `function` for three bodies (including a method,
+  `Expander.evalMacroBody`), and `replace_text` for a package variable's
+  initializer. Every existing test passed on the first run, which is the
+  point of this step: they now all go through the expander.
