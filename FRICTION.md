@@ -641,6 +641,27 @@ One entry per PR, written before committing it.
 - `replace_declaration` swapped `tokenizeList` for a one-line wrapper and
   `add_declaration` added the tokenizer type with its methods after it;
   `remove_dead_code` took out the old `recoverError` once nothing used it.
+
+### PR: a garbage collector for compiled code
+
+- An 18-step `batch` restructured the compiler: `create_file` for the
+  collector, seven `replace_declaration` steps (`wasmFunc` and six of its
+  methods), two `add_declaration` steps, and `replace_text` for the rest.
+  It applied at the first try once the branch was right.
+- **The one refusal was a stale base:** I had branched from `master` before
+  the error-lines PR merged, so `replace_text` couldn't find the `gLine`
+  global the batch built on. The message named the step and file;
+  re-branching from that PR's branch and rerunning the same batch file
+  worked. Nothing in the tools could have known.
+- The `replace_declaration`-takes-one-declaration limit came up again;
+  this time I planned for it (new helpers via `add_declaration` with
+  `after`).
+- Measuring took more time than editing: three throwaway probe tests
+  (thresholds, a GC counter exported through a temporary global, compile
+  vs. run timing), each edited in with `sed`/Python and restored by
+  copying the file back. A tool for "apply this edit, run this, revert"
+  would fit that loop; `undo` covers the revert only for edits made
+  through the tools.
 - The 9-step batch otherwise applied as planned: constants and globals by
   `replace_text`, the body of `invoke` by line range, its locals and
   `define` call by `replace_text`.

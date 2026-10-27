@@ -12,6 +12,7 @@ type wasmRuntime struct {
 	putShow, putQuoted, putDescribed                uint32
 	builtins                                        map[string]uint32 // table index of each builtin
 	strArg, runeCount, runeOffset, newString        uint32            // string helpers
+	objSize, gcCopy, gcReloc, gc                    uint32            // the garbage collector
 }
 
 var (
@@ -56,6 +57,7 @@ func (c *wasmCompiler) runtime() {
 	rt.equal = c.declare(sig(vals(i64, i64), i32))
 	rt.invoke = c.declare(sig(vals(i64, i32, i32, i32), i64))
 	c.declareStrings()
+	c.declareGC()
 	builtinFuncs := map[string]uint32{}
 	rt.builtins = map[string]uint32{}
 	for _, name := range builtinNames {
