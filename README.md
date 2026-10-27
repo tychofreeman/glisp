@@ -19,7 +19,8 @@ compiles the program to a WebAssembly module instead, which runs in any
 WASI runtime (including Node's `node:wasi`) and prints the same output.
 
 Special forms: `quote if lambda def defmacro`. Builtins: `car cdr atom cons
-eq apply p`, `true false nil`, and arithmetic `plus - * / mod < > <= >=`.
+eq apply p`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
+predicates `number? string? symbol? list? function? boolean? nil?`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn` and `let`.
 
@@ -60,6 +61,9 @@ every program; it defines `mult`, `defn` and `let`.
 - [x] `*`, `/`, `mod`, `<=` and `>=`. `/` truncates toward zero and `mod`'s
   result has the dividend's sign, as in Go; dividing by zero is an error.
   The stdlib's `mult` used to add `y` to itself `x` times; it is now `*`.
+- [x] Type predicates: `number?`, `string?`, `symbol?`, `list?` (true for the
+  empty list, not for `nil`), `function?`, `boolean?` and `nil?`. Before them a
+  program couldn't tell a number from a symbol.
 - [x] `true`, `false` and `nil` literals; programs defined them as
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
 - [x] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists had to be built on

@@ -122,6 +122,17 @@ func divide(op string, div func(a, b int64) int64) Function {
 	}
 }
 
+// isType returns the builtin name, (name x), which reports whether x's
+// type is typ, as typeName names it.
+func isType(name, typ string) Function {
+	return func(_ *Scope, params List) interface{} {
+		if len(params) != 1 {
+			panic(fmt.Sprintf("%s: expects 1 argument, got %d", name, len(params)))
+		}
+		return typeName(params[0]) == typ
+	}
+}
+
 // compare returns a builtin (op a b) that compares two numbers with less.
 func compare(op string, less func(a, b int64) bool) Function {
 	return func(_ *Scope, params List) interface{} {
@@ -205,25 +216,33 @@ func printValues(scope *Scope, params List) interface{} {
 }
 
 var builtins = map[string]interface{}{
-	"car":   Function(car),
-	"cdr":   Function(cdr),
-	"atom":  Function(atom),
-	"cons":  Function(cons),
-	"plus":  Function(plus),
-	"-":     Function(minus),
-	"<":     compare("<", func(a, b int64) bool { return a < b }),
-	">":     compare(">", func(a, b int64) bool { return a > b }),
-	"<=":    compare("<=", func(a, b int64) bool { return a <= b }),
-	">=":    compare(">=", func(a, b int64) bool { return a >= b }),
-	"*":     Function(times),
-	"/":     divide("/", func(a, b int64) int64 { return a / b }),
-	"mod":   divide("mod", func(a, b int64) int64 { return a % b }),
-	"eq":    Function(eq),
-	"apply": Function(apply),
-	"p":     Function(printValues),
-	"true":  true,
-	"false": false,
-	"nil":   nil,
+	"car":  Function(car),
+	"cdr":  Function(cdr),
+	"atom": Function(atom),
+	"cons": Function(cons),
+	"plus": Function(plus),
+	"-":    Function(minus),
+	"<":    compare("<", func(a, b int64) bool { return a < b }),
+	">":    compare(">", func(a, b int64) bool { return a > b }),
+	"<=":   compare("<=", func(a, b int64) bool { return a <= b }),
+	">=":   compare(">=", func(a, b int64) bool { return a >= b }),
+	"*":    Function(times),
+	"/":    divide("/", func(a, b int64) int64 { return a / b }),
+	"mod":  divide("mod", func(a, b int64) int64 { return a % b }),
+
+	"number?":   isType("number?", "number"),
+	"string?":   isType("string?", "string"),
+	"symbol?":   isType("symbol?", "symbol"),
+	"list?":     isType("list?", "list"),
+	"function?": isType("function?", "function"),
+	"boolean?":  isType("boolean?", "bool"),
+	"nil?":      isType("nil?", "nil"),
+	"eq":        Function(eq),
+	"apply":     Function(apply),
+	"p":         Function(printValues),
+	"true":      true,
+	"false":     false,
+	"nil":       nil,
 }
 
 //go:embed stdlib.glisp

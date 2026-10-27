@@ -126,6 +126,9 @@ var wasmPrograms = []string{
 	`(p (* 2 3 7) (*) (/ 17 5) (/ -17 5) (mod 17 5) (mod -17 5) (mult 6 7))`,
 	`(p (<= 1 2) (<= 2 2) (<= 3 2) (>= 2 2) (>= 1 2))`,
 	`(p (apply * 1 2 3 4) (apply / 9 2))`,
+	`(p (number? 5) (number? (quote a)) (string? "s") (string? (quote s)) (symbol? (quote s)) (symbol? "s"))`,
+	`(p (list? (quote (1 2))) (list? (quote ())) (list? nil) (function? car) (function? (lambda (x) x)) (function? (quote car)))`,
+	`(p (boolean? false) (boolean? true) (boolean? nil) (nil? nil) (nil? (quote ())) (nil? 0))`,
 	// Errors.
 	`(car 1)`,
 	`(cdr "s")`,
@@ -151,6 +154,8 @@ var wasmPrograms = []string{
 	`(mod 1 0)`,
 	`(/ 1)`,
 	`(>= 1 2 3)`,
+	`(number? 1 2)`,
+	`(list?)`,
 }
 
 func TestCompiledProgramsPrintWhatTheInterpreterDoes(t *testing.T) {
