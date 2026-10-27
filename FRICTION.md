@@ -606,6 +606,20 @@ One entry per PR, written before committing it.
   (`examples/tour.glisp`), built by a short script. For a section that
   goes away entirely, the script cut the old text out of the file between
   two markers, so `old` matched exactly without retyping it.
+
+### PR: string functions
+
+- **One refusal, and it caught a real clash:** the batch named the new
+  builtin's Go function `str`, which the package already has (`token.go`'s
+  `str(s string) StringToken`). The batch type-checks at the end, so it
+  reported "cannot convert str (value of type func(s string) StringToken)"
+  on the line an earlier step wrote, marked with `*`, and rolled all 11
+  steps back. Renaming it `showJoined` fixed it. The first attempt failed
+  the same way through the tests' use of `str`, with more errors listed.
+- `create_file` of the two new files, `add_declaration` of the encoder's
+  `MemoryCopy`, `add_field` and seven `replace_text` steps went through as
+  one `batch`, built by a script from files in a scratch directory (the
+  `create_file` content-from-a-file gap again).
 - The 9-step batch otherwise applied as planned: constants and globals by
   `replace_text`, the body of `invoke` by line range, its locals and
   `define` call by `replace_text`.

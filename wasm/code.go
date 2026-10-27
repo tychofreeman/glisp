@@ -150,3 +150,7 @@ func (c *Code) MemorySize() { *c = append(*c, 0x3f, 0x00) }
 // MemoryGrow appends memory.grow: grow by the pages on the stack, leaving
 // the old size, or -1 if the memory can't grow.
 func (c *Code) MemoryGrow() { *c = append(*c, 0x40, 0x00) }
+
+// MemoryCopy appends memory.copy: copy n bytes from src to dst, the three
+// i32s on the stack (dst, src, n), which may overlap.
+func (c *Code) MemoryCopy() { *c = append(*c, 0xfc, 0x0a, 0x00, 0x00) }
