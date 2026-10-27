@@ -349,23 +349,25 @@ var stdlib string
 
 var builtinScope = &Scope{table: builtins}
 
-// stdlibForms is stdlib.glisp, parsed once.
-var stdlibForms = ParseMany(TokenizeString(stdlib))
+// stdlibForms is stdlib.glisp, read once.
+var stdlibForms = Read(TokenizeString(stdlib)).(List)
 
 // newScope makes the top-level scope for one run: its own definitions over
 // the builtins, which it never changes, with the stdlib loaded.
 func newScope() *Scope {
 	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}}
+	expander := NewExpander(scope)
 	for _, form := range stdlibForms {
-		GetValue(scope, form)
+		Eval(expander.Expand(form), scope)
 	}
 	return scope
 }
 
 func ProcessTokens(scope *Scope, tokenized List) interface{} {
+	expander := NewExpander(scope)
 	var value interface{}
-	for _, form := range ParseMany(tokenized) {
-		value = GetValue(scope, form)
+	for _, token := range tokenized {
+		value = Eval(expander.Expand(Read(token)), scope)
 	}
 	return value
 }
