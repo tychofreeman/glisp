@@ -4,6 +4,7 @@ import (
     _ "embed"
     "fmt"
     "os"
+    "reflect"
     "strings"
 )
 
@@ -122,7 +123,33 @@ func eq(_ *Scope, params List) interface{} {
     if len(params) != 2 {
         panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %v - %v", len(params), params))
     }
-    return params[0] == params[1]
+    return equal(params[0], params[1])
+}
+
+// equal reports whether two glisp values are equal: lists element by element,
+// other values with ==. Values whose type can't be compared with ==, such as
+// functions, are never equal.
+func equal(a, b interface{}) bool {
+    if la, isList := a.(List); isList {
+        lb, isList := b.(List)
+        if !isList || len(la) != len(lb) {
+            return false
+        }
+        for i := range la {
+            if !equal(la[i], lb[i]) {
+                return false
+            }
+        }
+        return true
+    }
+    if a == nil || b == nil {
+        return a == nil && b == nil
+    }
+    ta := reflect.TypeOf(a)
+    if ta != reflect.TypeOf(b) || !ta.Comparable() {
+        return false
+    }
+    return a == b
 }
 
 func apply(scope *Scope, params List) interface{} {

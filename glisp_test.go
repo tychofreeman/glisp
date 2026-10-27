@@ -167,3 +167,14 @@ func TestCallingALambdaWithTooFewArgumentsFails(t *testing.T) {
 func TestCallingALambdaWithTooManyArgumentsFails(t *testing.T) {
     assertPanicsWith(t, "((lambda (a) a) 1 2)", "expects 1 argument, got 2")
 }
+
+func TestEqComparesListsByContents(t *testing.T) {
+    AssertThat(t, Process("(eq (quote (1 (2 3))) (quote (1 (2 3))))"), IsTrue)
+    AssertThat(t, Process("(eq (quote (1 2)) (quote (1 3)))"), IsFalse)
+    AssertThat(t, Process("(eq (quote (1 2)) (quote (1 2 3)))"), IsFalse)
+    AssertThat(t, Process("(eq (quote (1)) 1)"), IsFalse)
+}
+
+func TestEqOnFunctionsDoesNotCrash(t *testing.T) {
+    AssertThat(t, Process("(eq plus car)"), IsFalse)
+}
