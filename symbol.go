@@ -6,13 +6,6 @@ func (sym Symbol) Str() string {
 	return sym.name
 }
 
-func (sym Symbol) Eval(scope *Scope) interface{} {
-	if resolved, ok := scope.lookup(sym); ok {
-		return resolved
-	}
-	panic("Cannot resolve symbol " + sym.name)
-}
-
 func symbol(s string) Symbol {
 	return Symbol{s}
 }
