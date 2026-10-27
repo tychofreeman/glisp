@@ -58,7 +58,7 @@ loaded before every program; it defines `mult`.
 
 ### Design
 
-- [ ] `def` writes into the shared `builtins` map, so definitions leak between
+- [x] `def` writes into the shared `builtins` map, so definitions leak between
   `Process` calls and tests, the stdlib is reloaded on every call, and nothing
   is safe to run concurrently. Give each run its own scope over the builtins.
 - [ ] `Process` panics on bad input; return `(value, error)` or recover at the

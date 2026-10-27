@@ -289,12 +289,22 @@ func ParseMany(input List) List {
 //go:embed stdlib.glisp
 var stdlib string
 
-var baseScope = &Scope{nil, builtins, false}
+var builtinScope = &Scope{nil, builtins, false}
 
-func ProcessTokens(scope *Scope, tokenized List, includeStdLib bool) interface{} {
-	if includeStdLib {
-		ProcessTokens(scope, TokenizeString(stdlib), false)
+// stdlibForms is stdlib.glisp, parsed once.
+var stdlibForms = ParseMany(TokenizeString(stdlib))
+
+// newScope makes the top-level scope for one run: its own definitions over
+// the builtins, which it never changes, with the stdlib loaded.
+func newScope() *Scope {
+	scope := &Scope{builtinScope, map[string]interface{}{}, false}
+	for _, form := range stdlibForms {
+		GetValue(scope, form)
 	}
+	return scope
+}
+
+func ProcessTokens(scope *Scope, tokenized List) interface{} {
 	var value interface{}
 	for _, form := range ParseMany(tokenized) {
 		value = GetValue(scope, form)
@@ -303,9 +313,9 @@ func ProcessTokens(scope *Scope, tokenized List, includeStdLib bool) interface{}
 }
 
 func Process(input string) interface{} {
-	return ProcessTokens(baseScope, TokenizeString(input), true)
+	return ProcessTokens(newScope(), TokenizeString(input))
 }
 
 func ProcessFile(fname string) interface{} {
-	return ProcessTokens(baseScope, TokenizeFile(fname), true)
+	return ProcessTokens(newScope(), TokenizeFile(fname))
 }

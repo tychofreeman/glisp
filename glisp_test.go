@@ -3,6 +3,7 @@ package glisp
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	. "github.com/tychofreeman/go-matchers"
 	"testing"
@@ -119,7 +120,7 @@ func TestCanSubtractByAddingNegativeNumbers(t *testing.T) {
 }
 
 func TestEmptyListEvaluatesToNil(t *testing.T) {
-	AssertThat(t, GetValue(baseScope, List{}) == nil, IsTrue)
+	AssertThat(t, GetValue(builtinScope, List{}) == nil, IsTrue)
 }
 
 func TestStdlibIsLoaded(t *testing.T) {
@@ -204,4 +205,34 @@ func IsNil(actual interface{}) (bool, string) {
 
 func TestDefmacroOfANonFunctionFails(t *testing.T) {
 	assertPanicsWith(t, "(defmacro m 5) (m)", "defmacro: expected a function, got int64 5")
+}
+
+func TestDefinitionsDoNotLeakBetweenRuns(t *testing.T) {
+	Process("(def leaked_def 1)")
+	assertPanicsWith(t, "leaked_def", "Cannot resolve symbol leaked_def")
+}
+
+func TestDefDoesNotChangeTheBuiltins(t *testing.T) {
+	Process("(def car 5) (def builtin_leak 1)")
+	if _, isFunction := builtins["car"].(Function); !isFunction {
+		t.Errorf("builtins[car] was replaced: %v", builtins["car"])
+	}
+	if _, found := builtins["builtin_leak"]; found {
+		t.Errorf("def added builtin_leak to the builtins")
+	}
+}
+
+func TestRunsCanHappenConcurrently(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := int64(0); i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			src := fmt.Sprintf("(def n %d) (def twice (lambda (x) (plus x x))) (twice n)", i)
+			if got := Process(src); got != i+i {
+				t.Errorf("%s: got %v, want %d", src, got, i+i)
+			}
+		}()
+	}
+	wg.Wait()
 }

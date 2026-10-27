@@ -257,3 +257,17 @@ One entry per PR, written before committing it.
   import came out correctly indented this time.
 - Writing `\n` inside a Go string, inside JSON, inside a shell heredoc took
   `\\\\n` in the heredoc; again the shell, not the tool.
+
+### PR: a fresh scope per run
+
+- No tool issues. A six-step `batch`: `rename` (`baseScope` →
+  `builtinScope`, including its use in a test), `add_declaration` with `after`
+  a package variable, three `replace_statements` by `function`, and
+  `remove_parameter` dropping `ProcessTokens`'s now-unused `includeStdLib`
+  and the `true` from both calls. Addressing by name throughout meant the
+  rename's rewritten lines never got in the way.
+- `add_declaration` added the `sync` import for the concurrency test,
+  correctly indented now that the files are gofmt'd.
+- `check` has no way to pass `-race`; I ran `go test -race` directly. A
+  `race` (or general `test_flags`) option on `check` would keep it in the
+  tool.
