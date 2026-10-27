@@ -684,3 +684,30 @@ One entry per PR, written before committing it.
   isn't Go, and `replace_text` needs an anchor; appending at the end
   has none). `create_file`/`replace_text` with an "append" mode would
   cover it.
+
+### PR: structured wasm generation (`wasmBody`)
+
+- Nine batches, about 120 steps, every one checked by hashing the compiled
+  module of each parity program and both examples before and after: the
+  bytes never changed. That check, a throwaway test outside the commit,
+  was the real guard for this PR; the type check alone let through one
+  behavior change (below).
+- Real refactorings did the part they fit: `rename` (`define` →
+  `defineCode` → `setBody`) and `function_to_method` for 13 helpers
+  (113 calls updated), once `replace_text` with `all_occurrences` had
+  changed their parameter from `*wasm.Code` to `*wasmBody`.
+- The rest was edits computed by Python scripts and sent as
+  `replace_declaration`/`replace_text` steps: constants of local indices
+  into `b.param`/`b.local` calls (typed from the separate `define` list),
+  and `If … Else … End` / `Block Loop … BrIf … Br End End` sequences
+  wrapped into `ifElse`/`when`/`until` closures. No tool wraps a run of
+  statements into a function literal passed to a call; that "wrap in a
+  closure" edit was most of the PR.
+- One mistake the type check couldn't see: dropping each switch case's
+  final `return` let the cases run on into the `panic` after the switch.
+  It compiled; the hash test caught it ("no builtin car"). Fixed by moving
+  the panic into `default:`.
+- `replace_text` refused a step whose text occurred twice (two identical
+  `when(fail)` blocks); `all_occurrences` fixed it, as the refusal said.
+- Appending this entry and the roadmap section in the previous PR was by
+  hand (heredoc): nothing appends to a file.

@@ -14,28 +14,28 @@ import "github.com/tychofreeman/glisp/wasm"
 // ordinary call with slow.
 type inlineBuiltin struct {
 	argc int
-	emit func(b *wasm.Code, rt *wasmRuntime, arg func(i int), slow func())
+	emit func(b *wasmBody, rt *wasmRuntime, arg func(i int), slow func())
 }
 
 // ifIntegers runs then if both arguments are integers, and slow if not.
-func ifIntegers(b *wasm.Code, arg func(i int), then, slow func()) {
+func (b *wasmBody) ifIntegers(arg func(i int), then, slow func()) {
 	arg(0)
 	arg(1)
 	b.Op(wasm.I64And)
 	b.I64Const(1)
 	b.Op(wasm.I64And, wasm.I32WrapI64)
-	b.If(wasm.BlockI64)
-	then()
-	b.Op(wasm.Else)
-	slow()
-	b.Op(wasm.End)
+	b.ifElse(wasm.BlockI64, func() {
+		then()
+	}, func() {
+		slow()
+	})
 }
 
 // arithmetic is an inline path for two integers: ops applied to the two
 // encoded values (2a+1 and 2b+1).
-func arithmetic(ops func(b *wasm.Code)) inlineBuiltin {
-	return inlineBuiltin{2, func(b *wasm.Code, _ *wasmRuntime, arg func(int), slow func()) {
-		ifIntegers(b, arg, func() {
+func arithmetic(ops func(b *wasmBody)) inlineBuiltin {
+	return inlineBuiltin{2, func(b *wasmBody, _ *wasmRuntime, arg func(int), slow func()) {
+		b.ifIntegers(arg, func() {
 			arg(0)
 			arg(1)
 			ops(b)
@@ -45,28 +45,28 @@ func arithmetic(ops func(b *wasm.Code)) inlineBuiltin {
 
 // comparison compares two integers: encoding keeps their order.
 func comparison(op byte) inlineBuiltin {
-	return arithmetic(func(b *wasm.Code) {
+	return arithmetic(func(b *wasmBody) {
 		b.Op(op)
-		boolean(b)
+		b.boolean()
 	})
 }
 
 // ifTag runs then if the tag of argument 0 satisfies test, and slow if not.
-func ifTag(b *wasm.Code, rt *wasmRuntime, arg func(int), test func(), then, slow func()) {
+func (b *wasmBody) ifTag(rt *wasmRuntime, arg func(int), test func(), then, slow func()) {
 	arg(0)
 	b.Call(rt.tagOf)
 	test()
-	b.If(wasm.BlockI64)
-	then()
-	b.Op(wasm.Else)
-	slow()
-	b.Op(wasm.End)
+	b.ifElse(wasm.BlockI64, func() {
+		then()
+	}, func() {
+		slow()
+	})
 }
 
 // pairField is car or cdr of a pair, inline: the field at offset.
 func pairField(offset uint32) inlineBuiltin {
-	return inlineBuiltin{1, func(b *wasm.Code, rt *wasmRuntime, arg func(int), slow func()) {
-		ifTag(b, rt, arg, func() {
+	return inlineBuiltin{1, func(b *wasmBody, rt *wasmRuntime, arg func(int), slow func()) {
+		b.ifTag(rt, arg, func() {
 			b.I32Const(tagPair)
 			b.Op(wasm.I32Eq)
 		}, func() {
@@ -78,33 +78,33 @@ func pairField(offset uint32) inlineBuiltin {
 }
 
 // predicate is a one-argument test that never fails: test leaves an i32.
-func predicate(test func(b *wasm.Code, rt *wasmRuntime, arg func(int))) inlineBuiltin {
-	return inlineBuiltin{1, func(b *wasm.Code, rt *wasmRuntime, arg func(int), _ func()) {
+func predicate(test func(b *wasmBody, rt *wasmRuntime, arg func(int))) inlineBuiltin {
+	return inlineBuiltin{1, func(b *wasmBody, rt *wasmRuntime, arg func(int), _ func()) {
 		test(b, rt, arg)
-		boolean(b)
+		b.boolean()
 	}}
 }
 
 var inlineBuiltins = map[string]inlineBuiltin{
-	"plus": arithmetic(func(b *wasm.Code) {
+	"plus": arithmetic(func(b *wasmBody) {
 		b.Op(wasm.I64Add)
 		b.I64Const(1)
 		b.Op(wasm.I64Sub)
 	}),
-	"-": arithmetic(func(b *wasm.Code) {
+	"-": arithmetic(func(b *wasmBody) {
 		b.Op(wasm.I64Sub)
 		b.I64Const(1)
 		b.Op(wasm.I64Add)
 	}),
-	"*": inlineBuiltin{2, func(b *wasm.Code, _ *wasmRuntime, arg func(int), slow func()) {
-		ifIntegers(b, arg, func() {
+	"*": inlineBuiltin{2, func(b *wasmBody, _ *wasmRuntime, arg func(int), slow func()) {
+		b.ifIntegers(arg, func() {
 			for i := 0; i < 2; i++ {
 				arg(i)
 				b.I64Const(1)
 				b.Op(wasm.I64ShrS)
 			}
 			b.Op(wasm.I64Mul)
-			encode(b)
+			b.encode()
 		}, slow)
 	}},
 	"<":   comparison(wasm.I64LtS),
@@ -113,42 +113,42 @@ var inlineBuiltins = map[string]inlineBuiltin{
 	">=":  comparison(wasm.I64GeS),
 	"car": pairField(8),
 	"cdr": pairField(16),
-	"eq": inlineBuiltin{2, func(b *wasm.Code, rt *wasmRuntime, arg func(int), _ func()) {
+	"eq": inlineBuiltin{2, func(b *wasmBody, rt *wasmRuntime, arg func(int), _ func()) {
 		arg(0)
 		arg(1)
 		b.Call(rt.equal)
-		boolean(b)
+		b.boolean()
 	}},
-	"cons": inlineBuiltin{2, func(b *wasm.Code, rt *wasmRuntime, arg func(int), slow func()) {
+	"cons": inlineBuiltin{2, func(b *wasmBody, rt *wasmRuntime, arg func(int), slow func()) {
 		// Onto a list: a new pair. Onto nil or an atom, the builtin's rules.
 		arg(1)
 		b.Call(rt.tagOf)
-		isList(b)
-		b.If(wasm.BlockI64)
-		arg(0)
-		arg(1)
-		b.Call(rt.pair)
-		b.Op(wasm.Else)
-		slow()
-		b.Op(wasm.End)
+		b.isList()
+		b.ifElse(wasm.BlockI64, func() {
+			arg(0)
+			arg(1)
+			b.Call(rt.pair)
+		}, func() {
+			slow()
+		})
 	}},
-	"atom": predicate(func(b *wasm.Code, rt *wasmRuntime, arg func(int)) {
+	"atom": predicate(func(b *wasmBody, rt *wasmRuntime, arg func(int)) {
 		arg(0)
 		b.Call(rt.tagOf)
-		isList(b)
+		b.isList()
 		b.Op(wasm.I32Eqz)
 	}),
-	"list?": predicate(func(b *wasm.Code, rt *wasmRuntime, arg func(int)) {
+	"list?": predicate(func(b *wasmBody, rt *wasmRuntime, arg func(int)) {
 		arg(0)
 		b.Call(rt.tagOf)
-		isList(b)
+		b.isList()
 	}),
-	"number?": predicate(func(b *wasm.Code, _ *wasmRuntime, arg func(int)) {
+	"number?": predicate(func(b *wasmBody, _ *wasmRuntime, arg func(int)) {
 		arg(0)
 		b.I64Const(1)
 		b.Op(wasm.I64And, wasm.I32WrapI64)
 	}),
-	"nil?": predicate(func(b *wasm.Code, _ *wasmRuntime, arg func(int)) {
+	"nil?": predicate(func(b *wasmBody, _ *wasmRuntime, arg func(int)) {
 		arg(0)
 		b.I64Const(addrNil)
 		b.Op(wasm.I64Eq)
