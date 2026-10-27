@@ -173,9 +173,17 @@ prints exactly what the interpreter does, error messages included.
   `examples/tour.glisp`, even with memory preallocated; turning off V8's
   wasm tier-up (`--no-wasm-tier-up`) mostly avoids it, and wazero runs it
   every time. Not yet tried on a newer Node.
-- [ ] Tail calls: recursion depth is limited by the stack (about 500,000
-  calls). The wasm tail-call proposal (`return_call`) would fix tail calls,
-  but wazero v1.10 doesn't support it.
+- [x] Self tail calls are loops: a call in tail position to the function
+  itself (checked at run time, so it holds even if the name is redefined)
+  jumps back to the start of the function, so loops written as recursion
+  run in constant stack. Each pass gives captured variables fresh cells.
+- [ ] Other tail calls (mutual recursion, calls to other functions) still
+  use the stack, limited to about 500,000 deep. The wasm tail-call proposal
+  (`return_call`) would cover them, but wazero v1.10 doesn't support it; a
+  trampoline would, at the cost of every call.
+- [ ] The interpreter doesn't turn tail calls into loops: Go's stack takes
+  it to about 300,000 deep, and past that Go crashes rather than reporting
+  an error.
 - [ ] Integers are 63 bits (one bit tags them); the interpreter's are 64.
 - [ ] Every call goes through `invoke` and the table; calls to builtins that
   aren't redefined could be direct, or inline (`plus`, `car`).
