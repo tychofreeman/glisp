@@ -18,8 +18,10 @@ import (
 // Macros are expanded while compiling, so a program's macros, and the
 // functions they call (top-level defs of lambdas), run in the interpreter.
 func CompileWasm(input string) (module []byte, err error) {
-	defer recoverError(&err)
-	return compileWasm(TokenizeString(input)), nil
+	run := &runState{}
+	defer recoverAt(&err, run)
+	tokens, lines := tokenizeLines(input)
+	return compileWasm(run, tokens, lines), nil
 }
 
 // CompileWasmFile is CompileWasm for the program in the file fname.
@@ -78,6 +80,7 @@ const (
 	gPendingArgs        // where they are
 	gCapture            // 1 while str captures printing into a string
 	gCapEnd             // where the captured bytes go next
+	gLine               // the line of the call being made, for errors
 	gNames
 )
 
@@ -104,9 +107,10 @@ type wasmCompiler struct {
 	rt       wasmRuntime
 }
 
-func compileWasm(tokens List) []byte {
-	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}}
+func compileWasm(run *runState, tokens List, lines Lines) []byte {
+	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}, run: run}
 	expander := NewExpander(scope)
+	expander.lines = Lines{}
 	expand := func(form interface{}) Node {
 		node := expander.Expand(form)
 		if def, isDef := node.(Def); isDef {
@@ -120,8 +124,11 @@ func compileWasm(tokens List) []byte {
 	for _, form := range stdlibForms {
 		stdlibNodes = append(stdlibNodes, expand(form))
 	}
+	var programLines []int
 	for _, token := range tokens {
-		programNodes = append(programNodes, expand(Read(token)))
+		form := readLines(token, lines, expander.lines)
+		programLines = append(programLines, expander.formLine(form))
+		programNodes = append(programNodes, expand(form))
 	}
 
 	c := newWasmCompiler(scope)
@@ -132,7 +139,18 @@ func compileWasm(tokens List) []byte {
 		main.expr(node)
 		main.code.Op(wasm.Drop)
 	}
-	main.body(programNodes)
+	// Each top-level form starts at its own line, as in the interpreter.
+	if len(programNodes) == 0 {
+		main.code.I64Const(addrNil)
+	}
+	for i, node := range programNodes {
+		main.code.I32Const(int32(programLines[i]))
+		main.code.GlobalSet(gLine)
+		main.expr(node)
+		if i < len(programNodes)-1 {
+			main.code.Op(wasm.Drop)
+		}
+	}
 	mainIndex := c.declare(wasm.FuncType{Results: []wasm.ValType{wasm.I64}})
 	c.define(mainIndex, main.locals, main.code)
 
@@ -355,6 +373,15 @@ func (f *wasmFunc) local(t wasm.ValType) uint32 {
 	return f.nparams + uint32(len(f.locals)-1)
 }
 
+// at records, for errors, that the program is making the call on line, if
+// it is known.
+func (f *wasmFunc) at(line int) {
+	if line > 0 {
+		f.code.I32Const(int32(line))
+		f.code.GlobalSet(gLine)
+	}
+}
+
 // body compiles nodes, leaving the last one's value, or nil if there are none.
 func (f *wasmFunc) body(nodes []Node) {
 	if len(nodes) == 0 {
@@ -486,6 +513,7 @@ func (f *wasmFunc) def(n Def) {
 
 // apply pushes the arguments on the argument stack and calls invoke.
 func (f *wasmFunc) apply(n Apply) {
+	f.at(n.Line)
 	fn := f.local(wasm.I64)
 	f.expr(n.Fn)
 	f.code.LocalSet(fn)
@@ -504,6 +532,7 @@ func (f *wasmFunc) apply(n Apply) {
 // invoke calls the function in local fn with n's arguments, already on the
 // argument stack, and pops them.
 func (f *wasmFunc) invoke(fn uint32, n Apply) {
+	f.at(n.Line) // again, after the arguments' calls
 	size := int32(8 * len(n.Args))
 	f.code.LocalGet(fn)
 	f.code.GlobalGet(gSP)
@@ -547,6 +576,7 @@ func (f *wasmFunc) tailExpr(node Node) {
 // this closure itself (local 0), its arguments become the parameters and it
 // jumps back to the top of the loop; otherwise tailCall makes it.
 func (f *wasmFunc) tailApply(n Apply) {
+	f.at(n.Line)
 	fn := f.local(wasm.I64)
 	f.expr(n.Fn)
 	f.code.LocalSet(fn)
@@ -556,6 +586,7 @@ func (f *wasmFunc) tailApply(n Apply) {
 		f.expr(arg)
 		f.code.LocalSet(args[i])
 	}
+	f.at(n.Line)
 	if len(n.Args) != len(f.lambda.Params) {
 		f.tailCall(fn, args, n)
 		return
@@ -750,7 +781,7 @@ func unresolved(node Node) Node {
 		for i, arg := range n.Args {
 			args[i] = unresolved(arg)
 		}
-		return Apply{unresolved(n.Fn), args}
+		return Apply{Fn: unresolved(n.Fn), Args: args, Line: n.Line}
 	case Lambda:
 		body := make([]Node, len(n.Body))
 		for i, form := range n.Body {

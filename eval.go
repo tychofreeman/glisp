@@ -35,11 +35,13 @@ func Eval(node Node, scope *Scope) interface{} {
 			scope.add(n.Name, Eval(n.Value, scope))
 			return List{}
 		case Apply:
+			scope.at(n.Line)
 			fn := Eval(n.Fn, scope)
 			args := make(List, len(n.Args))
 			for i, arg := range n.Args {
 				args[i] = Eval(arg, scope)
 			}
+			scope.at(n.Line) // again, after the arguments' calls
 			switch f := fn.(type) {
 			case *Closure:
 				// The call's value is this Eval's, so the callee replaces this
@@ -83,7 +85,7 @@ func (c *Closure) bind(args List) *Scope {
 		}
 		panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %s", strings.Join(params, " "), len(params), arguments, len(args), Write(args)))
 	}
-	local := &Scope{prev: c.scope, table: make(map[string]interface{}, len(args))}
+	local := &Scope{prev: c.scope, table: make(map[string]interface{}, len(args)), run: c.scope.run}
 	for i, name := range params {
 		local.table[name] = args[i]
 	}

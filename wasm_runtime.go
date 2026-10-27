@@ -577,6 +577,14 @@ func (c *wasmCompiler) failBeginBody() wasm.Code {
 	b.I32Const(2)
 	b.GlobalSet(gFD)
 	c.text(&b, "glisp: ")
+	b.GlobalGet(gLine)
+	b.If(wasm.BlockVoid)
+	c.text(&b, "line ")
+	b.GlobalGet(gLine)
+	b.Op(wasm.I64ExtendI32U)
+	b.Call(c.rt.putInt)
+	c.text(&b, ": ")
+	b.Op(wasm.End)
 	return b
 }
 

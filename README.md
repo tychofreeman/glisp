@@ -70,6 +70,12 @@ every program; it defines `mult`, `defn` and `let`.
   `chars` count characters, not bytes (`(string_length "héllo")` is 5);
   `string<` orders strings; `symbol` makes a symbol from a string; and
   `parse_number` reads an integer, or gives `nil`.
+- [x] Errors give their line: `glisp: line 2: car: expected a list, got
+  number 5`. The tokenizer records the line each list starts on, the
+  expander gives it to each call (code a macro made gets the macro call's
+  line), and both backends report the line of the call being made when an
+  error happens, inside functions too. Parse errors name the line where
+  they were found.
 - [x] `true`, `false` and `nil` literals; programs defined them as
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
 - [x] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists had to be built on
