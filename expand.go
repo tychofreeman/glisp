@@ -86,7 +86,7 @@ func (e *Expander) expandList(f List) Node {
 		case "defmacro":
 			name := definedName("defmacro", f.Rest())
 			value := e.evalMacroBody(f[2])
-			fn, isFunction := value.(Function)
+			fn, isFunction := asFunction(value)
 			if !isFunction {
 				panic(fmt.Sprintf("defmacro: expected a function, got %s\n", described(value)))
 			}

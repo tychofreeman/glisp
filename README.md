@@ -181,9 +181,13 @@ prints exactly what the interpreter does, error messages included.
   use the stack, limited to about 500,000 deep. The wasm tail-call proposal
   (`return_call`) would cover them, but wazero v1.10 doesn't support it; a
   trampoline would, at the cost of every call.
-- [ ] The interpreter doesn't turn tail calls into loops: Go's stack takes
-  it to about 300,000 deep, and past that Go crashes rather than reporting
-  an error.
+- [x] The interpreter replaces frames on tail calls: `Eval` is a loop, and
+  a call to a closure in tail position (or an `if` branch) carries on in
+  the same loop with the callee's body and scope instead of a new Go call.
+  Mutual recursion runs in constant stack (a test goes a million deep);
+  only calls that aren't tail calls use Go's stack, which crashes Go past
+  about 300,000 deep. Lambdas now evaluate to a `*Closure` holding their
+  code and scope; builtins stay `Function`s.
 - [ ] Integers are 63 bits (one bit tags them); the interpreter's are 64.
 - [ ] Every call goes through `invoke` and the table; calls to builtins that
   aren't redefined could be direct, or inline (`plus`, `car`).

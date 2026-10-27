@@ -169,6 +169,9 @@ func equal(a, b interface{}) bool {
 	if a == nil || b == nil {
 		return a == nil && b == nil
 	}
+	if _, isClosure := a.(*Closure); isClosure {
+		return false // functions are never equal, as builtins aren't
+	}
 	ta := reflect.TypeOf(a)
 	if ta != reflect.TypeOf(b) || !ta.Comparable() {
 		return false
@@ -180,7 +183,7 @@ func apply(scope *Scope, params List) interface{} {
 	if len(params) == 0 {
 		panic("apply: expects a function")
 	}
-	fn, isFunction := params[0].(Function)
+	fn, isFunction := asFunction(params[0])
 	if !isFunction {
 		panic(fmt.Sprintf("apply: expected a function, got %s", described(params[0])))
 	}

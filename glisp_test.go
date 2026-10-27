@@ -110,6 +110,25 @@ func TestMutualRecursion(t *testing.T) {
 	AssertThat(t, Process(evenOdd+"(is_even 7)"), IsFalse)
 }
 
+// Every call here is in tail position, so Eval replaces its frame rather
+// than growing Go's stack, which would crash well before a million.
+func TestTailCallsReplaceTheirFrame(t *testing.T) {
+	program := `(defn ev (n) (if (eq n 0) true (od (- n 1))))
+		(defn od (n) (if (eq n 0) false (ev (- n 1))))
+		(p (ev 1000000))
+		(ev 1000001)`
+	AssertThat(t, Process(program), IsFalse)
+}
+
+func TestTailCallsLeaveOtherCallsAlone(t *testing.T) {
+	// The last form of a body is the tail; earlier forms still run first, and
+	// a call that isn't in tail position returns to its caller.
+	program := `(defn f (n acc) (def m (* n 2)) (if (eq n 0) acc (f (- n 1) (cons m acc))))
+		(list? (cons 1 (f 3 nil)))`
+	AssertThat(t, Process(program), IsTrue)
+	AssertThat(t, Write(Process("(defn f (n acc) (def m (* n 2)) (if (eq n 0) acc (f (- n 1) (cons m acc)))) (f 3 nil)")), Equals("(2 4 6)"))
+}
+
 // The malformed (def x2 (p x) (lambda ...)) that the old disabled mutual
 // recursion test used: def evaluated (p x) as the value and ignored the rest.
 func TestDefWithTheWrongNumberOfArgumentsFails(t *testing.T) {
@@ -214,6 +233,7 @@ func TestEqComparesListsByContents(t *testing.T) {
 }
 
 func TestEqOnFunctionsDoesNotCrash(t *testing.T) {
+	AssertThat(t, Process("(def f (lambda (x) x)) (eq f f)"), IsFalse)
 	AssertThat(t, Process("(eq plus car)"), IsFalse)
 }
 
