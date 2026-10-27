@@ -122,3 +122,7 @@ func TestEmptyListEvaluatesToNil(t *testing.T) {
 func TestStdlibIsLoaded(t *testing.T) {
     AssertThat(t, Process("(mult 3 4)"), Equals(int64(12)))
 }
+
+func TestDefStoresTheValueOfItsExpression(t *testing.T) {
+    AssertThat(t, Process("(def y (plus 1 2)) (plus y 1)"), Equals(int64(4)))
+}

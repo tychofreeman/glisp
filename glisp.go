@@ -127,11 +127,13 @@ func apply(scope *Scope, params List) interface{} {
 }
 
 func define_(scope *Scope, params List) interface{} {
-    name := params.First().(Token).Str()
-    body := params.Rest().First()
-
-    scope.add(name, body)
-    return List{}
+	name := params.First().(Token).Str()
+	body := params.Second()
+	if _, isLambda := body.(Function); !isLambda {
+		body = GetValue(scope, body)
+	}
+	scope.add(name, body)
+	return List{}
 }
 
 func macro(scope *Scope, params List) interface{} {
