@@ -138,3 +138,10 @@ One entry per PR, written before committing it.
 - No refusals. `replace_text` was the right tool for the one-line macro change:
   the same `return b(macroScope, macroParams)` appears twice, so `old` needed
   the `case Function:` line above it to be unique.
+
+### PR: eq on lists
+
+- Same import issue as the last PR: `add_declaration` added `reflect` with a
+  tab among space-indented imports; fixed with `replace_text`.
+- Nothing else: `add_declaration` with `after: "eq"` placed the helper right
+  after `eq`, and `replace_text` changed the one comparison.

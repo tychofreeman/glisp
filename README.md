@@ -28,7 +28,7 @@ loaded before every program; it defines `mult`.
   caller's parameter of the same name.
 - [x] Calling a lambda with too few arguments panics (index out of range); extra
   arguments are silently dropped.
-- [ ] `eq` on two lists crashes the Go runtime ("comparing uncomparable type").
+- [x] `eq` on two lists crashes the Go runtime ("comparing uncomparable type").
 - [ ] Silent wrong answers: `plus` skips non-integers (`(plus 1 "a")` is 1), and
   `car`/`cdr` of a non-list return nil.
 - [ ] Tokenizer:
