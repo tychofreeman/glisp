@@ -226,3 +226,13 @@ One entry per PR, written before committing it.
   write gofmt-style tabs. From here on the files are gofmt'd, so new edits
   should match. A `format` step (or `check` reporting files that aren't
   gofmt'd) would have caught it on the first edit.
+
+### PR: dead code
+
+- No tool issues. One four-step `batch`: `replace_statements` with empty
+  `content` deleted each unreachable `return nil` (nothing in its description
+  says empty content deletes, but it does — worth saying, since there's no
+  separate "delete statements" tool); `remove_else` un-nested `atom`;
+  `remove_dead_code` removed `ParamsList` and noted the exported-API change.
+  Line numbers stayed valid across steps, and since the files are gofmt'd now,
+  `gofmt -l` stayed clean after the edits.

@@ -12,7 +12,6 @@ type Valuable interface {
 	Eval(*Scope) interface{}
 }
 
-type ParamsList List
 type Function func(_ *Scope, params List) interface{}
 type NonEvaluatingFunction func(_ *Scope, params List) interface{}
 
@@ -31,7 +30,6 @@ func GetValue(scope *Scope, source interface{}) interface{} {
 	default:
 		panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", value, value))
 	}
-	return nil
 }
 
 func quote(_ *Scope, params List) interface{} {
@@ -77,9 +75,8 @@ func atom(_ *Scope, params List) interface{} {
 		default:
 			return true
 		}
-	} else {
-		return false
 	}
+	return false
 }
 
 func cons(_ *Scope, params List) interface{} {
@@ -181,7 +178,6 @@ func macro(scope *Scope, params List) interface{} {
 			return b(macroScope, macroParams)
 		default:
 			panic(fmt.Sprintf("Could nt execute a function: %t %v\n%v\n", b, b, macroScope))
-			return nil
 		}
 	})
 	scope.add(name, macroFn)
