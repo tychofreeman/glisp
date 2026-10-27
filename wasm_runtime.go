@@ -445,28 +445,6 @@ func (c *wasmCompiler) putValueBody(b *wasmBody) {
 	b.Call(c.rt.putByte)
 }
 
-// putType(v) prints the glisp name of v's type, as typeName does.
-func (c *wasmCompiler) putTypeBody(b *wasmBody) {
-	v, t := b.param(0), b.local(i32)
-	b.LocalGet(v)
-	b.Call(c.rt.tagOf)
-	b.LocalSet(t)
-	names := []struct {
-		tag  int32
-		name string
-	}{
-		{tagInt, "number"}, {tagNil, "nil"}, {tagTrue, "bool"}, {tagFalse, "bool"},
-		{tagString, "string"}, {tagSymbol, "symbol"}, {tagClosure, "function"},
-	}
-	for _, n := range names {
-		b.LocalGet(t)
-		b.I32Const(n.tag)
-		b.Op(wasm.I32Eq)
-		b.returnIf(func() { c.text(b, n.name) })
-	}
-	c.text(b, "list")
-}
-
 // putArgs(args, argc) prints the arguments as a list: (a b c).
 func (c *wasmCompiler) putArgsBody(b *wasmBody) {
 	args, argc, i := b.param(0), b.param(1), b.local(i32)
@@ -905,11 +883,6 @@ func (c *wasmCompiler) checkArgs(b *wasmBody, spec builtin) {
 	}
 }
 
-// tags are the tags that values of kind k have.
-func (k kind) tags() []int32 {
-	return [][]int32{nil, {tagInt}, {tagString}, {tagEmpty, tagPair, tagNil}, {tagClosure}}[k]
-}
-
 // tagIn leaves whether the tag in local t is one of tags.
 func (b *wasmBody) tagIn(t uint32, tags []int32) {
 	for k, tag := range tags {
@@ -1052,17 +1025,6 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.arg(1)
 		b.Op(map[string]byte{"<": wasm.I64LtS, ">": wasm.I64GtS, "<=": wasm.I64LeS, ">=": wasm.I64GeS}[name])
 		b.boolean()
-	case "number?", "string?", "symbol?", "list?", "function?", "boolean?", "nil?":
-		t := b.local(i32)
-		b.arg(0)
-		b.Call(c.rt.tagOf)
-		b.LocalSet(t)
-		b.tagIn(t, map[string][]int32{
-			"number?": {tagInt}, "string?": {tagString}, "symbol?": {tagSymbol},
-			"list?": {tagEmpty, tagPair}, "function?": {tagClosure},
-			"boolean?": {tagTrue, tagFalse}, "nil?": {tagNil},
-		}[name])
-		b.boolean()
 	case "eq":
 		b.arg(0)
 		b.arg(1)
@@ -1099,6 +1061,15 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.Call(c.rt.flush)
 		b.I64Const(addrEmpty)
 	default:
+		if typ, isPredicate := predicateType(name); isPredicate {
+			t := b.local(i32)
+			b.arg(0)
+			b.Call(c.rt.tagOf)
+			b.LocalSet(t)
+			b.tagIn(t, tagsOf(typ))
+			b.boolean()
+			return
+		}
 		c.stringBuiltin(b, name)
 	}
 }

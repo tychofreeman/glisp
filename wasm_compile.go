@@ -35,7 +35,8 @@ func CompileWasmFile(fname string) ([]byte, error) {
 
 // Compiled values are i64s. An odd value is an integer n stored as 2n+1; any
 // other value is the address of an object in linear memory, whose first i32
-// is its tag. The value 0 marks a variable that has no value yet.
+// is its tag. The value 0 marks a variable that has no value yet. What each
+// tag means, its type and its layout, is in tagKinds.
 const (
 	tagInt = iota // integers have no object; tagOf reports this tag
 	tagNil

@@ -49,38 +49,6 @@ func (c *wasmCompiler) safePoint(b *wasmBody) {
 	})
 }
 
-// objSize(p) is the size in bytes of the object at p.
-func (c *wasmCompiler) objSizeBody(b *wasmBody) {
-	p, tag := b.param(0), b.local(i32)
-	b.LocalGet(p)
-	b.I32Load(0)
-	b.LocalSet(tag)
-	for _, size := range []struct{ tag, size int32 }{{tagPair, 24}, {tagCell, 16}} {
-		b.LocalGet(tag)
-		b.I32Const(size.tag)
-		b.Op(wasm.I32Eq)
-		b.returnIf(func() { b.I32Const(size.size) })
-	}
-	b.LocalGet(tag)
-	b.I32Const(tagClosure)
-	b.Op(wasm.I32Eq)
-	b.returnIf(func() {
-		b.LocalGet(p)
-		b.I32Load(8)
-		b.I32Const(3)
-		b.Op(wasm.I32Shl)
-		b.I32Const(16)
-		b.Op(wasm.I32Add)
-	})
-	// A string or symbol.
-	b.LocalGet(p)
-	b.I32Load(4)
-	b.I32Const(15)
-	b.Op(wasm.I32Add)
-	b.I32Const(-8)
-	b.Op(wasm.I32And)
-}
-
 // gcCopy(v) is v, copied to to-space if it is an object in from-space: the
 // copy's address, which a forward left in the old object gives to any
 // later reference.
@@ -193,19 +161,6 @@ func (c *wasmCompiler) gcBody(b *wasmBody) {
 			b.GlobalSet(g)
 		}
 	}
-	field := func(fn uint32, offset uint32) {
-		b.LocalGet(scan)
-		b.LocalGet(scan)
-		b.I64Load(offset)
-		b.Call(fn)
-		b.I64Store(offset)
-	}
-	tagIs := func(tag int32) {
-		b.LocalGet(scan)
-		b.I32Load(0)
-		b.I32Const(tag)
-		b.Op(wasm.I32Eq)
-	}
 	objects := func(fn uint32) {
 		b.GlobalGet(gToStart)
 		b.LocalSet(scan)
@@ -214,36 +169,12 @@ func (c *wasmCompiler) gcBody(b *wasmBody) {
 			b.GlobalGet(gToNext)
 			b.Op(wasm.I32GeU)
 		}, func() {
-			tagIs(tagPair)
-			b.when(func() {
-				field(fn, 8)
-				field(fn, 16)
-			})
-			tagIs(tagCell)
-			b.when(func() {
-				field(fn, 8)
-			})
-			tagIs(tagClosure)
-			b.when(func() {
-				b.I32Const(0)
-				b.LocalSet(k)
-				b.until(func() {
-					b.LocalGet(k)
-					b.LocalGet(scan)
-					b.I32Load(8)
-					b.Op(wasm.I32GeU)
-				}, func() {
-					b.LocalGet(scan)
-					b.LocalGet(k)
-					b.I32Const(3)
-					b.Op(wasm.I32Shl, wasm.I32Add)
-					b.LocalTee(p)
-					b.LocalGet(p)
-					b.I64Load(16)
-					b.Call(fn)
-					b.I64Store(16)
-					b.incr(k)
-				})
+			b.eachValue(scan, k, p, func(at uint32) {
+				b.LocalGet(at)
+				b.LocalGet(at)
+				b.I64Load(0)
+				b.Call(fn)
+				b.I64Store(0)
 			})
 			b.LocalGet(scan)
 			b.LocalGet(scan)
