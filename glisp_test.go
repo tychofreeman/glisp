@@ -291,3 +291,11 @@ func TestLessAndGreaterCompare(t *testing.T) {
 	assertPanicsWith(t, "(< 1)", "<: expects 2 arguments, got 1")
 	assertPanicsWith(t, "(> 1 \"a\")", ">: expected a number, got string a")
 }
+
+func TestTrueFalseAndNilAreDefined(t *testing.T) {
+	AssertThat(t, Process("true"), IsTrue)
+	AssertThat(t, Process("false"), IsFalse)
+	AssertThat(t, Process("nil"), IsNil)
+	AssertThat(t, Process("(if true 1 2)"), Equals(int64(1)))
+	AssertThat(t, Process("(eq (car (quote ())) nil)"), IsTrue)
+}

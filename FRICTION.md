@@ -314,3 +314,9 @@ One entry per PR, written before committing it.
   `builtins` map, each `after` the previous key. `add_element`'s keys are
   written as in the source (`"\"plus\""`), which the description says.
 - A seven-step `replace_text` batch updated the `.glisp` example.
+
+### PR: `true`, `false` and `nil`
+
+- No tool issues: three `add_element` steps (no `after`, so each went at the
+  end of the `builtins` map), and gofmt-style alignment of the map came out
+  right. One `replace_text` removed the example's own definitions.

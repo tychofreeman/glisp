@@ -232,6 +232,9 @@ var builtins = map[string]interface{}{
 	"def":      NonEvaluatingFunction(define),
 	"defmacro": NonEvaluatingFunction(macro),
 	"p":        Function(printValues),
+	"true":     true,
+	"false":    false,
+	"nil":      nil,
 }
 
 func paramBinder(decls interface{}) func(interface{}) map[string]interface{} {

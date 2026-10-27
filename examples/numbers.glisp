@@ -2,9 +2,6 @@
 ; built from the handful of builtins.  Run it with
 ;   go run ./cmd/glisp examples/numbers.glisp
 
-(def true (eq 1 1))
-(def false (eq 1 2))
-(def nil (car (quote ())))
 (def empty (quote ()))
 
 (def null (lambda (l) (eq (car l) nil)))
