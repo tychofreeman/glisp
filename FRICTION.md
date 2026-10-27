@@ -389,3 +389,19 @@ One entry per PR, written before committing it.
 ### PR: compiler roadmap
 
 - No tool issues: one `replace_text` appended the section to the README.
+
+## Compiler foundations
+
+### PR: `Node` types
+
+- **A name clash with a dot-imported package.** The tests dot-import
+  go-matchers, which exports `Call`, so a `Call` node type doesn't compile in
+  the test package. The batch's error said exactly that, and rolled back
+  cleanly; the node is `Apply` instead.
+- `rename` (old `Lambda` → `parsedLambda`) listed a comment that still said
+  "Lambda", with its line — the cue to fix it with `replace_text`.
+- **`create_file` gofmt'd the file it created**, realigning a map literal, so a
+  later `replace_text` with `old` copied from my own source didn't match. The
+  refusal's advice (grep for the line as it is) was right; replacing the two
+  statements by line range was simpler. Worth knowing: text you hand to
+  `create_file` or `add_declaration` may not be the text that lands.

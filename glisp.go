@@ -148,13 +148,13 @@ func ifThenElse(scope *Scope, params List) interface{} {
 }
 
 // lambdaForm is (lambda (params...) body...) evaluated at run time, as when a
-// macro builds one. A lambda written in the source becomes a Lambda value when
+// macro builds one. A lambda written in the source becomes a parsedLambda when
 // it is parsed, so it never gets here.
 func lambdaForm(scope *Scope, params List) interface{} {
 	if len(params) == 0 {
 		panic("lambda: expects a parameter list")
 	}
-	return Lambda{paramBinder(params.First()), ParseMany(params.Rest())}.Eval(scope)
+	return parsedLambda{paramBinder(params.First()), ParseMany(params.Rest())}.Eval(scope)
 }
 
 func eq(_ *Scope, params List) interface{} {
@@ -299,14 +299,14 @@ func paramBinder(decls interface{}) func(interface{}) map[string]interface{} {
 	}
 }
 
-// Lambda is a parsed (lambda (params...) body...) form. Evaluating it makes a
+// parsedLambda is a parsed (lambda (params...) body...) form. Evaluating it makes a
 // Function that closes over the scope it was evaluated in.
-type Lambda struct {
+type parsedLambda struct {
 	bind func(interface{}) map[string]interface{}
 	body List
 }
 
-func (l Lambda) Eval(scope *Scope) interface{} {
+func (l parsedLambda) Eval(scope *Scope) interface{} {
 	return Function(func(_ *Scope, params List) interface{} {
 		local := &Scope{prev: scope, table: l.bind(params)}
 		var last interface{}
@@ -327,7 +327,7 @@ func Parse(source interface{}) interface{} {
 		return node
 	case List:
 		if node.IsLambda() {
-			return Lambda{paramBinder(node.Second()), ParseMany(node.Rest().Rest())}
+			return parsedLambda{paramBinder(node.Second()), ParseMany(node.Rest().Rest())}
 		}
 		x := ParseMany(node)
 		return x
