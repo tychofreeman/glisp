@@ -40,5 +40,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, "glisp:", err)
 		os.Exit(1)
 	}
-	fmt.Println("=>", value)
+	fmt.Println("=>", glisp.Show(value))
 }

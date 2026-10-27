@@ -9,6 +9,7 @@ type wasmRuntime struct {
 	alloc, flush, putByte, putBytes, putStr, putInt uint32
 	putValue, putType, putArgs, failBegin, failEnd  uint32
 	tagOf, num, listArg, pair, cell, equal, invoke  uint32
+	putShow, putQuoted, putDescribed                uint32
 	builtins                                        map[string]uint32 // table index of each builtin
 }
 
@@ -41,6 +42,9 @@ func (c *wasmCompiler) runtime() {
 	rt.putValue = c.declare(sig(vals(i64)))
 	rt.putType = c.declare(sig(vals(i64)))
 	rt.putArgs = c.declare(sig(vals(i32, i32)))
+	rt.putShow = c.declare(sig(vals(i64)))
+	rt.putQuoted = c.declare(sig(vals(i32)))
+	rt.putDescribed = c.declare(sig(vals(i64)))
 	rt.failBegin = c.declare(sig(nil))
 	rt.failEnd = c.declare(sig(nil))
 	rt.tagOf = c.declare(sig(vals(i64), i32))
@@ -65,6 +69,9 @@ func (c *wasmCompiler) runtime() {
 	c.define(rt.putValue, vals(i32, i32), c.putValueBody())
 	c.define(rt.putType, vals(i32), c.putTypeBody())
 	c.define(rt.putArgs, vals(i32), c.putArgsBody())
+	c.define(rt.putShow, nil, c.putShowBody())
+	c.define(rt.putQuoted, vals(i32, i32, i32), c.putQuotedBody())
+	c.define(rt.putDescribed, nil, c.putDescribedBody())
 	c.define(rt.failBegin, nil, c.failBeginBody())
 	c.define(rt.failEnd, nil, c.failEndBody())
 	c.define(rt.tagOf, nil, c.tagOfBody())
@@ -152,14 +159,10 @@ func returnIf(b *wasm.Code, then func()) {
 	b.Op(wasm.Return, wasm.End)
 }
 
-// value prints the %T and %v of the value in local v, as an error does.
+// typeAndValue prints the type and value in local v, as an error does.
 func (c *wasmCompiler) typeAndValue(b *wasm.Code, v uint32) {
 	b.LocalGet(v)
-	b.Call(c.rt.putType)
-	b.I32Const(' ')
-	b.Call(c.rt.putByte)
-	b.LocalGet(v)
-	b.Call(c.rt.putValue)
+	b.Call(c.rt.putDescribed)
 }
 
 // alloc(size) returns size bytes of heap, doubling memory when it runs out.
@@ -334,7 +337,7 @@ func (c *wasmCompiler) putIntBody() wasm.Code {
 	return b
 }
 
-// putValue(v) prints v as fmt's %v prints the interpreter's value.
+// putValue(v) prints v as Write does.
 func (c *wasmCompiler) putValueBody() wasm.Code {
 	const v, t, first = 0, 1, 2
 	var b wasm.Code
@@ -353,26 +356,22 @@ func (c *wasmCompiler) putValueBody() wasm.Code {
 		b.Op(wasm.I64ShrS)
 		b.Call(c.rt.putInt)
 	})
-	when(tagNil, func() { c.text(&b, "<nil>") })
+	when(tagNil, func() { c.text(&b, "nil") })
 	when(tagTrue, func() { c.text(&b, "true") })
 	when(tagFalse, func() { c.text(&b, "false") })
 	when(tagString, func() {
 		b.LocalGet(v)
 		b.Op(wasm.I32WrapI64)
-		b.Call(c.rt.putStr)
+		b.Call(c.rt.putQuoted)
 	})
 	when(tagSymbol, func() {
-		b.I32Const('{')
-		b.Call(c.rt.putByte)
 		b.LocalGet(v)
 		b.Op(wasm.I32WrapI64)
 		b.Call(c.rt.putStr)
-		b.I32Const('}')
-		b.Call(c.rt.putByte)
 	})
 	when(tagClosure, func() { c.text(&b, "<function>") })
-	// A list: [a b c].
-	b.I32Const('[')
+	// A list: (a b c).
+	b.I32Const('(')
 	b.Call(c.rt.putByte)
 	b.I32Const(1)
 	b.LocalSet(first)
@@ -396,12 +395,12 @@ func (c *wasmCompiler) putValueBody() wasm.Code {
 	b.LocalSet(v)
 	b.Br(0)
 	b.Op(wasm.End, wasm.End)
-	b.I32Const(']')
+	b.I32Const(')')
 	b.Call(c.rt.putByte)
 	return b
 }
 
-// putType(v) prints v's type as fmt's %T prints the interpreter's value.
+// putType(v) prints the glisp name of v's type, as typeName does.
 func (c *wasmCompiler) putTypeBody() wasm.Code {
 	const v, t = 0, 1
 	var b wasm.Code
@@ -412,8 +411,8 @@ func (c *wasmCompiler) putTypeBody() wasm.Code {
 		tag  int32
 		name string
 	}{
-		{tagInt, "int64"}, {tagNil, "<nil>"}, {tagTrue, "bool"}, {tagFalse, "bool"},
-		{tagString, "string"}, {tagSymbol, "glisp.Symbol"}, {tagClosure, "glisp.Function"},
+		{tagInt, "number"}, {tagNil, "nil"}, {tagTrue, "bool"}, {tagFalse, "bool"},
+		{tagString, "string"}, {tagSymbol, "symbol"}, {tagClosure, "function"},
 	}
 	for _, n := range names {
 		b.LocalGet(t)
@@ -421,15 +420,15 @@ func (c *wasmCompiler) putTypeBody() wasm.Code {
 		b.Op(wasm.I32Eq)
 		returnIf(&b, func() { c.text(&b, n.name) })
 	}
-	c.text(&b, "glisp.List")
+	c.text(&b, "list")
 	return b
 }
 
-// putArgs(args, argc) prints the arguments as a list: [a b c].
+// putArgs(args, argc) prints the arguments as a list: (a b c).
 func (c *wasmCompiler) putArgsBody() wasm.Code {
 	const args, argc, i = 0, 1, 2
 	var b wasm.Code
-	b.I32Const('[')
+	b.I32Const('(')
 	b.Call(c.rt.putByte)
 	b.Block(wasm.BlockVoid)
 	b.Loop(wasm.BlockVoid)
@@ -451,8 +450,93 @@ func (c *wasmCompiler) putArgsBody() wasm.Code {
 	incr(&b, i)
 	b.Br(0)
 	b.Op(wasm.End, wasm.End)
-	b.I32Const(']')
+	b.I32Const(')')
 	b.Call(c.rt.putByte)
+	return b
+}
+
+// putShow(v) prints v as Show does: a string as its text, anything else as
+// putValue writes it.
+func (c *wasmCompiler) putShowBody() wasm.Code {
+	var b wasm.Code
+	c.tagIs(&b, 0, tagString)
+	returnIf(&b, func() {
+		b.LocalGet(0)
+		b.Op(wasm.I32WrapI64)
+		b.Call(c.rt.putStr)
+	})
+	b.LocalGet(0)
+	b.Call(c.rt.putValue)
+	return b
+}
+
+// putQuoted(s) prints the string object s in quotes, escaping as quote does.
+func (c *wasmCompiler) putQuotedBody() wasm.Code {
+	const s, i, n, ch = 0, 1, 2, 3
+	var b wasm.Code
+	put := func(bytes ...int32) {
+		for _, x := range bytes {
+			b.I32Const(x)
+			b.Call(c.rt.putByte)
+		}
+	}
+	is := func(x int32) {
+		b.LocalGet(ch)
+		b.I32Const(x)
+		b.Op(wasm.I32Eq)
+	}
+	put('"')
+	b.LocalGet(s)
+	b.I32Load(4)
+	b.LocalSet(n)
+	b.Block(wasm.BlockVoid)
+	b.Loop(wasm.BlockVoid)
+	b.LocalGet(i)
+	b.LocalGet(n)
+	b.Op(wasm.I32GeU)
+	b.BrIf(1)
+	b.LocalGet(s)
+	b.LocalGet(i)
+	b.Op(wasm.I32Add)
+	b.I32Load8U(8)
+	b.LocalSet(ch)
+	is('\n')
+	b.If(wasm.BlockVoid)
+	put('\\', 'n')
+	b.Op(wasm.Else)
+	is('\t')
+	b.If(wasm.BlockVoid)
+	put('\\', 't')
+	b.Op(wasm.Else)
+	is('"')
+	is('\\')
+	b.Op(wasm.I32Or)
+	b.If(wasm.BlockVoid)
+	put('\\')
+	b.Op(wasm.End)
+	b.LocalGet(ch)
+	b.Call(c.rt.putByte)
+	b.Op(wasm.End, wasm.End)
+	incr(&b, i)
+	b.Br(0)
+	b.Op(wasm.End, wasm.End)
+	put('"')
+	return b
+}
+
+// putDescribed(v) prints v's type and value, as described does.
+func (c *wasmCompiler) putDescribedBody() wasm.Code {
+	var b wasm.Code
+	b.LocalGet(0)
+	b.I64Const(addrNil)
+	b.Op(wasm.I64Eq)
+	returnIf(&b, func() { c.text(&b, "nil") })
+	b.LocalGet(0)
+	b.Call(c.rt.putType)
+	b.I32Const(' ')
+	b.Call(c.rt.putByte)
+	b.LocalGet(0)
+	b.Call(c.rt.putValue)
 	return b
 }
 
@@ -892,14 +976,28 @@ func (c *wasmCompiler) builtinBody(name string) ([]wasm.ValType, wasm.Code) {
 		b.Call(c.rt.invoke)
 		return vals(i64), b
 	case "p":
-		b.LocalGet(1)
+		const i = 3
+		b.Block(wasm.BlockVoid)
+		b.Loop(wasm.BlockVoid)
+		b.LocalGet(i)
 		b.LocalGet(argc)
-		b.Call(c.rt.putArgs)
+		b.Op(wasm.I32GeU)
+		b.BrIf(1)
+		b.LocalGet(i)
+		b.If(wasm.BlockVoid)
+		b.I32Const(' ')
+		b.Call(c.rt.putByte)
+		b.Op(wasm.End)
+		argAt(&b, i)
+		b.Call(c.rt.putShow)
+		incr(&b, i)
+		b.Br(0)
+		b.Op(wasm.End, wasm.End)
 		b.I32Const('\n')
 		b.Call(c.rt.putByte)
 		b.Call(c.rt.flush)
 		b.I64Const(addrEmpty)
-		return nil, b
+		return vals(i32), b
 	}
 	panic("wasm: no builtin " + name)
 }

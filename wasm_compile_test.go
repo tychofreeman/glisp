@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -59,7 +58,7 @@ func runInterpreted(t *testing.T, program string) string {
 	if err != nil {
 		return out + "glisp: " + err.Error() + "\n"
 	}
-	return out + fmt.Sprintln("=>", value)
+	return out + "=> " + Show(value) + "\n"
 }
 
 var wasmPrograms = []string{
@@ -167,7 +166,7 @@ func TestCompiledExampleMatchesTheInterpreter(t *testing.T) {
 }
 
 func TestCompiledFunctionsPrintAsFunctions(t *testing.T) {
-	if got := runCompiled(t, `(p car (lambda (x) x))`); got != "[<function> <function>]\n=> []\n" {
+	if got := runCompiled(t, `(p car (lambda (x) x))`); got != "<function> <function>\n=> ()\n" {
 		t.Errorf("got %q", got)
 	}
 }

@@ -40,7 +40,7 @@ func Eval(node Node, scope *Scope) interface{} {
 		if f, isFunction := fn.(Function); isFunction {
 			return f(scope, args)
 		}
-		panic(fmt.Sprintf("Cannot call %T %v in %v\n", fn, fn, n))
+		panic(fmt.Sprintf("Cannot call %s in %v\n", described(fn), n))
 	}
 	panic(fmt.Sprintf("Eval: unknown node %T %v", node, node))
 }
@@ -54,7 +54,7 @@ func closure(lambda Lambda, scope *Scope) Function {
 			if len(lambda.Params) == 1 {
 				arguments = "argument"
 			}
-			panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %v", strings.Join(lambda.Params, " "), len(lambda.Params), arguments, len(args), args))
+			panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %s", strings.Join(lambda.Params, " "), len(lambda.Params), arguments, len(args), Write(args)))
 		}
 		local := &Scope{prev: scope, table: make(map[string]interface{}, len(args))}
 		for i, name := range lambda.Params {

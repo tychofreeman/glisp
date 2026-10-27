@@ -218,7 +218,7 @@ func TestEqOnFunctionsDoesNotCrash(t *testing.T) {
 }
 
 func TestPlusRejectsNonNumbers(t *testing.T) {
-	assertPanicsWith(t, "(plus 1 \"a\")", "plus: expected a number, got string a")
+	assertPanicsWith(t, "(plus 1 \"a\")", "plus: expected a number, got string \"a\"")
 }
 
 func TestPlusAddsQuotedNumbers(t *testing.T) {
@@ -226,8 +226,8 @@ func TestPlusAddsQuotedNumbers(t *testing.T) {
 }
 
 func TestCarAndCdrRejectNonLists(t *testing.T) {
-	assertPanicsWith(t, "(car 5)", "car: expected a list, got int64 5")
-	assertPanicsWith(t, "(cdr \"a\")", "cdr: expected a list, got string a")
+	assertPanicsWith(t, "(car 5)", "car: expected a list, got number 5")
+	assertPanicsWith(t, "(cdr \"a\")", "cdr: expected a list, got string \"a\"")
 }
 
 func TestCarAndCdrOfNilAreNil(t *testing.T) {
@@ -241,7 +241,7 @@ func IsNil(actual interface{}) (bool, string) {
 }
 
 func TestDefmacroOfANonFunctionFails(t *testing.T) {
-	assertPanicsWith(t, "(defmacro m 5) (m)", "defmacro: expected a function, got int64 5")
+	assertPanicsWith(t, "(defmacro m 5) (m)", "defmacro: expected a function, got number 5")
 }
 
 func TestDefinitionsDoNotLeakBetweenRuns(t *testing.T) {
@@ -283,7 +283,7 @@ func TestRunReturnsTheValue(t *testing.T) {
 
 func TestRunReturnsErrorsInsteadOfPanicking(t *testing.T) {
 	for src, want := range map[string]string{
-		"(plus 1 \"a\")":   "plus: expected a number, got string a",
+		"(plus 1 \"a\")":   "plus: expected a number, got string \"a\"",
 		"(undefined_fn 1)": "Cannot resolve symbol undefined_fn",
 		"(plus 1 2":        "missing )",
 	} {
@@ -316,7 +316,7 @@ func TestMinusSubtracts(t *testing.T) {
 	AssertThat(t, Process("(- 10 3)"), Equals(int64(7)))
 	AssertThat(t, Process("(- 10 3 2)"), Equals(int64(5)))
 	AssertThat(t, Process("(- 5)"), Equals(int64(-5)))
-	assertPanicsWith(t, "(- 1 \"a\")", "-: expected a number, got string a")
+	assertPanicsWith(t, "(- 1 \"a\")", "-: expected a number, got string \"a\"")
 }
 
 func TestLessAndGreaterCompare(t *testing.T) {
@@ -326,7 +326,7 @@ func TestLessAndGreaterCompare(t *testing.T) {
 	AssertThat(t, Process("(> 2 1)"), IsTrue)
 	AssertThat(t, Process("(> 1 2)"), IsFalse)
 	assertPanicsWith(t, "(< 1)", "<: expects 2 arguments, got 1")
-	assertPanicsWith(t, "(> 1 \"a\")", ">: expected a number, got string a")
+	assertPanicsWith(t, "(> 1 \"a\")", ">: expected a number, got string \"a\"")
 }
 
 func TestTrueFalseAndNilAreDefined(t *testing.T) {
@@ -370,14 +370,14 @@ func TestBuiltinsReportTheWrongNumberOfArguments(t *testing.T) {
 }
 
 func TestCallingSomethingThatIsNotAFunctionFails(t *testing.T) {
-	assertPanicsWith(t, "(1 2)", "Cannot call int64 1")
-	assertPanicsWith(t, "(\"f\" 2)", "Cannot call string f")
+	assertPanicsWith(t, "(1 2)", "Cannot call number 1")
+	assertPanicsWith(t, "(\"f\" 2)", "Cannot call string \"f\"")
 }
 
 func TestDefNeedsASymbolToDefine(t *testing.T) {
-	assertPanicsWith(t, "(def 1 2)", "def: expected a symbol to define, got int64 1")
-	assertPanicsWith(t, "(def)", "def: expected a symbol to define, got <nil>")
-	assertPanicsWith(t, "(defmacro 1 (lambda (xs) 1))", "defmacro: expected a symbol to define, got int64 1")
+	assertPanicsWith(t, "(def 1 2)", "def: expected a symbol to define, got number 1")
+	assertPanicsWith(t, "(def)", "def: expected a symbol to define, got nil")
+	assertPanicsWith(t, "(defmacro 1 (lambda (xs) 1))", "defmacro: expected a symbol to define, got number 1")
 }
 
 func TestLambdaNeedsAParameterList(t *testing.T) {
