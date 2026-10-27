@@ -184,13 +184,22 @@ func apply(scope *Scope, params List) interface{} {
 	return GetValue(scope, params)
 }
 
-// definedName returns the symbol a (def name ...) or (defmacro name ...) form
-// defines, or panics naming the form fn.
+// definedName returns the symbol a (def name value) or (defmacro name value)
+// form defines, or panics naming the form fn if the form doesn't have exactly
+// a symbol and a value.
 func definedName(fn string, params List) string {
-	if sym, isSymbol := params.First().(Symbol); isSymbol {
-		return sym.Str()
+	sym, isSymbol := params.First().(Symbol)
+	if !isSymbol {
+		panic(fmt.Sprintf("%s: expected a symbol to define, got %T %v", fn, params.First(), params.First()))
 	}
-	panic(fmt.Sprintf("%s: expected a symbol to define, got %T %v", fn, params.First(), params.First()))
+	if len(params) != 2 {
+		arguments := "arguments"
+		if len(params) == 1 {
+			arguments = "argument"
+		}
+		panic(fmt.Sprintf("%s: expects a name and a value, got %d %s", fn, len(params), arguments))
+	}
+	return sym.Str()
 }
 
 func define(scope *Scope, params List) interface{} {

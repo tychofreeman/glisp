@@ -359,3 +359,16 @@ One entry per PR, written before committing it.
 - No tool issues: two `replace_text` steps in a `batch` edited the Markdown.
   `git checkout` was the quickest way to throw away a first attempt that
   changed more than intended (`undo` would have taken one call per step).
+
+### PR: mutual recursion
+
+- **`rename` refused to turn a disabled test back on**, correctly: renaming
+  `THIS_FAILS_…_TestMutualRecursionFails` to `TestMutualRecursion` "would make
+  go test run it as a test function". That was the point, but a rename is
+  meant to keep behavior. `add_declaration` of the new tests plus
+  `remove_dead_code` of the old function did it instead.
+- `remove_dead_code` noted that removing the old function "changes the
+  module's API" because its name is exported. It's in a `_test.go` file, so it
+  was never part of the API; the note is a false positive there.
+- Otherwise smooth: `replace_statements` by `function` and `replace_text` for
+  the doc comment, in one `batch`.
