@@ -105,8 +105,6 @@ func plus(_ *Scope, params List) interface{} {
 		switch x := p.(type) {
 		case int64:
 			sum = sum + x
-		case NumberToken:
-			sum = sum + x.Value()
 		default:
 			panic(fmt.Sprintf("plus: expected a number, got %T %v", p, p))
 		}
@@ -262,9 +260,9 @@ func (l Lambda) Eval(scope *Scope) interface{} {
 func Parse(source interface{}) interface{} {
 	switch node := source.(type) {
 	case NumberToken:
-		return node
+		return node.Value()
 	case StringToken:
-		return node
+		return node.Value()
 	case Symbol:
 		return node
 	case List:

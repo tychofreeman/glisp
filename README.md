@@ -52,7 +52,7 @@ loaded before every program; it defines `mult`.
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
 - [ ] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists have to be built on
   `(quote ())`.
-- [ ] Quoted numbers stay tokens: `plus` accepts them, but
+- [x] Quoted numbers stay tokens: `plus` accepts them, but
   `(eq (car (quote (1))) 1)` is false.
 - [ ] Macros: `isMacroScope` and `createNonEvaluatingScope` are never used.
 
@@ -63,7 +63,7 @@ loaded before every program; it defines `mult`.
   is safe to run concurrently. Give each run its own scope over the builtins.
 - [x] `Process` panics on bad input; return `(value, error)` or recover at the
   top level.
-- [ ] Values are Go `int64`/`string` in some places and `NumberToken`/
+- [x] Values are Go `int64`/`string` in some places and `NumberToken`/
   `StringToken` in others; `NumberToken` re-parses its string on every `Eval`.
 
 ### Cleanup

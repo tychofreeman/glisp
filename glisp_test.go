@@ -262,3 +262,15 @@ func TestRunFileReportsAMissingFile(t *testing.T) {
 		t.Errorf("RunFile of a missing file: got no error")
 	}
 }
+
+func TestQuotedNumbersEqualComputedOnes(t *testing.T) {
+	AssertThat(t, Process("(eq (car (quote (1))) 1)"), IsTrue)
+	AssertThat(t, Process("(eq (car (quote (\"a\"))) \"a\")"), IsTrue)
+}
+
+func TestQuotedListsHoldGoValues(t *testing.T) {
+	got := Process("(quote (1 \"a\" b))").(List)
+	if got[0] != int64(1) || got[1] != "a" || got[2] != symbol("b") {
+		t.Errorf("got %#v, want int64 1, string a, symbol b", got)
+	}
+}

@@ -288,3 +288,10 @@ One entry per PR, written before committing it.
   with a note for each.
 - Otherwise smooth: `replace_text` to add a doc comment above `Process`,
   `replace_statements` by `function` for `cmd/glisp`'s `main`.
+
+### PR: values at parse time
+
+- No tool issues. `replace_expression` on the bare expression `node` in two
+  `return node` lines did exactly that, and noted each type change
+  (`NumberToken` → `int64`, `StringToken` → `string`) — a useful
+  confirmation that the change meant what I thought.
