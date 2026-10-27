@@ -100,14 +100,14 @@ The core forms, as Go types implementing a `Node` interface:
 | `If` | `(if c then else)` |
 | `Lambda` | `(lambda (params) body...)` |
 | `Def` | `(def name value)` |
-| `Call` | `(f args...)` |
+| `Apply` | `(f args...)`, a call (`Call` clashes with a go-matchers name) |
 
 `defn`, `defmacro` and other macros never reach a backend: an `Expander`
 runs them while expanding, using the interpreter to evaluate macro bodies.
 Builtins other than the special forms (`car`, `plus`, `<`, `p`, …) stay
-ordinary functions, called through `Ref` and `Call`.
+ordinary functions, called through `Ref` and `Apply`.
 
-- [ ] Add the `Node` types.
+- [x] Add the `Node` types.
 - [ ] Write the `Expander`: special forms become nodes; `defmacro` registers a
   macro; macro calls are expanded, recursively, until only core forms remain.
 - [ ] Make the interpreter evaluate `Node`s, so every existing test runs
