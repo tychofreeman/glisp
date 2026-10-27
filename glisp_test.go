@@ -21,7 +21,7 @@ func TestCarGrabsFirstItem(t *testing.T) {
 }
 
 func TestCdrGrabsTail(t *testing.T) {
-    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\")))"), HasExactly(str("b"), str("c"), HasExactly(str("d"))))
+    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\"))))"), HasExactly(str("b"), str("c"), HasExactly(str("d"))))
 }
 
 func TestAtomIsTrueForSymbols(t *testing.T) {
@@ -29,7 +29,7 @@ func TestAtomIsTrueForSymbols(t *testing.T) {
 }
 
 func TestAtomIsFalseForComplexExpres(t *testing.T) {
-    AssertThat(t, Process("(atom (quote ())"), IsFalse)
+    AssertThat(t, Process("(atom (quote ()))"), IsFalse)
 }
 
 func TestIntegerLiteralsAreImplemented(t *testing.T) {
@@ -77,7 +77,7 @@ func TestLambdasAreClosures(t *testing.T) {
 }
 
 func TestApplyCallsFunctions(t *testing.T) {
-    AssertThat(t, Process("(apply plus 1 1"), Equals(int64(2)))
+    AssertThat(t, Process("(apply plus 1 1)"), Equals(int64(2)))
 }
 
 func TestGloballyNamesFunctions(t *testing.T) {

@@ -31,14 +31,14 @@ loaded before every program; it defines `mult`.
 - [x] `eq` on two lists crashes the Go runtime ("comparing uncomparable type").
 - [x] Silent wrong answers: `plus` skips non-integers (`(plus 1 "a")` is 1), and
   `car`/`cdr` of a non-list return nil.
-- [ ] Tokenizer:
+- [x] Tokenizer:
   - [x] `(` or `)` inside a string splits the string.
   - [x] Characters other than letters, digits, `- _ ?` and `"` are dropped as
     separators, so `(+ 1 2)` reads as `(1 2)`.
   - [x] A lone `"` panics.
   - [x] Input is read byte by byte, so non-ASCII text is mangled
     (`héllo` becomes `hÃ©llo`).
-  - [ ] An unmatched `)` ends parsing: `(plus 1 2)) (plus 10 10)` returns 3.
+  - [x] An unmatched `)` ends parsing: `(plus 1 2)) (plus 10 10)` returns 3.
 - [x] Evaluating an empty list panicked.
 - [x] `stdlib.glisp` was read from a hardcoded path.
 

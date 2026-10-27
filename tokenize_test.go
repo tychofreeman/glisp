@@ -91,3 +91,9 @@ func TestUnterminatedStringsFail(t *testing.T) {
 func TestNonASCIITextIsKept(t *testing.T) {
     AssertThat(t, TokenizeString("(λ \"héllo\")"), HasExactly(HasExactly(symbol("λ"), token("\"héllo\""))))
 }
+
+func TestUnbalancedParensFail(t *testing.T) {
+    assertPanicsWith(t, "(plus 1 2)) (plus 10 10)", "unexpected )")
+    assertPanicsWith(t, "(plus 1 (plus 2 3)", "missing )")
+    assertPanicsWith(t, "(", "missing )")
+}
