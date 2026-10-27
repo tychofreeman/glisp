@@ -160,3 +160,10 @@ One entry per PR, written before committing it.
 - Writing nested lines of `replace_statements` content with tabs (since it
   re-indents with tabs when given `function`) avoided mixed indentation this
   time.
+
+### PR: parens inside strings
+
+- No tool issues. `replace_statements` by line range replaced the tokenizer's
+  whole `if` chain (one statement) and kept the file's indentation. Passing Go
+  rune literals like `'"'` inside JSON inside a shell argument took awkward
+  quoting; that's the shell, not the tool, and `batch @file` avoids it.
