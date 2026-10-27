@@ -1,6 +1,9 @@
 package glisp
 
 import (
+	"fmt"
+	"strings"
+
     "testing"
     . "github.com/tychofreeman/go-matchers"
 )
@@ -141,4 +144,26 @@ func TestClosuresCaptureTheirDefiningScope(t *testing.T) {
 
 func TestFreeVariablesDoNotSeeTheCallersParameters(t *testing.T) {
     AssertThat(t, Process("(def outer_v 100) (def get_v (lambda () outer_v)) (def shadow (lambda (outer_v) (get_v))) (shadow 1)"), Equals(int64(100)))
+}
+
+// assertPanicsWith checks that running src panics with a message containing want.
+func assertPanicsWith(t *testing.T, src string, want string) {
+    t.Helper()
+    defer func() {
+        r := recover()
+        if r == nil {
+            t.Errorf("%s: expected a panic containing %q, got none", src, want)
+        } else if !strings.Contains(fmt.Sprint(r), want) {
+            t.Errorf("%s: expected a panic containing %q, got %v", src, want, r)
+        }
+    }()
+    Process(src)
+}
+
+func TestCallingALambdaWithTooFewArgumentsFails(t *testing.T) {
+    assertPanicsWith(t, "((lambda (a b) a) 1)", "expects 2 arguments, got 1")
+}
+
+func TestCallingALambdaWithTooManyArgumentsFails(t *testing.T) {
+    assertPanicsWith(t, "((lambda (a) a) 1 2)", "expects 1 argument, got 2")
 }

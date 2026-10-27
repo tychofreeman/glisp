@@ -4,6 +4,7 @@ import (
     _ "embed"
     "fmt"
     "os"
+    "strings"
 )
 
 type Valuable interface {
@@ -140,7 +141,7 @@ func macro(scope *Scope, params List) interface{} {
     macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
         switch b := body.(type) {
         case Function:
-            return b(macroScope, macroParams)
+            return b(macroScope, List{macroParams})
         case NonEvaluatingFunction:
             return b(macroScope, macroParams)
         default:
@@ -192,6 +193,13 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
         scope := map[string]interface{}{}
         switch params := theParams.(type) {
         case List:
+            if len(params) != len(param_names) {
+                arguments := "arguments"
+                if len(param_names) == 1 {
+                    arguments = "argument"
+                }
+                panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %v", strings.Join(param_names, " "), len(param_names), arguments, len(params), params))
+            }
             for i := 0; i < len(param_names); i++ {
                 scope[param_names[i]] = params[i]
             }

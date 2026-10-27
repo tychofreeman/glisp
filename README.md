@@ -26,7 +26,7 @@ loaded before every program; it defines `mult`.
 - [x] Scoping is dynamic, not lexical: a lambda body runs in its caller's scope,
   so closures don't capture variables, and a free variable can pick up a
   caller's parameter of the same name.
-- [ ] Calling a lambda with too few arguments panics (index out of range); extra
+- [x] Calling a lambda with too few arguments panics (index out of range); extra
   arguments are silently dropped.
 - [ ] `eq` on two lists crashes the Go runtime ("comparing uncomparable type").
 - [ ] Silent wrong answers: `plus` skips non-integers (`(plus 1 "a")` is 1), and
