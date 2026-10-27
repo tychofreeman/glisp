@@ -114,7 +114,7 @@ ordinary functions, called through `Ref` and `Apply`.
   through the expander. Macros then expand once, not on every call.
 - [x] Remove the old `List`-walking evaluator and the `quote`, `if`,
   `lambda`, `def` and `defmacro` builtins it needed.
-- [ ] A resolve pass that fills in each `Ref`'s `Loc` and each `Lambda`'s
+- [x] A resolve pass that fills in each `Ref`'s `Loc` and each `Lambda`'s
   captured variables, for backends that compile variable access.
 
 Decisions this makes:

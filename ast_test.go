@@ -6,7 +6,7 @@ func TestNodesPrintAsCoreGlisp(t *testing.T) {
 	program := Def{"inc_all", Lambda{
 		Params: []string{"l"},
 		Body: []Node{Apply{Ref{Name: "map"}, []Node{
-			Lambda{[]string{"n"}, []Node{Apply{Ref{Name: "plus"}, []Node{Ref{Name: "n"}, Const{int64(1)}}}}},
+			Lambda{Params: []string{"n"}, Body: []Node{Apply{Ref{Name: "plus"}, []Node{Ref{Name: "n"}, Const{int64(1)}}}}},
 			Ref{Name: "l"},
 		}}},
 	}}
@@ -21,7 +21,7 @@ func TestNodesPrintAsCoreGlisp(t *testing.T) {
 	}{
 		{If{Ref{Name: "c"}, Const{"yes"}, Const{nil}}, `(if c "yes" nil)`},
 		{Quote{List{symbol("a"), int64(1), List{"s", nil}}}, `(quote (a 1 ("s" nil)))`},
-		{Apply{Lambda{nil, []Node{Const{int64(7)}}}, nil}, `((lambda () 7))`},
+		{Apply{Lambda{Body: []Node{Const{int64(7)}}}, nil}, `((lambda () 7))`},
 		{Def{"flag", Const{true}}, `(def flag true)`},
 	} {
 		if got := c.node.String(); got != c.want {

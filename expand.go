@@ -79,7 +79,7 @@ func (e *Expander) expandList(f List) Node {
 			if len(f) < 2 {
 				panic("lambda: expects a parameter list")
 			}
-			return Lambda{paramNames(f[1]), e.ExpandAll(f[2:])}
+			return Lambda{Params: paramNames(f[1]), Body: e.ExpandAll(f[2:])}
 		case "def":
 			name := definedName("def", f.Rest())
 			return Def{name, e.Expand(f[2])}

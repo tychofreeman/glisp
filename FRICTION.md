@@ -443,3 +443,17 @@ One entry per PR, written before committing it.
   the `builtins` map realigned after five `replace_text` deletions.
 - `remove_dead_code`'s note that removing an exported name changes the API
   appeared 11 times for one step — one line listing the names would do.
+
+### PR: the resolve pass
+
+- **`add_field` refused, with exactly what to fix:** the three unkeyed
+  `Lambda{…}` literals, with file and line. Keying them with
+  `replace_expression` and `add_field` in one `batch` went through.
+- **`create_file` of a test using an undefined `Resolve`** got the same
+  refusal as `add_declaration` did earlier, again suggesting a `results`
+  argument that `create_file` doesn't take. `create_from_usage` with
+  `results` worked, but its `to_file` must already exist ("is not a file of
+  package"), so the batch had to `create_file resolve.go` with just a package
+  clause first. `to_file` creating the file would save a step.
+- Otherwise smooth: `add_declaration` replaced the stub (and said so), and
+  `replace_declaration` swapped two `String` methods.
