@@ -54,14 +54,10 @@ func TestStringFunctionErrors(t *testing.T) {
 func TestCompiledStringFunctions(t *testing.T) {
 	for _, c := range stringPrograms {
 		program := "(p " + c.src + ") (str " + c.src + ")"
-		if got, want := runCompiled(t, program), runInterpreted(t, program); got != want {
-			t.Errorf("%s\ncompiled:    %q\ninterpreted: %q", program, got, want)
-		}
+		assertSameOutput(t, program)
 	}
 	for _, src := range []string{`(string_length 5)`, `(substring "abc" 0 4)`, `(substring "abc" "a" 2)`, `(chars (quote a))`, `(string< "a" 1)`, `(symbol 1)`, `(parse_number 12)`, `(p (chars "héllo")) (substring "héllo" 2 9)`} {
-		if got, want := runCompiled(t, src), runInterpreted(t, src); got != want {
-			t.Errorf("%s\ncompiled:    %q\ninterpreted: %q", src, got, want)
-		}
+		assertSameOutput(t, src)
 	}
 }
 
