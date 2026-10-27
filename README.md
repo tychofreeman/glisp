@@ -44,35 +44,37 @@ loaded before every program; it defines `mult`.
 
 ### Language
 
-- [ ] Comments.
-- [ ] Subtraction and comparison builtins (`-`, `<`, `>`). Programs build them
-  by counting up from 0, which is very slow for large numbers (Collatz steps
-  for 27 takes about a minute).
-- [ ] `true`, `false` and `nil` literals; programs define them as
+- [x] Comments: `;` to the end of the line.
+- [x] Subtraction and comparison builtins (`-`, `<`, `>`). Programs built them
+  by counting up from 0, which was very slow (Collatz steps for 27 took about
+  a minute; it now takes well under a second).
+- [x] `true`, `false` and `nil` literals; programs defined them as
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
-- [ ] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists have to be built on
+- [x] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists had to be built on
   `(quote ())`.
-- [ ] Quoted numbers stay tokens: `plus` accepts them, but
+- [x] Quoted numbers stay tokens: `plus` accepts them, but
   `(eq (car (quote (1))) 1)` is false.
-- [ ] Macros: `isMacroScope` and `createNonEvaluatingScope` are never used.
+- [x] Macros: `isMacroScope` and `createNonEvaluatingScope` were never used, and a
+  macro's expansion wasn't evaluated. Expansions are now evaluated in the
+  caller's scope, and the unused machinery is gone.
 
 ### Design
 
-- [ ] `def` writes into the shared `builtins` map, so definitions leak between
+- [x] `def` writes into the shared `builtins` map, so definitions leak between
   `Process` calls and tests, the stdlib is reloaded on every call, and nothing
   is safe to run concurrently. Give each run its own scope over the builtins.
-- [ ] `Process` panics on bad input; return `(value, error)` or recover at the
+- [x] `Process` panics on bad input; return `(value, error)` or recover at the
   top level.
-- [ ] Values are Go `int64`/`string` in some places and `NumberToken`/
+- [x] Values are Go `int64`/`string` in some places and `NumberToken`/
   `StringToken` in others; `NumberToken` re-parses its string on every `Eval`.
 
 ### Cleanup
 
-- [ ] gofmt the code (it's indented with 4 spaces; `define_` uses tabs).
-- [ ] Remove dead code: the `ParamsList` type, the unreachable `return nil` in
+- [x] gofmt the code (it's indented with 4 spaces; `define_` uses tabs).
+- [x] Remove dead code: the `ParamsList` type, the unreachable `return nil` in
   `GetValue` and `macro`, the `else` after `return` in `atom`.
-- [ ] Go-style names for `make_param_binding_fn`, `if_`, `define_`, and `print`
+- [x] Go-style names for `make_param_binding_fn`, `if_`, `define_`, and `print`
   (which shadows Go's builtin).
-- [ ] Replace deprecated `ioutil`; fix the "Could nt" typo and `%t` verb in
+- [x] Replace deprecated `ioutil`; fix the "Could nt" typo and `%t` verb in
   `macro`.
-- [ ] Tests for errors, arity and functions as values.
+- [x] Tests for errors, arity and functions as values.
