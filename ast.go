@@ -32,8 +32,9 @@ type If struct{ Cond, Then, Else Node }
 // Lambda is (lambda (params...) body...); the value of its last body form is
 // its result.
 type Lambda struct {
-	Params []string
-	Body   []Node
+	Params   []string
+	Body     []Node
+	Captured []string // filled in by Resolve: variables from enclosing lambdas
 }
 
 // Def is (def name value).
@@ -72,14 +73,23 @@ func (n Const) String() string {
 
 func (n Quote) String() string { return "(quote " + datumString(n.Datum) + ")" }
 
-func (n Ref) String() string { return n.Name }
+func (n Ref) String() string {
+	if n.Loc != nil {
+		return fmt.Sprintf("%s@%d.%d", n.Name, n.Loc.Depth, n.Loc.Index)
+	}
+	return n.Name
+}
 
 func (n If) String() string {
 	return "(if " + n.Cond.String() + " " + n.Then.String() + " " + n.Else.String() + ")"
 }
 
 func (n Lambda) String() string {
-	return "(lambda (" + strings.Join(n.Params, " ") + ")" + nodesString(n.Body) + ")"
+	captured := ""
+	if len(n.Captured) > 0 {
+		captured = " [" + strings.Join(n.Captured, " ") + "]"
+	}
+	return "(lambda (" + strings.Join(n.Params, " ") + ")" + captured + nodesString(n.Body) + ")"
 }
 
 func (n Def) String() string { return "(def " + n.Name + " " + n.Value.String() + ")" }
