@@ -35,7 +35,7 @@ func Write(v interface{}) string {
 		return strconv.FormatInt(v, 10)
 	case bool:
 		return strconv.FormatBool(v)
-	case Function:
+	case Function, *Closure:
 		return "<function>"
 	case Macro:
 		return "<macro>"
@@ -75,7 +75,7 @@ func typeName(v interface{}) string {
 		return "symbol"
 	case List:
 		return "list"
-	case Function:
+	case Function, *Closure:
 		return "function"
 	case Macro:
 		return "macro"

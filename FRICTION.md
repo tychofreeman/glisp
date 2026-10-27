@@ -568,3 +568,22 @@ One entry per PR, written before committing it.
 - The batch noted that step 2 didn't type-check alone (it calls
   `tailExpr`, added in step 4) and re-ran itself with `check: "end"`,
   which saved a round trip.
+
+## Tail calls between functions (stacked PRs)
+
+### PR: frame replacement in the interpreter
+
+- No refusals. An 8-step `batch` with `check: "end"` did it all:
+  `replace_statements` with `function: Eval` rewrote the evaluator as a
+  loop, `add_declaration` added the `Closure` type, its two methods and
+  `asFunction`, `remove_dead_code` removed the old `closure` once nothing
+  called it (and said so), and five `replace_text` steps fixed the
+  `Function` checks in `apply`, `defmacro`, `equal` and printing.
+- Finding those checks took a `grep` for `Function`; there's no "find
+  every type assertion to this type" in the tools, which is what this
+  change needed. `inspect` finds declarations and references to a name,
+  but `fn.(Function)` is a reference to the type among many others
+  (`Function(car)`, return types), so the list would be long.
+- `replace_text` reports the line it changed, which here was a line of
+  the edit's surroundings rather than the removed one; the edit itself
+  was right.
