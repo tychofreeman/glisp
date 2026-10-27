@@ -23,7 +23,7 @@ loaded before every program; it defines `mult`.
 - [x] Functions can't be used as values: `GetValue` has no case for `Function`,
   so a lambda passed inline as an argument, or returned from a function, panics.
   Every function passed to `map`/`filter`/`fold` has to be a named `def`.
-- [ ] Scoping is dynamic, not lexical: a lambda body runs in its caller's scope,
+- [x] Scoping is dynamic, not lexical: a lambda body runs in its caller's scope,
   so closures don't capture variables, and a free variable can pick up a
   caller's parameter of the same name.
 - [ ] Calling a lambda with too few arguments panics (index out of range); extra

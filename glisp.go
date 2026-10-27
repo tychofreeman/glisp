@@ -130,17 +130,13 @@ func apply(scope *Scope, params List) interface{} {
 
 func define_(scope *Scope, params List) interface{} {
 	name := params.First().(Token).Str()
-	body := params.Second()
-	if _, isLambda := body.(Function); !isLambda {
-		body = GetValue(scope, body)
-	}
-	scope.add(name, body)
+	scope.add(name, GetValue(scope, params.Second()))
 	return List{}
 }
 
 func macro(scope *Scope, params List) interface{} {
     name := params.First().(Token).Str()
-    body := params.Rest().First()
+    body := GetValue(scope, params.Second())
     macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
         switch b := body.(type) {
         case Function:
@@ -206,6 +202,24 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
     }
 }
 
+// Lambda is a parsed (lambda (params...) body...) form. Evaluating it makes a
+// Function that closes over the scope it was evaluated in.
+type Lambda struct {
+    bind func(interface{}) map[string]interface{}
+    body List
+}
+
+func (l Lambda) Eval(scope *Scope) interface{} {
+    return Function(func(_ *Scope, params List) interface{} {
+        local := &Scope{scope, l.bind(params), false}
+        var last interface{}
+        for _, element := range l.body {
+            last = GetValue(local, element)
+        }
+        return last
+    })
+}
+
 func Parse(source interface{}) interface{} {
     switch node := source.(type) {
     case NumberToken:
@@ -216,16 +230,7 @@ func Parse(source interface{}) interface{} {
         return node
     case List:
         if node.IsLambda() {
-            body := ParseMany(node.Rest().Rest())
-            param_binding_fn := make_param_binding_fn(node.Second())
-            return Function(func(scope *Scope, params List) interface{} {
-                param_bindings := param_binding_fn(params)
-                var lastElement interface{} = nil
-                for _, element := range body {
-                    lastElement = GetValue(&Scope{scope, param_bindings, false}, element)
-                }
-                return lastElement
-            })
+            return Lambda{make_param_binding_fn(node.Second()), ParseMany(node.Rest().Rest())}
         }
         x :=  ParseMany(node)
         return x

@@ -114,3 +114,14 @@ One entry per PR, written before committing it.
   the opposite rule (`replace_statements` re-indents with tabs).
 - `batch` with `"report": "summary"` worked well: three dependent edits in one
   call, names (`List.Eval`, `ProcessTokens`) stayed valid across steps.
+
+### PR: lexical scope
+
+- `replace_statements` indents differently depending on how the statements
+  are named: with `function` (replacing `define_`'s whole body) it used tabs,
+  in a file indented with spaces; with `start_line`/`end_line` (inside
+  `Parse`) the replacement matched the file's 4-space indentation.
+- Otherwise smooth: a four-step `batch` (`add_declaration` with `before`,
+  `replace_statements` by lines and by function, `replace_text`) applied in one
+  call, and the line range I read before the batch was correctly moved past the
+  18 lines the first step inserted.
