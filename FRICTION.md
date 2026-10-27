@@ -351,3 +351,11 @@ One entry per PR, written before committing it.
 - No tool issues. One `add_declaration` added seven tests; `batch` noticed
   that the first `replace_expression` called a helper the third step declares
   and re-ran with `check: "end"` by itself, as it did once before.
+
+## Later changes
+
+### PR: CLAUDE.md for glisp
+
+- No tool issues: two `replace_text` steps in a `batch` edited the Markdown.
+  `git checkout` was the quickest way to throw away a first attempt that
+  changed more than intended (`undo` would have taken one call per step).
