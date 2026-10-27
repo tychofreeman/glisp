@@ -345,3 +345,9 @@ One entry per PR, written before committing it.
   restate each literal exactly.
 - `replace_statements` with empty `content` deleted the `isMacroScope` check
   in `List.Eval`, as it did for the dead `return`s earlier.
+
+### PR: more tests
+
+- No tool issues. One `add_declaration` added seven tests; `batch` noticed
+  that the first `replace_expression` called a helper the third step declares
+  and re-ran with `check: "end"` by itself, as it did once before.

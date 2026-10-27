@@ -77,4 +77,4 @@ loaded before every program; it defines `mult`.
   (which shadows Go's builtin).
 - [x] Replace deprecated `ioutil`; fix the "Could nt" typo and `%t` verb in
   `macro`.
-- [ ] Tests for errors, arity and functions as values.
+- [x] Tests for errors, arity and functions as values.

@@ -184,14 +184,23 @@ func apply(scope *Scope, params List) interface{} {
 	return GetValue(scope, params)
 }
 
+// definedName returns the symbol a (def name ...) or (defmacro name ...) form
+// defines, or panics naming the form fn.
+func definedName(fn string, params List) string {
+	if sym, isSymbol := params.First().(Symbol); isSymbol {
+		return sym.Str()
+	}
+	panic(fmt.Sprintf("%s: expected a symbol to define, got %T %v", fn, params.First(), params.First()))
+}
+
 func define(scope *Scope, params List) interface{} {
-	name := params.First().(Token).Str()
+	name := definedName("def", params)
 	scope.add(name, GetValue(scope, params.Second()))
 	return List{}
 }
 
 func macro(scope *Scope, params List) interface{} {
-	name := params.First().(Token).Str()
+	name := definedName("defmacro", params)
 	body := GetValue(scope, params.Second())
 	macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
 		switch b := body.(type) {
