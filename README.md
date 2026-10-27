@@ -248,11 +248,16 @@ by hand. In the order to do them; each makes the next cheaper.
   `apply` report a wrong count as the others do
   (`eq: expects 2 arguments, got 1`). The inline fast paths stay a wasm
   table by name, since they are an optimization of one backend.
-- [ ] **A value kind.** What each kind of value is lives in `typeName`,
+- [x] **A value kind.** What each kind of value is lived in `typeName`,
   the predicates' tag map, `objSize`, the collector's field scan and
-  `putValue`. Wanted: a row per kind (tag, name, size, which fields hold
-  values) the collector, printer and predicates derive from, so a new heap
-  kind can't be missed by the collector.
+  `putType`. Now `tagKinds` (wasm_kinds.go) has a row per tag: the type
+  `typeName` gives its values, and for heap objects their layout (a fixed
+  part with its value fields, and a counted tail of bytes or values).
+  `putType`, the type predicates, argument kinds, `objSize` and the
+  collector's scan come from it, and a test checks every tag has a row.
+  Argument kinds are sets of type names, so the interpreter checks them
+  with `typeName` too. `putValue` still switches on tags itself: printing
+  differs per kind in more than layout.
 - [ ] **The calling convention.** How a call lays out the argument stack
   is known separately by `pushCall`, `compileLambda`'s frame, `tailCall`
   and the runtime's `invoke` (the pending-call protocol), and the

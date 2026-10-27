@@ -1,6 +1,9 @@
 package glisp
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // A builtin is a function every backend provides. Its spec says what
 // arguments it takes; each backend checks them from the spec, with the same
@@ -28,23 +31,15 @@ func (k kind) noun() string {
 	return [...]string{"anything", "a number", "a string", "a list", "a function"}[k]
 }
 
+// types are the types of k's values, as typeName names them; none for
+// anyKind, which takes any value.
+func (k kind) types() []string {
+	return [][]string{nil, {"number"}, {"string"}, {"list", "nil"}, {"function"}}[k]
+}
+
 // has reports whether v is of kind k.
 func (k kind) has(v interface{}) bool {
-	switch k {
-	case numberKind:
-		_, is := v.(int64)
-		return is
-	case stringKind:
-		_, is := v.(string)
-		return is
-	case listKind:
-		_, is := v.(List)
-		return is || v == nil
-	case functionKind:
-		_, is := asFunction(v)
-		return is
-	}
-	return true
+	return k == anyKind || slices.Contains(k.types(), typeName(v))
 }
 
 // kind is the kind of argument i.
@@ -105,7 +100,7 @@ var (
 
 // builtinSpecs are the builtin functions, in the order the wasm backend
 // numbers them.
-var builtinSpecs = []builtin{
+var builtinSpecs = append([]builtin{
 	{"car", 1, 1, []kind{listKind}, car},
 	{"cdr", 1, 1, []kind{listKind}, cdr},
 	{"atom", 1, 1, anyOne, atom},
@@ -119,13 +114,6 @@ var builtinSpecs = []builtin{
 	{">", 2, 2, numbers, compare(func(a, b int64) bool { return a > b })},
 	{"<=", 2, 2, numbers, compare(func(a, b int64) bool { return a <= b })},
 	{">=", 2, 2, numbers, compare(func(a, b int64) bool { return a >= b })},
-	{"number?", 1, 1, anyOne, isType("number")},
-	{"string?", 1, 1, anyOne, isType("string")},
-	{"symbol?", 1, 1, anyOne, isType("symbol")},
-	{"list?", 1, 1, anyOne, isType("list")},
-	{"function?", 1, 1, anyOne, isType("function")},
-	{"boolean?", 1, 1, anyOne, isType("bool")},
-	{"nil?", 1, 1, anyOne, isType("nil")},
 	{"eq", 2, 2, nil, eq},
 	{"apply", 1, -1, []kind{functionKind, anyKind}, apply},
 	{"p", 0, -1, nil, printValues},
@@ -136,6 +124,32 @@ var builtinSpecs = []builtin{
 	{"string<", 2, 2, oneString, stringLess},
 	{"symbol", 1, 1, oneString, toSymbol},
 	{"parse_number", 1, 1, oneString, parseNumber},
+}, typePredicateSpecs()...)
+
+// typePredicates are the builtins that test a value's type, each with the
+// type it tests, as typeName names it.
+var typePredicates = [][2]string{
+	{"number?", "number"}, {"string?", "string"}, {"symbol?", "symbol"}, {"list?", "list"},
+	{"function?", "function"}, {"boolean?", "bool"}, {"nil?", "nil"},
+}
+
+func typePredicateSpecs() []builtin {
+	var specs []builtin
+	for _, p := range typePredicates {
+		specs = append(specs, builtin{p[0], 1, 1, anyOne, isType(p[1])})
+	}
+	return specs
+}
+
+// predicateType is the type the builtin name tests, if it is a type
+// predicate.
+func predicateType(name string) (string, bool) {
+	for _, p := range typePredicates {
+		if p[0] == name {
+			return p[1], true
+		}
+	}
+	return "", false
 }
 
 // builtinTable is the builtins as the interpreter's top scope holds them,

@@ -732,3 +732,21 @@ One entry per PR, written before committing it.
   have clashed with the import in other files; caught while drafting.
   The "is this name free?" check from the last PR's notes again.
 - By hand: this entry (heredoc append).
+
+### PR: value kinds (`tagKinds`)
+
+- One 12-step batch: `create_file` for wasm_kinds.go, `replace_text` to
+  take out the old `objSize`, `putType`, `kind.tags`, the predicates' case
+  and the collector's per-tag scan, and to make `builtinSpecs` an
+  `append` with the type predicates; `add_declaration` for the predicate
+  table. It type-checked and passed the first time.
+- Removing the old `objSizeBody` and `putTypeBody` had to go by
+  `replace_text` of their whole text, comments included: their new
+  versions are in another file, so `remove_dead_code` (which needs them
+  unused) and `move_declaration` (which moves them unchanged) didn't fit.
+  "Replace this declaration with one in another file" would.
+- The regexes that found those old texts for the batch were the fragile
+  part; a step addressing a declaration by name and dropping it
+  regardless of uses (`delete_declaration`) would have made them
+  unnecessary.
+- By hand: this entry.

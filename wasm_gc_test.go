@@ -83,3 +83,15 @@ func TestCompiledGarbageIsCollected(t *testing.T) {
 		t.Errorf("memory grew to %d MB", size>>20)
 	}
 }
+
+func TestEveryTagHasAKind(t *testing.T) {
+	for tag := int32(tagInt); tag <= tagCell; tag++ {
+		found := false
+		for _, k := range tagKinds {
+			found = found || k.tag == tag
+		}
+		if !found {
+			t.Errorf("tag %d has no entry in tagKinds", tag)
+		}
+	}
+}
