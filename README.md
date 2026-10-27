@@ -68,7 +68,7 @@ loaded before every program; it defines `mult`.
 
 ### Cleanup
 
-- [ ] gofmt the code (it's indented with 4 spaces; `define_` uses tabs).
+- [x] gofmt the code (it's indented with 4 spaces; `define_` uses tabs).
 - [ ] Remove dead code: the `ParamsList` type, the unreachable `return nil` in
   `GetValue` and `macro`, the `else` after `return` in `atom`.
 - [ ] Go-style names for `make_param_binding_fn`, `if_`, `define_`, and `print`

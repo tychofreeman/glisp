@@ -214,3 +214,15 @@ One entry per PR, written before committing it.
 - The new checks exposed two existing tests whose input was missing a `)`
   (`TestCdrGrabsTail`, `TestAtomIsFalseForComplexExpres`) besides
   `TestApplyCallsFunctions`; fixed with `replace_text`.
+
+## Working through the rest of the roadmap (stacked PRs)
+
+### PR: gofmt
+
+- gorefactor has no formatting tool, so this one is plain `gofmt -w .`.
+  That's the right tool, but it means the "whitespace" category of friction
+  above (tabs vs. the file's 4 spaces, mixed indentation, tab-indented
+  imports) was really a mismatch with an un-gofmt'd codebase: the tools
+  write gofmt-style tabs. From here on the files are gofmt'd, so new edits
+  should match. A `format` step (or `check` reporting files that aren't
+  gofmt'd) would have caught it on the first edit.
