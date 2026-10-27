@@ -77,7 +77,7 @@ const (
 )
 
 // builtinNames are the builtin functions, compiled as runtime functions.
-var builtinNames = []string{"car", "cdr", "atom", "cons", "plus", "-", "<", ">", "eq", "apply", "p"}
+var builtinNames = []string{"car", "cdr", "atom", "cons", "plus", "-", "*", "/", "mod", "<", ">", "<=", ">=", "eq", "apply", "p"}
 
 type wasmCompiler struct {
 	m        *wasm.Module

@@ -525,3 +525,19 @@ One entry per PR, written before committing it.
   `undo` history doesn't survive a restart either (each `refactor` call is
   its own process, though the CLI's on-disk undo would cover the last one).
 - After the restart: `replace_text` for README and this entry; no issues.
+
+### PR: `*`, `/`, `mod`, `<=`, `>=`
+
+- No refusals. Tests first (one `batch`: `add_declaration` of two tests,
+  `replace_text` adding programs to the wasm parity list; it failed with
+  "Cannot resolve symbol *"), then one 8-step `batch` for both backends
+  and the stdlib.
+- Most of the wasm changes were `replace_text` on lines inside one big
+  `switch` in `builtinBody` (a new case, widened case lists, one op
+  choice). That's the right tool, but `add_case` would read better for
+  the new `case "/", "mod":`; I didn't reach for it because placing it
+  before an existing case needs that case's line, and I had read the
+  file by `grep`, not `inspect`.
+- A local branch `language/arithmetic` already existed (from the earlier
+  `-`/`<`/`>` PR, merged and kept); `git checkout -b` refused, so this one
+  is `language/more-arithmetic`. Not a gorefactor issue.

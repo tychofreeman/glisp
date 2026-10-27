@@ -329,6 +329,29 @@ func TestLessAndGreaterCompare(t *testing.T) {
 	assertPanicsWith(t, "(> 1 \"a\")", ">: expected a number, got string \"a\"")
 }
 
+func TestMultiplyDivideAndModulo(t *testing.T) {
+	AssertThat(t, Process("(* 2 3 7)"), Equals(int64(42)))
+	AssertThat(t, Process("(*)"), Equals(int64(1)))
+	AssertThat(t, Process("(/ 17 5)"), Equals(int64(3)))
+	AssertThat(t, Process("(/ -17 5)"), Equals(int64(-3)))
+	AssertThat(t, Process("(mod 17 5)"), Equals(int64(2)))
+	AssertThat(t, Process("(mod -17 5)"), Equals(int64(-2)))
+	AssertThat(t, Process("(mult 6 7)"), Equals(int64(42)))
+	assertPanicsWith(t, "(* 2 \"a\")", "*: expected a number, got string \"a\"")
+	assertPanicsWith(t, "(/ 1 0)", "/: division by zero")
+	assertPanicsWith(t, "(mod 1 0)", "mod: division by zero")
+	assertPanicsWith(t, "(/ 1)", "/: expects 2 arguments, got 1")
+}
+
+func TestLessOrEqualAndGreaterOrEqual(t *testing.T) {
+	AssertThat(t, Process("(<= 1 2)"), IsTrue)
+	AssertThat(t, Process("(<= 2 2)"), IsTrue)
+	AssertThat(t, Process("(<= 3 2)"), IsFalse)
+	AssertThat(t, Process("(>= 2 2)"), IsTrue)
+	AssertThat(t, Process("(>= 1 2)"), IsFalse)
+	assertPanicsWith(t, "(>= 1 2 3)", ">=: expects 2 arguments, got 3")
+}
+
 func TestTrueFalseAndNilAreDefined(t *testing.T) {
 	AssertThat(t, Process("true"), IsTrue)
 	AssertThat(t, Process("false"), IsFalse)
