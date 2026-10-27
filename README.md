@@ -45,9 +45,9 @@ loaded before every program; it defines `mult`.
 ### Language
 
 - [x] Comments: `;` to the end of the line.
-- [ ] Subtraction and comparison builtins (`-`, `<`, `>`). Programs build them
-  by counting up from 0, which is very slow for large numbers (Collatz steps
-  for 27 takes about a minute).
+- [x] Subtraction and comparison builtins (`-`, `<`, `>`). Programs built them
+  by counting up from 0, which was very slow (Collatz steps for 27 took about
+  a minute; it now takes well under a second).
 - [ ] `true`, `false` and `nil` literals; programs define them as
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
 - [ ] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists have to be built on

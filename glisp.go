@@ -102,14 +102,42 @@ func cons(_ *Scope, params List) interface{} {
 func plus(_ *Scope, params List) interface{} {
 	var sum int64 = 0
 	for _, p := range params {
-		switch x := p.(type) {
-		case int64:
-			sum = sum + x
-		default:
-			panic(fmt.Sprintf("plus: expected a number, got %T %v", p, p))
-		}
+		sum += number("plus", p)
 	}
 	return sum
+}
+
+// number returns p as an int64, or panics naming the builtin fn.
+func number(fn string, p interface{}) int64 {
+	if n, isNumber := p.(int64); isNumber {
+		return n
+	}
+	panic(fmt.Sprintf("%s: expected a number, got %T %v", fn, p, p))
+}
+
+// minus is (- a b c ...), a-b-c..., and (- a), -a.
+func minus(_ *Scope, params List) interface{} {
+	if len(params) == 0 {
+		panic("-: expects at least 1 argument, got 0")
+	}
+	if len(params) == 1 {
+		return -number("-", params[0])
+	}
+	result := number("-", params[0])
+	for _, p := range params[1:] {
+		result -= number("-", p)
+	}
+	return result
+}
+
+// compare returns a builtin (op a b) that compares two numbers with less.
+func compare(op string, less func(a, b int64) bool) Function {
+	return func(_ *Scope, params List) interface{} {
+		if len(params) != 2 {
+			panic(fmt.Sprintf("%s: expects 2 arguments, got %d", op, len(params)))
+		}
+		return less(number(op, params[0]), number(op, params[1]))
+	}
 }
 
 func ifThenElse(scope *Scope, params List) interface{} {
@@ -195,6 +223,9 @@ var builtins = map[string]interface{}{
 	"atom":     Function(atom),
 	"cons":     Function(cons),
 	"plus":     Function(plus),
+	"-":        Function(minus),
+	"<":        compare("<", func(a, b int64) bool { return a < b }),
+	">":        compare(">", func(a, b int64) bool { return a > b }),
 	"if":       NonEvaluatingFunction(ifThenElse),
 	"eq":       Function(eq),
 	"apply":    Function(apply),

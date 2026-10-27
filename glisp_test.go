@@ -274,3 +274,20 @@ func TestQuotedListsHoldGoValues(t *testing.T) {
 		t.Errorf("got %#v, want int64 1, string a, symbol b", got)
 	}
 }
+
+func TestMinusSubtracts(t *testing.T) {
+	AssertThat(t, Process("(- 10 3)"), Equals(int64(7)))
+	AssertThat(t, Process("(- 10 3 2)"), Equals(int64(5)))
+	AssertThat(t, Process("(- 5)"), Equals(int64(-5)))
+	assertPanicsWith(t, "(- 1 \"a\")", "-: expected a number, got string a")
+}
+
+func TestLessAndGreaterCompare(t *testing.T) {
+	AssertThat(t, Process("(< 1 2)"), IsTrue)
+	AssertThat(t, Process("(< 2 1)"), IsFalse)
+	AssertThat(t, Process("(< 2 2)"), IsFalse)
+	AssertThat(t, Process("(> 2 1)"), IsTrue)
+	AssertThat(t, Process("(> 1 2)"), IsFalse)
+	assertPanicsWith(t, "(< 1)", "<: expects 2 arguments, got 1")
+	assertPanicsWith(t, "(> 1 \"a\")", ">: expected a number, got string a")
+}

@@ -305,3 +305,12 @@ One entry per PR, written before committing it.
 - Writing Go rune literals (`';'`, `'\n'`) in JSON passed as a single-quoted
   shell argument needed `'"'"'` around each quote; `batch @file` from a
   heredoc or script is the better habit for anything with quotes.
+
+### PR: `-`, `<` and `>`
+
+- No tool issues. A five-step `batch`: `add_declaration` (a `number` helper,
+  `minus`, `compare`) after `plus`, `replace_statements` to make `plus` use the
+  helper, and three `add_element` steps putting `"-"`, `"<"` and `">"` into the
+  `builtins` map, each `after` the previous key. `add_element`'s keys are
+  written as in the source (`"\"plus\""`), which the description says.
+- A seven-step `replace_text` batch updated the `.glisp` example.
