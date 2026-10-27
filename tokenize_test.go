@@ -73,3 +73,7 @@ func TestHandlesNegativeNumbers(t *testing.T) {
 func TestHandlesUnderscoresInNames(t *testing.T) {
     AssertThat(t, TokenizeString("\"a_b\""), HasExactly(token("\"a_b\"")))
 }
+
+func TestParensInsideStringsArePartOfTheString(t *testing.T) {
+    AssertThat(t, TokenizeString("(quote \"a(b)c\")"), HasExactly(HasExactly(symbol("quote"), token("\"a(b)c\""))))
+}

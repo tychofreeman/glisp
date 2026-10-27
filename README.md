@@ -32,7 +32,7 @@ loaded before every program; it defines `mult`.
 - [x] Silent wrong answers: `plus` skips non-integers (`(plus 1 "a")` is 1), and
   `car`/`cdr` of a non-list return nil.
 - [ ] Tokenizer:
-  - [ ] `(` or `)` inside a string splits the string.
+  - [x] `(` or `)` inside a string splits the string.
   - [ ] Characters other than letters, digits, `- _ ?` and `"` are dropped as
     separators, so `(+ 1 2)` reads as `(1 2)`.
   - [ ] A lone `"` panics.
