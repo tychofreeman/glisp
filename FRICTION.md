@@ -464,3 +464,18 @@ One entry per PR, written before committing it.
   disabled test (the exported-name API note again, for a `_test.go`
   function), `replace_text` added the macro to `stdlib.glisp`, and
   `replace_statements` updated a test helper.
+
+## WebAssembly backend (stacked PRs)
+
+### PR: the wasm encoder package
+
+- No refusals: one `batch` of three `create_file` steps made the new
+  `wasm` package (encoder, instruction builder, test), gofmt-ed, and its
+  test passed on the first run.
+- `create_file` takes the file's content inline, so a 250-line file goes
+  into JSON by hand. Wrote a small script that builds the `batch` file from
+  files written in a scratch directory. A `content_file` (or `from`)
+  argument naming a local file would remove the script.
+- `go get` and `go mod tidy` wrote `go.mod` (outside gorefactor); merging
+  its two `require` blocks was a `replace_text` on a non-Go file, which
+  worked fine.
