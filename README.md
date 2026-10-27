@@ -48,13 +48,15 @@ loaded before every program; it defines `mult`.
 - [x] Subtraction and comparison builtins (`-`, `<`, `>`). Programs built them
   by counting up from 0, which was very slow (Collatz steps for 27 took about
   a minute; it now takes well under a second).
-- [ ] `true`, `false` and `nil` literals; programs define them as
+- [x] `true`, `false` and `nil` literals; programs defined them as
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
-- [ ] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists have to be built on
+- [x] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists had to be built on
   `(quote ())`.
 - [x] Quoted numbers stay tokens: `plus` accepts them, but
   `(eq (car (quote (1))) 1)` is false.
-- [ ] Macros: `isMacroScope` and `createNonEvaluatingScope` are never used.
+- [x] Macros: `isMacroScope` and `createNonEvaluatingScope` were never used, and a
+  macro's expansion wasn't evaluated. Expansions are now evaluated in the
+  caller's scope, and the unused machinery is gone.
 
 ### Design
 
@@ -75,4 +77,4 @@ loaded before every program; it defines `mult`.
   (which shadows Go's builtin).
 - [x] Replace deprecated `ioutil`; fix the "Could nt" typo and `%t` verb in
   `macro`.
-- [ ] Tests for errors, arity and functions as values.
+- [x] Tests for errors, arity and functions as values.

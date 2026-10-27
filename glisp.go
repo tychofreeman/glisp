@@ -80,23 +80,20 @@ func atom(_ *Scope, params List) interface{} {
 }
 
 func cons(_ *Scope, params List) interface{} {
-	if len(params) == 1 {
-		return params
-	} else if len(params) == 2 {
-		if atom(nil, params.Rest()) == true {
-			return params
-		} else {
-			switch x := params[1].(type) {
-			case List:
-				output := List{params[0]}
-				for _, i := range x {
-					output = append(output, i)
-				}
-				return output
-			}
+	switch len(params) {
+	case 1:
+		return List{params[0]}
+	case 2:
+		switch rest := params[1].(type) {
+		case nil:
+			return List{params[0]}
+		case List:
+			return append(List{params[0]}, rest...)
+		default:
+			return List{params[0], rest}
 		}
 	}
-	return nil
+	panic(fmt.Sprintf("cons: expects 1 or 2 arguments, got %d", len(params)))
 }
 
 func plus(_ *Scope, params List) interface{} {
@@ -187,19 +184,28 @@ func apply(scope *Scope, params List) interface{} {
 	return GetValue(scope, params)
 }
 
+// definedName returns the symbol a (def name ...) or (defmacro name ...) form
+// defines, or panics naming the form fn.
+func definedName(fn string, params List) string {
+	if sym, isSymbol := params.First().(Symbol); isSymbol {
+		return sym.Str()
+	}
+	panic(fmt.Sprintf("%s: expected a symbol to define, got %T %v", fn, params.First(), params.First()))
+}
+
 func define(scope *Scope, params List) interface{} {
-	name := params.First().(Token).Str()
+	name := definedName("def", params)
 	scope.add(name, GetValue(scope, params.Second()))
 	return List{}
 }
 
 func macro(scope *Scope, params List) interface{} {
-	name := params.First().(Token).Str()
+	name := definedName("defmacro", params)
 	body := GetValue(scope, params.Second())
 	macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
 		switch b := body.(type) {
 		case Function:
-			return b(macroScope, List{macroParams})
+			return GetValue(macroScope, b(macroScope, List{macroParams}))
 		case NonEvaluatingFunction:
 			return b(macroScope, macroParams)
 		default:
@@ -232,6 +238,9 @@ var builtins = map[string]interface{}{
 	"def":      NonEvaluatingFunction(define),
 	"defmacro": NonEvaluatingFunction(macro),
 	"p":        Function(printValues),
+	"true":     true,
+	"false":    false,
+	"nil":      nil,
 }
 
 func paramBinder(decls interface{}) func(interface{}) map[string]interface{} {
@@ -279,7 +288,7 @@ type Lambda struct {
 
 func (l Lambda) Eval(scope *Scope) interface{} {
 	return Function(func(_ *Scope, params List) interface{} {
-		local := &Scope{scope, l.bind(params), false}
+		local := &Scope{prev: scope, table: l.bind(params)}
 		var last interface{}
 		for _, element := range l.body {
 			last = GetValue(local, element)
@@ -318,7 +327,7 @@ func ParseMany(input List) List {
 //go:embed stdlib.glisp
 var stdlib string
 
-var builtinScope = &Scope{nil, builtins, false}
+var builtinScope = &Scope{table: builtins}
 
 // stdlibForms is stdlib.glisp, parsed once.
 var stdlibForms = ParseMany(TokenizeString(stdlib))
@@ -326,7 +335,7 @@ var stdlibForms = ParseMany(TokenizeString(stdlib))
 // newScope makes the top-level scope for one run: its own definitions over
 // the builtins, which it never changes, with the stdlib loaded.
 func newScope() *Scope {
-	scope := &Scope{builtinScope, map[string]interface{}{}, false}
+	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}}
 	for _, form := range stdlibForms {
 		GetValue(scope, form)
 	}

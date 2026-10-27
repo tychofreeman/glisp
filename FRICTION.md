@@ -314,3 +314,40 @@ One entry per PR, written before committing it.
   `builtins` map, each `after` the previous key. `add_element`'s keys are
   written as in the source (`"\"plus\""`), which the description says.
 - A seven-step `replace_text` batch updated the `.glisp` example.
+
+### PR: `true`, `false` and `nil`
+
+- No tool issues: three `add_element` steps (no `after`, so each went at the
+  end of the `builtins` map), and gofmt-style alignment of the map came out
+  right. One `replace_text` removed the example's own definitions.
+
+### PR: `cons` onto `nil`
+
+- No tool issues. `replace_statements` by `function` rewrote `cons`'s body;
+  with the file gofmt'd, its tab indentation now matches.
+- `replace_text` has an `all_occurrences` option (it's in the description; I
+  hadn't noticed it before), which replaced the example's six uses of `empty`
+  in one step.
+
+### PR: macros
+
+- **Two refusals removing the `isMacroScope` field, both correct and both
+  told me what to do.** First: "an unkeyed literal of Scope … lists every
+  field; give it keys first". Keying the three `&Scope{…}` literals with
+  `replace_expression` fixed that. Second: removing the field would change
+  what `%#v` prints in `Symbol.Eval`'s error, which passed the whole scope to
+  `fmt`. That message dumped every definition in the run, so shortening it to
+  `Cannot resolve symbol x` (another `replace_expression`, which also dropped
+  the now-unused `fmt` import) was an improvement anyway; with it as step 1,
+  the five-step batch went through.
+- A wish: a tool to key an unkeyed composite literal (or `remove_dead_code`
+  offering to do it) — three hand-written `replace_expression` steps had to
+  restate each literal exactly.
+- `replace_statements` with empty `content` deleted the `isMacroScope` check
+  in `List.Eval`, as it did for the dead `return`s earlier.
+
+### PR: more tests
+
+- No tool issues. One `add_declaration` added seven tests; `batch` noticed
+  that the first `replace_expression` called a helper the third step declares
+  and re-ran with `check: "end"` by itself, as it did once before.
