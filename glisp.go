@@ -1,6 +1,7 @@
 package glisp
 
 import (
+    _ "embed"
     "fmt"
     "os"
 )
@@ -237,11 +238,14 @@ func ParseMany(input List) List {
     return List(output)
 }
 
+//go:embed stdlib.glisp
+var stdlib string
+
 var baseScope = &Scope{nil, builtins, false}
 
 func ProcessTokens(scope *Scope, tokenized List, includeStdLib bool) interface{} {
     if includeStdLib {
-        ProcessTokens(scope, TokenizeFile("/Users/cwfreeman/dev/go/src/glisp/stdlib.glisp"), false)
+        ProcessTokens(scope, TokenizeString(stdlib), false)
     }
     parsed := ParseMany(tokenized)
     value := GetValue(scope, parsed)

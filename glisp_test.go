@@ -118,3 +118,7 @@ func TestCanSubtractByAddingNegativeNumbers(t *testing.T) {
 func TestEmptyListEvaluatesToNil(t *testing.T) {
     AssertThat(t, GetValue(baseScope, List{}) == nil, IsTrue)
 }
+
+func TestStdlibIsLoaded(t *testing.T) {
+    AssertThat(t, Process("(mult 3 4)"), Equals(int64(12)))
+}
