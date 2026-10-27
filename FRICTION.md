@@ -125,3 +125,16 @@ One entry per PR, written before committing it.
   `replace_statements` by lines and by function, `replace_text`) applied in one
   call, and the line range I read before the batch was correctly moved past the
   18 lines the first step inserted.
+
+### PR: lambda arity
+
+- `insert_statements` added the `strings` import itself (and said so in a
+  note), but indented it with a tab among imports indented with 4 spaces.
+  `add_declaration` likewise added `fmt` and `strings` to the test file
+  without being asked, which was convenient.
+- `insert_statements` kept the content's own 4-space indentation, like
+  `add_declaration` and line-range `replace_statements`, unlike
+  `replace_statements` by `function`.
+- No refusals. `replace_text` was the right tool for the one-line macro change:
+  the same `return b(macroScope, macroParams)` appears twice, so `old` needed
+  the `case Function:` line above it to be unique.
