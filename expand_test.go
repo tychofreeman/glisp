@@ -6,13 +6,10 @@ import (
 	"testing"
 )
 
-// expandProgram reads and expands each top-level form of src, after the
-// stdlib's, and returns the expanded forms as core glisp.
+// expandProgram reads and expands each top-level form of src, in a scope
+// with the stdlib loaded, and returns the expanded forms as core glisp.
 func expandProgram(src string) []string {
-	e := NewExpander(&Scope{prev: builtinScope, table: map[string]interface{}{}})
-	for _, form := range TokenizeString(stdlib) {
-		e.Expand(Read(form))
-	}
+	e := NewExpander(newScope())
 	var out []string
 	for _, form := range TokenizeString(src) {
 		out = append(out, e.Expand(Read(form)).String())
@@ -42,6 +39,7 @@ func TestExpandingMacros(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
 		{`(defn inc (n) (plus n 1))`, `(def inc (lambda (n) (plus n 1)))`},
 		{`(lambda (x) (defn g (y) y))`, `(lambda (x) (def g (lambda (y) y)))`},
+		{`(let (a 1 b a) b)`, `((lambda (a) ((lambda (b) ((lambda () b))) a)) 1)`},
 		{unlessMacro + `(unless (eq a b) 1 2)`, `(quote ()) (if (eq a b) 2 1)`},
 		{`(defmacro twice (lambda (xs) (cons (quote do2) (cons (car xs) (cons (car xs) nil))))) (twice (defn f () 1))`,
 			`(quote ()) (do2 (def f (lambda () 1)) (def f (lambda () 1)))`},

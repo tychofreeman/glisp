@@ -132,8 +132,24 @@ func TestMacrosCanExpandToLambdas(t *testing.T) {
 	AssertThat(t, Process("(defmacro fn (lambda (xs) (cons (quote lambda) xs))) ((fn (x) (plus x 1)) 4)"), Equals(int64(5)))
 }
 
-func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
+func TestLetBindsNamesForItsBody(t *testing.T) {
 	AssertThat(t, Process("(let (a 1) a)"), Equals(int64(1)))
+	AssertThat(t, Process("(let (a 1 b 2) (plus a b))"), Equals(int64(3)))
+	AssertThat(t, Process("(let () 5)"), Equals(int64(5)))
+	AssertThat(t, Process("(let (a 1) (plus a 100) a)"), Equals(int64(1)))
+}
+
+func TestLetBindingsCanUseEarlierOnes(t *testing.T) {
+	AssertThat(t, Process("(let (a 1 b (plus a 1)) b)"), Equals(int64(2)))
+}
+
+func TestLetShadowsOnlyInsideItsBody(t *testing.T) {
+	AssertThat(t, Process("(def x 10) (let (x 1) x)"), Equals(int64(1)))
+	AssertThat(t, Process("(def x 10) (let (x 1) x) x"), Equals(int64(10)))
+}
+
+func TestLetInsideAFunction(t *testing.T) {
+	AssertThat(t, Process("(defn f (n) (let (m (plus n 1)) (mult m m))) (f 2)"), Equals(int64(9)))
 }
 
 func TestCanSubtractByAddingNegativeNumbers(t *testing.T) {
