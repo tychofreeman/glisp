@@ -33,9 +33,6 @@ func (node List) IsLambda() bool {
 }
 
 func (value List) Eval(scope *Scope) interface{} {
-	if scope.isMacroScope {
-		return value
-	}
 	if len(value) == 0 {
 		return nil
 	}
