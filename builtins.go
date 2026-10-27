@@ -77,9 +77,15 @@ func (b builtin) check(args List) {
 		panic(fmt.Sprintf("%s: %s, got %d", b.name, b.expects(), len(args)))
 	}
 	for i, arg := range args {
-		if k := b.kind(i); !k.has(arg) {
-			panic(fmt.Sprintf("%s: expected %s, got %s", b.name, k.noun(), described(arg)))
-		}
+		checkKind(b.name, b.kind(i), arg)
+	}
+}
+
+// checkKind panics unless arg, an argument of the builtin name, is of kind
+// k.
+func checkKind(name string, k kind, arg interface{}) {
+	if !k.has(arg) {
+		panic(fmt.Sprintf("%s: expected %s, got %s", name, k.noun(), described(arg)))
 	}
 }
 
@@ -115,7 +121,7 @@ var builtinSpecs = append([]builtin{
 	{"<=", 2, 2, numbers, compare(func(a, b int64) bool { return a <= b })},
 	{">=", 2, 2, numbers, compare(func(a, b int64) bool { return a >= b })},
 	{"eq", 2, 2, nil, eq},
-	{"apply", 1, -1, []kind{functionKind, anyKind}, apply},
+	{"apply", 2, -1, []kind{functionKind, anyKind}, apply},
 	{"p", 0, -1, nil, printValues},
 	{"str", 0, -1, nil, showJoined},
 	{"string_length", 1, 1, oneString, stringLength},

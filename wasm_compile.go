@@ -610,13 +610,7 @@ func (f *wasmFunc) pushCall(n Apply) stackCall {
 	f.GlobalGet(gSP)
 	f.LocalSet(call.base)
 	for _, node := range append([]Node{n.Fn}, n.Args...) {
-		f.GlobalGet(gSP)
-		f.expr(node)
-		f.I64Store(0)
-		f.GlobalGet(gSP)
-		f.I32Const(8)
-		f.Op(wasm.I32Add)
-		f.GlobalSet(gSP)
+		f.push(func() { f.expr(node) })
 	}
 	return call
 }
