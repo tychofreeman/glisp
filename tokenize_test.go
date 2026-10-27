@@ -73,3 +73,27 @@ func TestHandlesNegativeNumbers(t *testing.T) {
 func TestHandlesUnderscoresInNames(t *testing.T) {
     AssertThat(t, TokenizeString("\"a_b\""), HasExactly(token("\"a_b\"")))
 }
+
+func TestParensInsideStringsArePartOfTheString(t *testing.T) {
+    AssertThat(t, TokenizeString("(quote \"a(b)c\")"), HasExactly(HasExactly(symbol("quote"), token("\"a(b)c\""))))
+}
+
+func TestOperatorCharactersAreSymbols(t *testing.T) {
+    AssertThat(t, TokenizeString("(+ 1 2)"), HasExactly(HasExactly(symbol("+"), token("1"), token("2"))))
+    AssertThat(t, TokenizeString("(<= a.b *x*)"), HasExactly(HasExactly(symbol("<="), symbol("a.b"), symbol("*x*"))))
+}
+
+func TestUnterminatedStringsFail(t *testing.T) {
+    assertPanicsWith(t, "(quote \")", "unterminated string")
+    assertPanicsWith(t, "\"abc", "unterminated string: \"abc")
+}
+
+func TestNonASCIITextIsKept(t *testing.T) {
+    AssertThat(t, TokenizeString("(λ \"héllo\")"), HasExactly(HasExactly(symbol("λ"), token("\"héllo\""))))
+}
+
+func TestUnbalancedParensFail(t *testing.T) {
+    assertPanicsWith(t, "(plus 1 2)) (plus 10 10)", "unexpected )")
+    assertPanicsWith(t, "(plus 1 (plus 2 3)", "missing )")
+    assertPanicsWith(t, "(", "missing )")
+}

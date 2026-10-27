@@ -1,6 +1,9 @@
 package glisp
 
 import (
+	"fmt"
+	"strings"
+
     "testing"
     . "github.com/tychofreeman/go-matchers"
 )
@@ -18,7 +21,7 @@ func TestCarGrabsFirstItem(t *testing.T) {
 }
 
 func TestCdrGrabsTail(t *testing.T) {
-    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\")))"), HasExactly(str("b"), str("c"), HasExactly(str("d"))))
+    AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\"))))"), HasExactly(str("b"), str("c"), HasExactly(str("d"))))
 }
 
 func TestAtomIsTrueForSymbols(t *testing.T) {
@@ -26,7 +29,7 @@ func TestAtomIsTrueForSymbols(t *testing.T) {
 }
 
 func TestAtomIsFalseForComplexExpres(t *testing.T) {
-    AssertThat(t, Process("(atom (quote ())"), IsFalse)
+    AssertThat(t, Process("(atom (quote ()))"), IsFalse)
 }
 
 func TestIntegerLiteralsAreImplemented(t *testing.T) {
@@ -74,7 +77,7 @@ func TestLambdasAreClosures(t *testing.T) {
 }
 
 func TestApplyCallsFunctions(t *testing.T) {
-    AssertThat(t, Process("(apply plus 1 1"), Equals(int64(2)))
+    AssertThat(t, Process("(apply plus 1 1)"), Equals(int64(2)))
 }
 
 func TestGloballyNamesFunctions(t *testing.T) {
@@ -133,4 +136,68 @@ func TestFunctionsCanBePassedAsArguments(t *testing.T) {
 
 func TestFunctionsCanBeReturned(t *testing.T) {
     AssertThat(t, Process("(def make_inc (lambda () (lambda (n) (plus n 1)))) ((make_inc) 41)"), Equals(int64(42)))
+}
+
+func TestClosuresCaptureTheirDefiningScope(t *testing.T) {
+    AssertThat(t, Process("(def make_adder (lambda (x) (lambda (y) (plus x y)))) (def add5 (make_adder 5)) (add5 10)"), Equals(int64(15)))
+}
+
+func TestFreeVariablesDoNotSeeTheCallersParameters(t *testing.T) {
+    AssertThat(t, Process("(def outer_v 100) (def get_v (lambda () outer_v)) (def shadow (lambda (outer_v) (get_v))) (shadow 1)"), Equals(int64(100)))
+}
+
+// assertPanicsWith checks that running src panics with a message containing want.
+func assertPanicsWith(t *testing.T, src string, want string) {
+    t.Helper()
+    defer func() {
+        r := recover()
+        if r == nil {
+            t.Errorf("%s: expected a panic containing %q, got none", src, want)
+        } else if !strings.Contains(fmt.Sprint(r), want) {
+            t.Errorf("%s: expected a panic containing %q, got %v", src, want, r)
+        }
+    }()
+    Process(src)
+}
+
+func TestCallingALambdaWithTooFewArgumentsFails(t *testing.T) {
+    assertPanicsWith(t, "((lambda (a b) a) 1)", "expects 2 arguments, got 1")
+}
+
+func TestCallingALambdaWithTooManyArgumentsFails(t *testing.T) {
+    assertPanicsWith(t, "((lambda (a) a) 1 2)", "expects 1 argument, got 2")
+}
+
+func TestEqComparesListsByContents(t *testing.T) {
+    AssertThat(t, Process("(eq (quote (1 (2 3))) (quote (1 (2 3))))"), IsTrue)
+    AssertThat(t, Process("(eq (quote (1 2)) (quote (1 3)))"), IsFalse)
+    AssertThat(t, Process("(eq (quote (1 2)) (quote (1 2 3)))"), IsFalse)
+    AssertThat(t, Process("(eq (quote (1)) 1)"), IsFalse)
+}
+
+func TestEqOnFunctionsDoesNotCrash(t *testing.T) {
+    AssertThat(t, Process("(eq plus car)"), IsFalse)
+}
+
+func TestPlusRejectsNonNumbers(t *testing.T) {
+    assertPanicsWith(t, "(plus 1 \"a\")", "plus: expected a number, got string a")
+}
+
+func TestPlusAddsQuotedNumbers(t *testing.T) {
+    AssertThat(t, Process("(plus (car (quote (1 2))) 1)"), Equals(int64(2)))
+}
+
+func TestCarAndCdrRejectNonLists(t *testing.T) {
+    assertPanicsWith(t, "(car 5)", "car: expected a list, got int64 5")
+    assertPanicsWith(t, "(cdr \"a\")", "cdr: expected a list, got string a")
+}
+
+func TestCarAndCdrOfNilAreNil(t *testing.T) {
+    AssertThat(t, Process("(car (cdr (quote ())))"), IsNil)
+    AssertThat(t, Process("(cdr (cdr (quote ())))"), IsNil)
+}
+
+// IsNil matches a nil value.
+func IsNil(actual interface{}) (bool, string) {
+    return actual == nil, fmt.Sprintf("expected nil, got %T %v", actual, actual)
 }

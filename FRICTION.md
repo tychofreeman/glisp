@@ -114,3 +114,103 @@ One entry per PR, written before committing it.
   the opposite rule (`replace_statements` re-indents with tabs).
 - `batch` with `"report": "summary"` worked well: three dependent edits in one
   call, names (`List.Eval`, `ProcessTokens`) stayed valid across steps.
+
+### PR: lexical scope
+
+- `replace_statements` indents differently depending on how the statements
+  are named: with `function` (replacing `define_`'s whole body) it used tabs,
+  in a file indented with spaces; with `start_line`/`end_line` (inside
+  `Parse`) the replacement matched the file's 4-space indentation.
+- Otherwise smooth: a four-step `batch` (`add_declaration` with `before`,
+  `replace_statements` by lines and by function, `replace_text`) applied in one
+  call, and the line range I read before the batch was correctly moved past the
+  18 lines the first step inserted.
+
+### PR: lambda arity
+
+- `insert_statements` added the `strings` import itself (and said so in a
+  note), but indented it with a tab among imports indented with 4 spaces.
+  `add_declaration` likewise added `fmt` and `strings` to the test file
+  without being asked, which was convenient.
+- `insert_statements` kept the content's own 4-space indentation, like
+  `add_declaration` and line-range `replace_statements`, unlike
+  `replace_statements` by `function`.
+- No refusals. `replace_text` was the right tool for the one-line macro change:
+  the same `return b(macroScope, macroParams)` appears twice, so `old` needed
+  the `case Function:` line above it to be unique.
+
+### PR: eq on lists
+
+- Same import issue as the last PR: `add_declaration` added `reflect` with a
+  tab among space-indented imports; fixed with `replace_text`.
+- Nothing else: `add_declaration` with `after: "eq"` placed the helper right
+  after `eq`, and `replace_text` changed the one comparison.
+
+### PR: silent wrong answers (`plus`, `car`, `cdr`)
+
+- The new test used an `IsNil` matcher that go-matchers doesn't have.
+  `add_declaration` quietly turned into a 2-step batch and declared a stub
+  `IsNil` (`panic("not implemented")`) — in **`glisp.go`**, the production
+  file, not the test file that used it. The output's only hint was "APPLIED
+  batch: 2 steps"; the tests then failed with "panic: not implemented".
+  Supplying the real `IsNil` with `add_declaration` on `glisp_test.go`
+  replaced the stub and left it in the test file, which is the right outcome,
+  but the stub should have gone in the test file to begin with (it's only
+  used from `_test.go`), and the result should name what it stubbed.
+- Writing nested lines of `replace_statements` content with tabs (since it
+  re-indents with tabs when given `function`) avoided mixed indentation this
+  time.
+
+### PR: parens inside strings
+
+- No tool issues. `replace_statements` by line range replaced the tokenizer's
+  whole `if` chain (one statement) and kept the file's indentation. Passing Go
+  rune literals like `'"'` inside JSON inside a shell argument took awkward
+  quoting; that's the shell, not the tool, and `batch @file` avoids it.
+
+### PR: operator characters as symbols
+
+- No tool issues. `replace_expression` changed just the condition of one
+  `else if`, so nothing else in the chain had to be restated. Its argument
+  for the old text isn't named in `refactor list`'s description ("its source
+  text"); I guessed `expression` and it was right, but naming the arguments in
+  the description would remove the guess.
+
+### PR: unterminated strings
+
+- The added `fmt` import was tab-indented among space-indented imports again
+  (third time); fixed with `replace_text`. Worth fixing in the tool: match the
+  import block's existing indentation.
+- Otherwise none: `insert_statements` before a line put the check exactly
+  where wanted.
+
+### PR: non-ASCII text
+
+- No tool issues: a one-line `replace_statements` by line range swapped the
+  byte read for `bs.ReadRune()`.
+
+### PR: unbalanced parens
+
+- **Batch refused after a rename.** A 9-step batch began with `rename`
+  (`Tokenize` → `tokenizeList`) and then addressed line 41 — the recursive
+  call — with `replace_expression`. The rename had rewritten that line (only
+  the identifier changed), so the batch refused: "line 41 … was rewritten by
+  step 1, so it is not there to address". The refusal was clear and rolled
+  everything back. Workaround: rename and `add_parameter` in one call, then a
+  fresh `inspect` and the remaining steps in a second call. It would help if a
+  line whose only change was a rename stayed addressable.
+- **`add_parameter` didn't flag shadowing.** The new parameter `nested` was
+  shadowed by an existing local `nested := …` in one branch of the body. Legal
+  Go, and the body didn't use the parameter yet, but a note would have saved a
+  read; I removed the local with `replace_statements`.
+- **Helpful:** `rename` noted that renaming the exported `Tokenize` changes the
+  module's API (so I re-added `Tokenize` as a wrapper); `batch` noticed that
+  step 2 used a variable step 3 declares, and re-ran with `check: "end"` on its
+  own.
+- **Correct refusal:** `move_statement_up` refused to put the
+  unterminated-string check above the missing-paren check, because both panic
+  and swapping them changes which error wins — which was the point.
+  `replace_statements` over both did it.
+- The new checks exposed two existing tests whose input was missing a `)`
+  (`TestCdrGrabsTail`, `TestAtomIsFalseForComplexExpres`) besides
+  `TestApplyCallsFunctions`; fixed with `replace_text`.

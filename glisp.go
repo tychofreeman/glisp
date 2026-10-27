@@ -4,6 +4,8 @@ import (
     _ "embed"
     "fmt"
     "os"
+    "reflect"
+    "strings"
 )
 
 type Valuable interface {
@@ -39,28 +41,32 @@ func quote(_ *Scope, params List) interface{} {
     panic(fmt.Sprintf("QUOTE takes exactly 1 argument; you have %v - %v\n", len(params), params))
 }
 
-func car(_ *Scope, params List) interface{} {
-    if len(params) > 0 {
-        switch x := params[0].(type) {
-        case List:
-            if len(x) > 0 {
-                return x[0]
-            }
-        }
+// listParam returns fn's first parameter as a List, treating nil (what car and
+// cdr give for an empty list) as an empty list. Anything else is an error.
+func listParam(fn string, params List) List {
+    if len(params) == 0 || params[0] == nil {
+        return nil
     }
-    return nil
+    if x, isList := params[0].(List); isList {
+        return x
+    }
+    panic(fmt.Sprintf("%s: expected a list, got %T %v", fn, params[0], params[0]))
+}
+
+func car(_ *Scope, params List) interface{} {
+	x := listParam("car", params)
+	if len(x) > 0 {
+		return x[0]
+	}
+	return nil
 }
 
 func cdr(_ *Scope, params List) interface{} {
-    if len(params) > 0 {
-        switch x := params[0].(type) {
-        case List:
-            if len(x) > 0 {
-                return x.Rest()
-            }
-        }
-    }
-    return nil
+	x := listParam("cdr", params)
+	if len(x) > 0 {
+		return x.Rest()
+	}
+	return nil
 }
 
 func atom(_ *Scope, params List) interface{} {
@@ -97,14 +103,18 @@ func cons(_ *Scope, params List) interface{} {
 }
 
 func plus(_ *Scope, params List) interface{} {
-    var sum int64 = 0
-    for _, p := range params {
-        switch x := p.(type) {
-        case int64:
-            sum = sum + x
-        }
-    }
-    return sum
+	var sum int64 = 0
+	for _, p := range params {
+		switch x := p.(type) {
+		case int64:
+			sum = sum + x
+		case NumberToken:
+			sum = sum + x.Value()
+		default:
+			panic(fmt.Sprintf("plus: expected a number, got %T %v", p, p))
+		}
+	}
+	return sum
 }
 
 func if_(scope *Scope, params List) interface{} {
@@ -121,7 +131,33 @@ func eq(_ *Scope, params List) interface{} {
     if len(params) != 2 {
         panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %v - %v", len(params), params))
     }
-    return params[0] == params[1]
+    return equal(params[0], params[1])
+}
+
+// equal reports whether two glisp values are equal: lists element by element,
+// other values with ==. Values whose type can't be compared with ==, such as
+// functions, are never equal.
+func equal(a, b interface{}) bool {
+    if la, isList := a.(List); isList {
+        lb, isList := b.(List)
+        if !isList || len(la) != len(lb) {
+            return false
+        }
+        for i := range la {
+            if !equal(la[i], lb[i]) {
+                return false
+            }
+        }
+        return true
+    }
+    if a == nil || b == nil {
+        return a == nil && b == nil
+    }
+    ta := reflect.TypeOf(a)
+    if ta != reflect.TypeOf(b) || !ta.Comparable() {
+        return false
+    }
+    return a == b
 }
 
 func apply(scope *Scope, params List) interface{} {
@@ -130,21 +166,17 @@ func apply(scope *Scope, params List) interface{} {
 
 func define_(scope *Scope, params List) interface{} {
 	name := params.First().(Token).Str()
-	body := params.Second()
-	if _, isLambda := body.(Function); !isLambda {
-		body = GetValue(scope, body)
-	}
-	scope.add(name, body)
+	scope.add(name, GetValue(scope, params.Second()))
 	return List{}
 }
 
 func macro(scope *Scope, params List) interface{} {
     name := params.First().(Token).Str()
-    body := params.Rest().First()
+    body := GetValue(scope, params.Second())
     macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
         switch b := body.(type) {
         case Function:
-            return b(macroScope, macroParams)
+            return b(macroScope, List{macroParams})
         case NonEvaluatingFunction:
             return b(macroScope, macroParams)
         default:
@@ -196,6 +228,13 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
         scope := map[string]interface{}{}
         switch params := theParams.(type) {
         case List:
+            if len(params) != len(param_names) {
+                arguments := "arguments"
+                if len(param_names) == 1 {
+                    arguments = "argument"
+                }
+                panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %v", strings.Join(param_names, " "), len(param_names), arguments, len(params), params))
+            }
             for i := 0; i < len(param_names); i++ {
                 scope[param_names[i]] = params[i]
             }
@@ -204,6 +243,24 @@ func make_param_binding_fn(param_decls interface{}) (func(interface{}) map[strin
         }
         return scope
     }
+}
+
+// Lambda is a parsed (lambda (params...) body...) form. Evaluating it makes a
+// Function that closes over the scope it was evaluated in.
+type Lambda struct {
+    bind func(interface{}) map[string]interface{}
+    body List
+}
+
+func (l Lambda) Eval(scope *Scope) interface{} {
+    return Function(func(_ *Scope, params List) interface{} {
+        local := &Scope{scope, l.bind(params), false}
+        var last interface{}
+        for _, element := range l.body {
+            last = GetValue(local, element)
+        }
+        return last
+    })
 }
 
 func Parse(source interface{}) interface{} {
@@ -216,16 +273,7 @@ func Parse(source interface{}) interface{} {
         return node
     case List:
         if node.IsLambda() {
-            body := ParseMany(node.Rest().Rest())
-            param_binding_fn := make_param_binding_fn(node.Second())
-            return Function(func(scope *Scope, params List) interface{} {
-                param_bindings := param_binding_fn(params)
-                var lastElement interface{} = nil
-                for _, element := range body {
-                    lastElement = GetValue(&Scope{scope, param_bindings, false}, element)
-                }
-                return lastElement
-            })
+            return Lambda{make_param_binding_fn(node.Second()), ParseMany(node.Rest().Rest())}
         }
         x :=  ParseMany(node)
         return x
