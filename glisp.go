@@ -41,28 +41,32 @@ func quote(_ *Scope, params List) interface{} {
     panic(fmt.Sprintf("QUOTE takes exactly 1 argument; you have %v - %v\n", len(params), params))
 }
 
-func car(_ *Scope, params List) interface{} {
-    if len(params) > 0 {
-        switch x := params[0].(type) {
-        case List:
-            if len(x) > 0 {
-                return x[0]
-            }
-        }
+// listParam returns fn's first parameter as a List, treating nil (what car and
+// cdr give for an empty list) as an empty list. Anything else is an error.
+func listParam(fn string, params List) List {
+    if len(params) == 0 || params[0] == nil {
+        return nil
     }
-    return nil
+    if x, isList := params[0].(List); isList {
+        return x
+    }
+    panic(fmt.Sprintf("%s: expected a list, got %T %v", fn, params[0], params[0]))
+}
+
+func car(_ *Scope, params List) interface{} {
+	x := listParam("car", params)
+	if len(x) > 0 {
+		return x[0]
+	}
+	return nil
 }
 
 func cdr(_ *Scope, params List) interface{} {
-    if len(params) > 0 {
-        switch x := params[0].(type) {
-        case List:
-            if len(x) > 0 {
-                return x.Rest()
-            }
-        }
-    }
-    return nil
+	x := listParam("cdr", params)
+	if len(x) > 0 {
+		return x.Rest()
+	}
+	return nil
 }
 
 func atom(_ *Scope, params List) interface{} {
@@ -99,14 +103,18 @@ func cons(_ *Scope, params List) interface{} {
 }
 
 func plus(_ *Scope, params List) interface{} {
-    var sum int64 = 0
-    for _, p := range params {
-        switch x := p.(type) {
-        case int64:
-            sum = sum + x
-        }
-    }
-    return sum
+	var sum int64 = 0
+	for _, p := range params {
+		switch x := p.(type) {
+		case int64:
+			sum = sum + x
+		case NumberToken:
+			sum = sum + x.Value()
+		default:
+			panic(fmt.Sprintf("plus: expected a number, got %T %v", p, p))
+		}
+	}
+	return sum
 }
 
 func if_(scope *Scope, params List) interface{} {

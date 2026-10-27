@@ -145,3 +145,18 @@ One entry per PR, written before committing it.
   tab among space-indented imports; fixed with `replace_text`.
 - Nothing else: `add_declaration` with `after: "eq"` placed the helper right
   after `eq`, and `replace_text` changed the one comparison.
+
+### PR: silent wrong answers (`plus`, `car`, `cdr`)
+
+- The new test used an `IsNil` matcher that go-matchers doesn't have.
+  `add_declaration` quietly turned into a 2-step batch and declared a stub
+  `IsNil` (`panic("not implemented")`) — in **`glisp.go`**, the production
+  file, not the test file that used it. The output's only hint was "APPLIED
+  batch: 2 steps"; the tests then failed with "panic: not implemented".
+  Supplying the real `IsNil` with `add_declaration` on `glisp_test.go`
+  replaced the stub and left it in the test file, which is the right outcome,
+  but the stub should have gone in the test file to begin with (it's only
+  used from `_test.go`), and the result should name what it stubbed.
+- Writing nested lines of `replace_statements` content with tabs (since it
+  re-indents with tabs when given `function`) avoided mixed indentation this
+  time.

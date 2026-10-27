@@ -178,3 +178,26 @@ func TestEqComparesListsByContents(t *testing.T) {
 func TestEqOnFunctionsDoesNotCrash(t *testing.T) {
     AssertThat(t, Process("(eq plus car)"), IsFalse)
 }
+
+func TestPlusRejectsNonNumbers(t *testing.T) {
+    assertPanicsWith(t, "(plus 1 \"a\")", "plus: expected a number, got string a")
+}
+
+func TestPlusAddsQuotedNumbers(t *testing.T) {
+    AssertThat(t, Process("(plus (car (quote (1 2))) 1)"), Equals(int64(2)))
+}
+
+func TestCarAndCdrRejectNonLists(t *testing.T) {
+    assertPanicsWith(t, "(car 5)", "car: expected a list, got int64 5")
+    assertPanicsWith(t, "(cdr \"a\")", "cdr: expected a list, got string a")
+}
+
+func TestCarAndCdrOfNilAreNil(t *testing.T) {
+    AssertThat(t, Process("(car (cdr (quote ())))"), IsNil)
+    AssertThat(t, Process("(cdr (cdr (quote ())))"), IsNil)
+}
+
+// IsNil matches a nil value.
+func IsNil(actual interface{}) (bool, string) {
+    return actual == nil, fmt.Sprintf("expected nil, got %T %v", actual, actual)
+}
