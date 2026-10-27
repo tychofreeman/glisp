@@ -597,6 +597,15 @@ One entry per PR, written before committing it.
   `add_declaration` with `after: "wasmFunc.tailApply"` went through.
   Letting `replace_declaration` take extra declarations to add after the
   replaced one would have saved the retry.
+
+## More of the roadmap (stacked PRs)
+
+### PR: the tour uses the new builtins
+
+- No refusals: one `batch` of 23 `replace_text` steps on a non-Go file
+  (`examples/tour.glisp`), built by a short script. For a section that
+  goes away entirely, the script cut the old text out of the file between
+  two markers, so `old` matched exactly without retyping it.
 - The 9-step batch otherwise applied as planned: constants and globals by
   `replace_text`, the body of `invoke` by line range, its locals and
   `define` call by `replace_text`.
