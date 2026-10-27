@@ -212,5 +212,9 @@ prints exactly what the interpreter does, error messages included.
   about 300,000 deep. Lambdas now evaluate to a `*Closure` holding their
   code and scope; builtins stay `Function`s.
 - [ ] Integers are 63 bits (one bit tags them); the interpreter's are 64.
-- [ ] Every call goes through `invoke` and the table; calls to builtins that
-  aren't redefined could be direct, or inline (`plus`, `car`).
+- [x] Direct calls to builtins: a call naming `plus - * < > <= >= eq car cdr
+  cons atom number? list? nil?` with the usual arguments runs the operation
+  inline when the name still holds the builtin (checked at run time, so
+  redefining it works), falling back to the ordinary call for anything the
+  inline path doesn't handle, so results and errors are the same. A loop of
+  tail calls through `plus` got 1.7x faster; arithmetic-heavy code 1.25x.

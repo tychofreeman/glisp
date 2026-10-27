@@ -572,19 +572,38 @@ func (f *wasmFunc) pushCall(n Apply) uint32 {
 }
 
 // invoke calls the function at base with n's arguments, all on the argument
-// stack, and pops them. It is a safe point: the collector may run first,
-// so the function is read from the stack after it.
+// stack, and pops them. A builtin with an inline path runs inline when the
+// function is still that builtin. Otherwise the call is a safe point: the
+// collector may run first, so the function is read from the stack after it.
 func (f *wasmFunc) invoke(base uint32, n Apply) {
 	f.at(n.Line) // again, after the arguments' calls
-	f.c.safePoint(&f.code)
-	f.code.LocalGet(base)
-	f.code.I64Load(0)
-	f.code.LocalGet(base)
-	f.code.I32Const(8)
-	f.code.Op(wasm.I32Add)
-	f.code.I32Const(int32(len(n.Args)))
-	f.code.I32Const(int32(f.c.str(unresolved(n).String())))
-	f.code.Call(f.c.rt.invoke)
+	call := func() {
+		f.c.safePoint(&f.code)
+		f.code.LocalGet(base)
+		f.code.I64Load(0)
+		f.code.LocalGet(base)
+		f.code.I32Const(8)
+		f.code.Op(wasm.I32Add)
+		f.code.I32Const(int32(len(n.Args)))
+		f.code.I32Const(int32(f.c.str(unresolved(n).String())))
+		f.code.Call(f.c.rt.invoke)
+	}
+	if name, inline, found := f.c.inlineFor(n); found {
+		f.code.LocalGet(base)
+		f.code.I64Load(0)
+		f.code.I64Const(int64(f.c.closure(f.c.rt.builtins[name])))
+		f.code.Op(wasm.I64Eq)
+		f.code.If(wasm.BlockI64)
+		inline.emit(&f.code, &f.c.rt, func(i int) {
+			f.code.LocalGet(base)
+			f.code.I64Load(uint32(8 * (1 + i)))
+		}, call)
+		f.code.Op(wasm.Else)
+		call()
+		f.code.Op(wasm.End)
+	} else {
+		call()
+	}
 	f.code.LocalGet(base)
 	f.code.GlobalSet(gSP)
 }

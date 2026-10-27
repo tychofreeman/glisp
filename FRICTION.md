@@ -662,6 +662,18 @@ One entry per PR, written before committing it.
   copying the file back. A tool for "apply this edit, run this, revert"
   would fit that loop; `undo` covers the revert only for edits made
   through the tools.
+
+### PR: direct calls to builtins
+
+- No refusals: `create_file` for the inline paths, then
+  `replace_declaration` for `invoke`, in one `batch`.
+- A name clash caught before sending: the new file wanted a helper called
+  `field`, which `wasm_runtime.go` already declares. I renamed it
+  (`pairField`) by hand in the scratch copy; the batch's type check would
+  have caught it too, as it did for `str` in the strings PR. A tool that
+  answers "is this name free in the package?" would be handy before writing
+  a new file.
+- `replace_declaration` replaced a test function as easily as code.
 - The 9-step batch otherwise applied as planned: constants and globals by
   `replace_text`, the body of `invoke` by line range, its locals and
   `define` call by `replace_text`.
