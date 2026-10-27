@@ -83,3 +83,44 @@ loaded before every program; it defines `mult`.
 - [x] Replace deprecated `ioutil`; fix the "Could nt" typo and `%t` verb in
   `macro`.
 - [x] Tests for errors, arity and functions as values.
+
+### Compiler foundations
+
+Groundwork for compiling glisp: expand macros into a small **core AST**, and
+make every backend (the interpreter first; later a bytecode VM, Go source,
+WebAssembly, …) a walker over it.
+
+The core forms, as Go types implementing a `Node` interface:
+
+| Node | Form |
+|---|---|
+| `Const` | `int64`, string, `true`/`false`/`nil` |
+| `Quote` | `(quote x)`: `x` as data |
+| `Ref` | a variable; a later pass fills in its `Loc` (scope depth and slot) |
+| `If` | `(if c then else)` |
+| `Lambda` | `(lambda (params) body...)` |
+| `Def` | `(def name value)` |
+| `Call` | `(f args...)` |
+
+`defn`, `defmacro` and other macros never reach a backend: an `Expander`
+runs them while expanding, using the interpreter to evaluate macro bodies.
+Builtins other than the special forms (`car`, `plus`, `<`, `p`, …) stay
+ordinary functions, called through `Ref` and `Call`.
+
+- [ ] Add the `Node` types.
+- [ ] Write the `Expander`: special forms become nodes; `defmacro` registers a
+  macro; macro calls are expanded, recursively, until only core forms remain.
+- [ ] Make the interpreter evaluate `Node`s, so every existing test runs
+  through the expander. Macros then expand once, not on every call.
+- [ ] Remove the old `List`-walking evaluator and the `quote`, `if`,
+  `lambda`, `def` and `defmacro` builtins it needed.
+- [ ] A resolve pass that fills in each `Ref`'s `Loc` and each `Lambda`'s
+  captured variables, for backends that compile variable access.
+
+Decisions this makes:
+
+- **Macros are defined before use.** A `defmacro` applies to the forms after it
+  (and the stdlib's to every program). Today a macro expands each time its call
+  runs, so a macro defined later still works; that stops.
+- **Macros aren't values.** A macro name can't be passed to a function or
+  returned, since it's gone after expansion.

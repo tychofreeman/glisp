@@ -385,3 +385,7 @@ One entry per PR, written before committing it.
   forms' extents; a structural "rewrite this s-expression" step would only
   make sense for Go, so that's no gap in a Go tool — just a note that
   non-Go bulk edits are text edits.
+
+### PR: compiler roadmap
+
+- No tool issues: one `replace_text` appended the section to the README.
