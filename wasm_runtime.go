@@ -8,10 +8,10 @@ type wasmRuntime struct {
 	fdWrite, procExit                               uint32 // WASI imports
 	alloc, flush, putByte, putBytes, putStr, putInt uint32
 	putValue, putType, putArgs, failBegin, failEnd  uint32
-	tagOf, num, listArg, pair, cell, equal, invoke  uint32
+	tagOf, pair, cell, equal, invoke                uint32
 	putShow, putQuoted, putDescribed                uint32
 	builtins                                        map[string]uint32 // table index of each builtin
-	strArg, runeCount, runeOffset, newString        uint32            // string helpers
+	runeCount, runeOffset, newString                uint32            // string helpers
 	objSize, gcCopy, gcReloc, gc                    uint32            // the garbage collector
 }
 
@@ -50,8 +50,6 @@ func (c *wasmCompiler) runtime() {
 	rt.failBegin = c.declare(sig(nil))
 	rt.failEnd = c.declare(sig(nil))
 	rt.tagOf = c.declare(sig(vals(i64), i32))
-	rt.num = c.declare(sig(vals(i64, i32), i64))
-	rt.listArg = c.declare(sig(vals(i64, i32), i64))
 	rt.pair = c.declare(sig(vals(i64, i64), i64))
 	rt.cell = c.declare(sig(vals(i64), i64))
 	rt.equal = c.declare(sig(vals(i64, i64), i32))
@@ -60,8 +58,8 @@ func (c *wasmCompiler) runtime() {
 	c.declareGC()
 	builtinFuncs := map[string]uint32{}
 	rt.builtins = map[string]uint32{}
-	for _, name := range builtinNames {
-		builtinFuncs[name], rt.builtins[name] = c.declareFn()
+	for _, spec := range builtinSpecs {
+		builtinFuncs[spec.name], rt.builtins[spec.name] = c.declareFn()
 	}
 
 	c.define(rt.alloc, c.allocBody)
@@ -79,15 +77,13 @@ func (c *wasmCompiler) runtime() {
 	c.define(rt.failBegin, c.failBeginBody)
 	c.define(rt.failEnd, c.failEndBody)
 	c.define(rt.tagOf, c.tagOfBody)
-	c.define(rt.num, c.numBody)
-	c.define(rt.listArg, c.listArgBody)
 	c.define(rt.pair, c.pairBody)
 	c.define(rt.cell, c.cellBody)
 	c.define(rt.equal, c.equalBody)
 	c.define(rt.invoke, c.invokeBody)
 	c.defineStrings()
-	for _, name := range builtinNames {
-		c.define(builtinFuncs[name], func(b *wasmBody) { c.builtinBody(b, name) })
+	for _, spec := range builtinSpecs {
+		c.define(builtinFuncs[spec.name], func(b *wasmBody) { c.builtinBody(b, spec) })
 	}
 }
 
@@ -618,47 +614,6 @@ func (c *wasmCompiler) tagOfBody(b *wasmBody) {
 	})
 }
 
-// num(v, fn) is the integer v holds, or an error naming the builtin fn.
-func (c *wasmCompiler) numBody(b *wasmBody) {
-	v, fn := b.param(0), b.param(1)
-	b.LocalGet(v)
-	b.I64Const(1)
-	b.Op(wasm.I64And, wasm.I64Eqz)
-	b.when(func() {
-		b.Call(c.rt.failBegin)
-		b.LocalGet(fn)
-		b.Call(c.rt.putStr)
-		c.text(b, ": expected a number, got ")
-		c.typeAndValue(b, v)
-		b.Call(c.rt.failEnd)
-		b.Op(wasm.Unreachable)
-	})
-	b.LocalGet(v)
-	b.I64Const(1)
-	b.Op(wasm.I64ShrS)
-}
-
-// listArg(v, fn) is the list v, the empty list for nil, or an error naming
-// the builtin fn: the interpreter's listParam.
-func (c *wasmCompiler) listArgBody(b *wasmBody) {
-	v, fn := b.param(0), b.param(1)
-	b.LocalGet(v)
-	b.I64Const(addrNil)
-	b.Op(wasm.I64Eq)
-	b.returnIf(func() { b.I64Const(addrEmpty) })
-	b.LocalGet(v)
-	b.Call(c.rt.tagOf)
-	b.isList()
-	b.returnIf(func() { b.LocalGet(v) })
-	b.Call(c.rt.failBegin)
-	b.LocalGet(fn)
-	b.Call(c.rt.putStr)
-	c.text(b, ": expected a list, got ")
-	c.typeAndValue(b, v)
-	b.Call(c.rt.failEnd)
-	b.Op(wasm.Unreachable)
-}
-
 // pair(car, cdr) makes a list cell.
 func (c *wasmCompiler) pairBody(b *wasmBody) {
 	car, cdr, p := b.param(0), b.param(1), b.local(i32)
@@ -875,20 +830,110 @@ func (c *wasmCompiler) invokeBody(b *wasmBody) {
 	b.LocalGet(r)
 }
 
-// builtinBody compiles the builtin name as a glisp function:
-// (self, args, argc) -> value.
-func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
+// checkArgs fails, as the interpreter does, unless the builtin's arguments
+// are what spec takes: how many, then the kind of each.
+func (c *wasmCompiler) checkArgs(b *wasmBody, spec builtin) {
 	argc := b.param(paramArgc)
-	argcIs := func(n int32, op byte) {
+	argcIs := func(n int, op byte) {
 		b.LocalGet(argc)
-		b.I32Const(n)
+		b.I32Const(int32(n))
 		b.Op(op)
 	}
-	putArgc := func() {
-		b.LocalGet(argc)
-		b.Op(wasm.I64ExtendI32U)
-		b.Call(c.rt.putInt)
+	wrongCount := true
+	switch {
+	case spec.max < 0 && spec.min == 0:
+		wrongCount = false
+	case spec.max < 0:
+		argcIs(spec.min, wasm.I32LtU)
+	case spec.min == spec.max:
+		argcIs(spec.min, wasm.I32Ne)
+	default:
+		argcIs(spec.min, wasm.I32LtU)
+		argcIs(spec.max, wasm.I32GtU)
+		b.Op(wasm.I32Or)
 	}
+	if wrongCount {
+		c.failIf(b, spec.name+": "+spec.expects()+", got ", func() {
+			b.LocalGet(argc)
+			b.Op(wasm.I64ExtendI32U)
+			b.Call(c.rt.putInt)
+		})
+	}
+	var v, t uint32 // the argument checked, and its tag
+	for _, k := range spec.kinds {
+		if k != anyKind {
+			v, t = b.local(i64), b.local(i32)
+			break
+		}
+	}
+	check := func(k kind, load func()) {
+		load()
+		b.LocalTee(v)
+		b.Call(c.rt.tagOf)
+		b.LocalSet(t)
+		b.tagIn(t, k.tags())
+		b.Op(wasm.I32Eqz)
+		c.failIf(b, spec.name+": expected "+k.noun()+", got ", func() { c.typeAndValue(b, v) })
+	}
+	// Each argument up to the last kind given, then, for a builtin taking
+	// any number, the rest in a loop: the last kind stands for them.
+	last := len(spec.kinds) - 1
+	fixed := spec.max
+	if spec.max < 0 {
+		fixed = last
+	}
+	for i := 0; i < fixed; i++ {
+		if k := spec.kind(i); k != anyKind {
+			if i >= spec.min {
+				panic("wasm: " + spec.name + ": a kind for an optional argument")
+			}
+			check(k, func() { b.arg(uint32(i)) })
+		}
+	}
+	if spec.max < 0 && last >= 0 && spec.kinds[last] != anyKind {
+		j := b.local(i32)
+		b.I32Const(int32(last))
+		b.LocalSet(j)
+		b.until(func() {
+			b.LocalGet(j)
+			b.LocalGet(argc)
+			b.Op(wasm.I32GeU)
+		}, func() {
+			check(spec.kinds[last], func() { b.argAt(j) })
+			b.incr(j)
+		})
+	}
+}
+
+// tags are the tags that values of kind k have.
+func (k kind) tags() []int32 {
+	return [][]int32{nil, {tagInt}, {tagString}, {tagEmpty, tagPair, tagNil}, {tagClosure}}[k]
+}
+
+// tagIn leaves whether the tag in local t is one of tags.
+func (b *wasmBody) tagIn(t uint32, tags []int32) {
+	for k, tag := range tags {
+		b.LocalGet(t)
+		b.I32Const(tag)
+		b.Op(wasm.I32Eq)
+		if k > 0 {
+			b.Op(wasm.I32Or)
+		}
+	}
+}
+
+// decode turns the value on the stack, an integer, into the integer.
+func (b *wasmBody) decode() {
+	b.I64Const(1)
+	b.Op(wasm.I64ShrS)
+}
+
+// builtinBody compiles the builtin name as a glisp function:
+// (self, args, argc) -> value.
+func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
+	c.checkArgs(b, spec)
+	argc := b.param(paramArgc)
+	name := spec.name
 	switch name {
 	case "car", "cdr":
 		v := b.local(i64)
@@ -896,14 +941,7 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
 		if name == "cdr" {
 			offset = 16
 		}
-		argcIs(0, wasm.I32Eq)
-		b.ifElse(wasm.BlockI64, func() {
-			b.I64Const(addrNil)
-		}, func() {
-			b.arg(0)
-		})
-		b.I32Const(int32(c.str(name)))
-		b.Call(c.rt.listArg)
+		b.arg(0)
 		b.LocalSet(v)
 		c.tagIs(b, v, tagPair)
 		b.ifElse(wasm.BlockI64, func() {
@@ -912,8 +950,6 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
 			b.I64Const(addrNil)
 		})
 	case "atom":
-		argcIs(0, wasm.I32Eq)
-		b.returnIf(func() { b.I64Const(addrFalse) })
 		b.arg(0)
 		b.Call(c.rt.tagOf)
 		b.isList()
@@ -921,14 +957,14 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
 		b.boolean()
 	case "cons":
 		rest := b.local(i64)
-		argcIs(1, wasm.I32Eq)
+		b.LocalGet(argc)
+		b.I32Const(1)
+		b.Op(wasm.I32Eq)
 		b.returnIf(func() {
 			b.arg(0)
 			b.I64Const(addrEmpty)
 			b.Call(c.rt.pair)
 		})
-		argcIs(2, wasm.I32Ne)
-		c.failIf(b, "cons: expects 1 or 2 arguments, got ", putArgc)
 		b.arg(1)
 		b.LocalTee(rest)
 		b.I64Const(addrNil)
@@ -953,11 +989,9 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
 		b.Call(c.rt.pair)
 	case "plus", "-", "*":
 		sum, i := b.local(i64), b.local(i32)
-		fn := int32(c.str(name))
 		number := func() {
 			b.argAt(i)
-			b.I32Const(fn)
-			b.Call(c.rt.num)
+			b.decode()
 		}
 		op := wasm.I64Add
 		if name == "*" {
@@ -967,11 +1001,11 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
 		}
 		if name == "-" {
 			op = wasm.I64Sub
-			argcIs(0, wasm.I32Eq)
-			c.failIf(b, "-: expects at least 1 argument, got 0", nil)
 			number()
 			b.LocalSet(sum)
-			argcIs(1, wasm.I32Eq)
+			b.LocalGet(argc)
+			b.I32Const(1)
+			b.Op(wasm.I32Eq)
 			b.returnIf(func() {
 				b.I64Const(0)
 				b.LocalGet(sum)
@@ -996,13 +1030,9 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
 		b.encode()
 	case "/", "mod":
 		a, d := b.local(i64), b.local(i64)
-		fn := int32(c.str(name))
-		argcIs(2, wasm.I32Ne)
-		c.failIf(b, name+": expects 2 arguments, got ", putArgc)
 		for i, local := range []uint32{a, d} {
 			b.arg(uint32(i))
-			b.I32Const(fn)
-			b.Call(c.rt.num)
+			b.decode()
 			b.LocalSet(local)
 		}
 		b.LocalGet(d)
@@ -1017,62 +1047,29 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
 		}
 		b.encode()
 	case "<", ">", "<=", ">=":
-		fn := int32(c.str(name))
-		argcIs(2, wasm.I32Ne)
-		c.failIf(b, name+": expects 2 arguments, got ", putArgc)
-		for i := uint32(0); i < 2; i++ {
-			b.arg(i)
-			b.I32Const(fn)
-			b.Call(c.rt.num)
-		}
+		// Encoding keeps integers' order.
+		b.arg(0)
+		b.arg(1)
 		b.Op(map[string]byte{"<": wasm.I64LtS, ">": wasm.I64GtS, "<=": wasm.I64LeS, ">=": wasm.I64GeS}[name])
 		b.boolean()
 	case "number?", "string?", "symbol?", "list?", "function?", "boolean?", "nil?":
 		t := b.local(i32)
-		argcIs(1, wasm.I32Ne)
-		c.failIf(b, name+": expects 1 argument, got ", putArgc)
 		b.arg(0)
 		b.Call(c.rt.tagOf)
 		b.LocalSet(t)
-		tags := map[string][]int32{
+		b.tagIn(t, map[string][]int32{
 			"number?": {tagInt}, "string?": {tagString}, "symbol?": {tagSymbol},
 			"list?": {tagEmpty, tagPair}, "function?": {tagClosure},
 			"boolean?": {tagTrue, tagFalse}, "nil?": {tagNil},
-		}[name]
-		for k, tag := range tags {
-			b.LocalGet(t)
-			b.I32Const(tag)
-			b.Op(wasm.I32Eq)
-			if k > 0 {
-				b.Op(wasm.I32Or)
-			}
-		}
+		}[name])
 		b.boolean()
-	case "str", "string_length", "substring", "chars", "string<", "symbol", "parse_number":
-		c.stringBuiltin(b, name)
 	case "eq":
-		argcIs(2, wasm.I32Ne)
-		c.failIf(b, "EQ requires exactly 2 parameters; you have ", func() {
-			putArgc()
-			c.text(b, " - ")
-			b.LocalGet(paramArgs)
-			b.LocalGet(argc)
-			b.Call(c.rt.putArgs)
-		})
 		b.arg(0)
 		b.arg(1)
 		b.Call(c.rt.equal)
 		b.boolean()
 	case "apply":
-		f := b.local(i64)
-		argcIs(0, wasm.I32Eq)
-		c.failIf(b, "apply: expects a function", nil)
 		b.arg(0)
-		b.LocalSet(f)
-		c.tagIs(b, f, tagClosure)
-		b.Op(wasm.I32Eqz)
-		c.failIf(b, "apply: expected a function, got ", func() { c.typeAndValue(b, f) })
-		b.LocalGet(f)
 		b.LocalGet(paramArgs)
 		b.I32Const(8)
 		b.Op(wasm.I32Add)
@@ -1102,6 +1099,6 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, name string) {
 		b.Call(c.rt.flush)
 		b.I64Const(addrEmpty)
 	default:
-		panic("wasm: no builtin " + name)
+		c.stringBuiltin(b, name)
 	}
 }
