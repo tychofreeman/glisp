@@ -2,84 +2,84 @@
 ; built from the handful of builtins.  Run it with
 ;   go run ./cmd/glisp examples/numbers.glisp
 
-(def null (lambda (l) (eq (car l) nil)))
-(def not (lambda (b) (if b false true)))
-(def inc (lambda (n) (plus n 1)))
-(def dec (lambda (n) (- n 1)))
+(defn null (l) (eq (car l) nil))
+(defn not (b) (if b false true))
+(defn inc (n) (plus n 1))
+(defn dec (n) (- n 1))
 
-(def mod (lambda (a b)
-  (if (< a b) a (mod (- a b) b))))
+(defn mod (a b)
+  (if (< a b) a (mod (- a b) b)))
 
-(def half_walk (lambda (n i)
-  (if (eq (plus i i) n) i (half_walk n (inc i)))))
-(def half (lambda (n) (half_walk n 0)))
+(defn half_walk (n i)
+  (if (eq (plus i i) n) i (half_walk n (inc i))))
+(defn half (n) (half_walk n 0))
 
-(def range (lambda (a b)
+(defn range (a b)
   (if (eq a (inc b)) nil
-    (cons a (range (inc a) b)))))
+    (cons a (range (inc a) b))))
 
-(def length (lambda (l)
-  (if (null l) 0 (inc (length (cdr l))))))
+(defn length (l)
+  (if (null l) 0 (inc (length (cdr l)))))
 
-(def map (lambda (f l)
+(defn map (f l)
   (if (null l) nil
-    (cons (f (car l)) (map f (cdr l))))))
+    (cons (f (car l)) (map f (cdr l)))))
 
-(def filter (lambda (pred l)
+(defn filter (pred l)
   (if (null l) nil
     (if (pred (car l))
       (cons (car l) (filter pred (cdr l)))
-      (filter pred (cdr l))))))
+      (filter pred (cdr l)))))
 
-(def fold (lambda (f acc l)
+(defn fold (f acc l)
   (if (null l) acc
-    (fold f (f acc (car l)) (cdr l)))))
+    (fold f (f acc (car l)) (cdr l))))
 
-(def add (lambda (a b) (plus a b)))
-(def sum (lambda (l) (fold add 0 l)))
+(defn add (a b) (plus a b))
+(defn sum (l) (fold add 0 l))
 
-(def push (lambda (acc x) (cons x acc)))
-(def reverse (lambda (l) (fold push nil l)))
+(defn push (acc x) (cons x acc))
+(defn reverse (l) (fold push nil l))
 
-(def append (lambda (a b)
+(defn append (a b)
   (if (null a) b
-    (cons (car a) (append (cdr a) b)))))
+    (cons (car a) (append (cdr a) b))))
 
-(def insert (lambda (x sorted)
+(defn insert (x sorted)
   (if (null sorted) (cons x nil)
     (if (< x (car sorted))
       (cons x sorted)
-      (cons (car sorted) (insert x (cdr sorted)))))))
-(def insert_into (lambda (acc x) (insert x acc)))
-(def sort (lambda (l) (fold insert_into nil l)))
+      (cons (car sorted) (insert x (cdr sorted))))))
+(defn insert_into (acc x) (insert x acc))
+(defn sort (l) (fold insert_into nil l))
 
-(def square (lambda (n) (mult n n)))
-(def even (lambda (n) (eq (mod n 2) 0)))
-(def odd (lambda (n) (not (even n))))
+(defn square (n) (mult n n))
+(defn even (n) (eq (mod n 2) 0))
+(defn odd (n) (not (even n)))
 
-(def fact (lambda (n)
-  (if (eq n 0) 1 (mult n (fact (dec n))))))
+(defn fact (n)
+  (if (eq n 0) 1 (mult n (fact (dec n)))))
 
-(def fib (lambda (n)
+(defn fib (n)
   (if (< n 2) n
-    (plus (fib (dec n)) (fib (- n 2))))))
+    (plus (fib (dec n)) (fib (- n 2)))))
 
-(def gcd (lambda (a b)
-  (if (eq b 0) a (gcd b (mod a b)))))
+(defn gcd (a b)
+  (if (eq b 0) a (gcd b (mod a b))))
 
-(def divides (lambda (d n) (eq (mod n d) 0)))
-(def no_divisor (lambda (n d)
+(defn divides (d n) (eq (mod n d) 0))
+(defn no_divisor (n d)
   (if (eq d n) true
-    (if (divides d n) false (no_divisor n (inc d))))))
-(def prime (lambda (n)
-  (if (< n 2) false (no_divisor n 2))))
+    (if (divides d n) false (no_divisor n (inc d)))))
+(defn prime (n)
+  (if (< n 2) false (no_divisor n 2)))
 
-(def collatz_next (lambda (n)
-  (if (even n) (half n) (inc (plus n (plus n n))))))
-(def collatz_steps (lambda (n)
-  (if (eq n 1) 0 (inc (collatz_steps (collatz_next n))))))
+(defn collatz_next (n)
+  (if (even n) (half n) (inc (plus n (plus n n)))))
+(defn collatz_steps (n)
+  (if (eq n 1) 0 (inc (collatz_steps (collatz_next n)))))
 
-(def scramble (lambda (n) (mod (plus 7 (mult n 13)) 31)))
+(defn scramble (n) (mod (plus 7 (mult n 13)) 31))
 
 (p "range 1..10:" (range 1 10))
 (p "squares:" (map square (range 1 10)))

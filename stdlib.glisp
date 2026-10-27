@@ -1,2 +1,8 @@
 (def mult_recur (lambda (fn x y sum) (if (eq 0 x) sum (fn fn (plus -1 x) y (plus y sum)))))
 (def mult (lambda (x y) (mult_recur mult_recur x y 0)))
+
+; (defn name (params...) body...) is (def name (lambda (params...) body...)).
+(defmacro defn (lambda (xs)
+  (cons (quote def)
+    (cons (car xs)
+      (cons (cons (quote lambda) (cdr xs)) nil)))))
