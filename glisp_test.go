@@ -504,6 +504,16 @@ func TestLogicAndCond(t *testing.T) {
 	}
 }
 
+func TestErrorFailsWithItsArgumentsAsStrJoinsThem(t *testing.T) {
+	_, err := Run(`(p 1)
+(defn check (n) (if (< n 0) (error "negative: " n " in " (quote (a "b"))) n))
+(check -2)`)
+	if err == nil || err.Error() != `line 2: negative: -2 in (a "b")` {
+		t.Errorf("got %v", err)
+	}
+	assertPanicsWith(t, "(error)", "error: expects at least 1 argument, got 0")
+}
+
 func TestFunctionsCanBeStoredInLists(t *testing.T) {
 	AssertThat(t, Process("((car (cons plus nil)) 1 2)"), Equals(int64(3)))
 }
