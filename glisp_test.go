@@ -141,7 +141,7 @@ func TestCanSubtractByAddingNegativeNumbers(t *testing.T) {
 }
 
 func TestEmptyListEvaluatesToNil(t *testing.T) {
-	AssertThat(t, GetValue(builtinScope, List{}) == nil, IsTrue)
+	AssertThat(t, Process("()"), IsNil)
 }
 
 func TestStdlibIsLoaded(t *testing.T) {

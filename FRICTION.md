@@ -420,3 +420,26 @@ One entry per PR, written before committing it.
   `Expander.evalMacroBody`), and `replace_text` for a package variable's
   initializer. Every existing test passed on the first run, which is the
   point of this step: they now all go through the expander.
+
+### PR: removing the old evaluator
+
+- **An interface can't be removed together with its methods.** Removing the
+  `Valuable` interface and the `Eval` methods that implemented it was refused
+  three ways — `Valuable` under `also`, in its own step after the methods,
+  and as the main name with the methods under `also` — each time with "the
+  interface Valuable has a method Eval, which a type could implement through
+  this one". Emptying the interface first with `replace_declaration` didn't
+  work either: the next step needs code that type-checks, and `check: "end"`
+  doesn't extend to refactoring steps (the refusal said so, clearly).
+  What worked: delete the interface's only use (a `case Valuable:` in
+  `GetValue`) with `replace_text`, then `remove_dead_code Valuable` alone,
+  then everything else in one `remove_dead_code` with `also`. The check is
+  right for removing *a method* while the interface stays; when the interface
+  goes in the same step it shouldn't apply.
+- `remove_dead_code`'s `also` isn't named in `refactor list`; an invalid
+  argument got a refusal that listed the real ones, which is a decent way to
+  ask, but the description could just say.
+- Once it went through: 19 declarations and an import gone in one step, with
+  the `builtins` map realigned after five `replace_text` deletions.
+- `remove_dead_code`'s note that removing an exported name changes the API
+  appeared 11 times for one step — one line listing the names would do.

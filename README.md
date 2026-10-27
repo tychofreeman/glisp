@@ -112,7 +112,7 @@ ordinary functions, called through `Ref` and `Apply`.
   macro; macro calls are expanded, recursively, until only core forms remain.
 - [x] Make the interpreter evaluate `Node`s, so every existing test runs
   through the expander. Macros then expand once, not on every call.
-- [ ] Remove the old `List`-walking evaluator and the `quote`, `if`,
+- [x] Remove the old `List`-walking evaluator and the `quote`, `if`,
   `lambda`, `def` and `defmacro` builtins it needed.
 - [ ] A resolve pass that fills in each `Ref`'s `Loc` and each `Lambda`'s
   captured variables, for backends that compile variable access.

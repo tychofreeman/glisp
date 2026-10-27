@@ -41,10 +41,6 @@ func (s StringToken) Value() string {
 	return s.value
 }
 
-func (s StringToken) Eval(scope *Scope) interface{} {
-	return s.value
-}
-
 func (s StringToken) Equals(other interface{}) (bool, string) {
 	switch o := other.(type) {
 	case string:
@@ -79,10 +75,6 @@ func (n NumberToken) Value() int64 {
 		return num
 	}
 	panic(fmt.Sprintf("Could not parse %v as a number!!", n.value))
-}
-
-func (n NumberToken) Eval(scope *Scope) interface{} {
-	return n.Value()
 }
 
 func (n NumberToken) Type() TokenType {

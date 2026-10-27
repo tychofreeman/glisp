@@ -8,36 +8,7 @@ import (
 	"strings"
 )
 
-type Valuable interface {
-	Eval(*Scope) interface{}
-}
-
 type Function func(_ *Scope, params List) interface{}
-type NonEvaluatingFunction func(_ *Scope, params List) interface{}
-
-func GetValue(scope *Scope, source interface{}) interface{} {
-	switch value := source.(type) {
-	case int64:
-		return value
-	case string:
-		return value
-	case List:
-		return value.Eval(scope)
-	case Valuable:
-		return value.Eval(scope)
-	case Function, NonEvaluatingFunction:
-		return value
-	default:
-		panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", value, value))
-	}
-}
-
-func quote(_ *Scope, params List) interface{} {
-	if len(params) > 0 {
-		return params[0]
-	}
-	panic(fmt.Sprintf("QUOTE takes exactly 1 argument; you have %v - %v\n", len(params), params))
-}
 
 // listParam returns fn's first parameter as a List, treating nil (what car and
 // cdr give for an empty list) as an empty list. Anything else is an error.
@@ -137,26 +108,6 @@ func compare(op string, less func(a, b int64) bool) Function {
 	}
 }
 
-func ifThenElse(scope *Scope, params List) interface{} {
-	if len(params) != 3 {
-		panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %v parts - %v.", len(params), params))
-	}
-	if true == GetValue(scope, params[0]) {
-		return GetValue(scope, params[1])
-	}
-	return GetValue(scope, params[2])
-}
-
-// lambdaForm is (lambda (params...) body...) evaluated at run time, as when a
-// macro builds one. A lambda written in the source becomes a parsedLambda when
-// it is parsed, so it never gets here.
-func lambdaForm(scope *Scope, params List) interface{} {
-	if len(params) == 0 {
-		panic("lambda: expects a parameter list")
-	}
-	return parsedLambda{paramBinder(params.First()), ParseMany(params.Rest())}.Eval(scope)
-}
-
 func eq(_ *Scope, params List) interface{} {
 	if len(params) != 2 {
 		panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %v - %v", len(params), params))
@@ -191,7 +142,14 @@ func equal(a, b interface{}) bool {
 }
 
 func apply(scope *Scope, params List) interface{} {
-	return GetValue(scope, params)
+	if len(params) == 0 {
+		panic("apply: expects a function")
+	}
+	fn, isFunction := params[0].(Function)
+	if !isFunction {
+		panic(fmt.Sprintf("apply: expected a function, got %T %v", params[0], params[0]))
+	}
+	return fn(scope, params.Rest())
 }
 
 // definedName returns the symbol a (def name value) or (defmacro name value)
@@ -212,29 +170,6 @@ func definedName(fn string, params List) string {
 	return sym.Str()
 }
 
-func define(scope *Scope, params List) interface{} {
-	name := definedName("def", params)
-	scope.add(name, GetValue(scope, params.Second()))
-	return List{}
-}
-
-func macro(scope *Scope, params List) interface{} {
-	name := definedName("defmacro", params)
-	body := GetValue(scope, params.Second())
-	macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
-		switch b := body.(type) {
-		case Function:
-			return GetValue(macroScope, b(macroScope, List{macroParams}))
-		case NonEvaluatingFunction:
-			return b(macroScope, macroParams)
-		default:
-			panic(fmt.Sprintf("defmacro: expected a function, got %T %v\n", b, b))
-		}
-	})
-	scope.add(name, macroFn)
-	return List{}
-}
-
 func printValues(scope *Scope, params List) interface{} {
 	fmt.Printf("%v\n", params)
 	os.Stdout.Sync()
@@ -242,106 +177,20 @@ func printValues(scope *Scope, params List) interface{} {
 }
 
 var builtins = map[string]interface{}{
-	"quote":    NonEvaluatingFunction(quote),
-	"car":      Function(car),
-	"cdr":      Function(cdr),
-	"atom":     Function(atom),
-	"cons":     Function(cons),
-	"plus":     Function(plus),
-	"-":        Function(minus),
-	"<":        compare("<", func(a, b int64) bool { return a < b }),
-	">":        compare(">", func(a, b int64) bool { return a > b }),
-	"if":       NonEvaluatingFunction(ifThenElse),
-	"lambda":   NonEvaluatingFunction(lambdaForm),
-	"eq":       Function(eq),
-	"apply":    Function(apply),
-	"def":      NonEvaluatingFunction(define),
-	"defmacro": NonEvaluatingFunction(macro),
-	"p":        Function(printValues),
-	"true":     true,
-	"false":    false,
-	"nil":      nil,
-}
-
-func paramBinder(decls interface{}) func(interface{}) map[string]interface{} {
-	names := []string{}
-	switch x := decls.(type) {
-	case List:
-		for _, y := range x {
-			switch z := y.(type) {
-			case Token:
-				names = append(names, z.Str())
-			default:
-				names = append(names, "")
-			}
-		}
-	default:
-		panic(fmt.Sprintf("Cannot build param bindings with unknown declaration type %T (expected a List of symbols)\n", x))
-	}
-	return func(theParams interface{}) map[string]interface{} {
-		scope := map[string]interface{}{}
-		switch params := theParams.(type) {
-		case List:
-			if len(params) != len(names) {
-				arguments := "arguments"
-				if len(names) == 1 {
-					arguments = "argument"
-				}
-				panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %v", strings.Join(names, " "), len(names), arguments, len(params), params))
-			}
-			for i := 0; i < len(names); i++ {
-				scope[names[i]] = params[i]
-			}
-		default:
-			panic(fmt.Sprintf("Cannot associate param names with values if values aren't in a List - found type %T\n", params))
-		}
-		return scope
-	}
-}
-
-// parsedLambda is a parsed (lambda (params...) body...) form. Evaluating it makes a
-// Function that closes over the scope it was evaluated in.
-type parsedLambda struct {
-	bind func(interface{}) map[string]interface{}
-	body List
-}
-
-func (l parsedLambda) Eval(scope *Scope) interface{} {
-	return Function(func(_ *Scope, params List) interface{} {
-		local := &Scope{prev: scope, table: l.bind(params)}
-		var last interface{}
-		for _, element := range l.body {
-			last = GetValue(local, element)
-		}
-		return last
-	})
-}
-
-func Parse(source interface{}) interface{} {
-	switch node := source.(type) {
-	case NumberToken:
-		return node.Value()
-	case StringToken:
-		return node.Value()
-	case Symbol:
-		return node
-	case List:
-		if node.IsLambda() {
-			return parsedLambda{paramBinder(node.Second()), ParseMany(node.Rest().Rest())}
-		}
-		x := ParseMany(node)
-		return x
-	}
-	return source
-}
-
-func ParseMany(input List) List {
-	output := List{}
-	for _, i := range input {
-		output = append(output, Parse(i))
-	}
-
-	return List(output)
+	"car":   Function(car),
+	"cdr":   Function(cdr),
+	"atom":  Function(atom),
+	"cons":  Function(cons),
+	"plus":  Function(plus),
+	"-":     Function(minus),
+	"<":     compare("<", func(a, b int64) bool { return a < b }),
+	">":     compare(">", func(a, b int64) bool { return a > b }),
+	"eq":    Function(eq),
+	"apply": Function(apply),
+	"p":     Function(printValues),
+	"true":  true,
+	"false": false,
+	"nil":   nil,
 }
 
 //go:embed stdlib.glisp
