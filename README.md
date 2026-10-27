@@ -20,7 +20,8 @@ WASI runtime (including Node's `node:wasi`) and prints the same output.
 
 Special forms: `quote if lambda def defmacro`. Builtins: `car cdr atom cons
 eq apply p`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
-predicates `number? string? symbol? list? function? boolean? nil?`.
+predicates `number? string? symbol? list? function? boolean? nil?`, and
+strings `str string_length substring chars string< symbol parse_number`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn` and `let`.
 
@@ -64,6 +65,11 @@ every program; it defines `mult`, `defn` and `let`.
 - [x] Type predicates: `number?`, `string?`, `symbol?`, `list?` (true for the
   empty list, not for `nil`), `function?`, `boolean?` and `nil?`. Before them a
   program couldn't tell a number from a symbol.
+- [x] Strings: `(str x ...)` joins its arguments as `p` shows them (so it
+  also turns numbers and lists into text); `string_length`, `substring` and
+  `chars` count characters, not bytes (`(string_length "héllo")` is 5);
+  `string<` orders strings; `symbol` makes a symbol from a string; and
+  `parse_number` reads an integer, or gives `nil`.
 - [x] `true`, `false` and `nil` literals; programs defined them as
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
 - [x] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists had to be built on

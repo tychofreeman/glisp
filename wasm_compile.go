@@ -76,6 +76,8 @@ const (
 	gPendingFn          // a tail call's function (i64), for invoke to call
 	gPendingArgc        // how many arguments it has
 	gPendingArgs        // where they are
+	gCapture            // 1 while str captures printing into a string
+	gCapEnd             // where the captured bytes go next
 	gNames
 )
 
@@ -87,7 +89,8 @@ const pending = 2
 
 // builtinNames are the builtin functions, compiled as runtime functions.
 var builtinNames = []string{"car", "cdr", "atom", "cons", "plus", "-", "*", "/", "mod", "<", ">", "<=", ">=",
-	"number?", "string?", "symbol?", "list?", "function?", "boolean?", "nil?", "eq", "apply", "p"}
+	"number?", "string?", "symbol?", "list?", "function?", "boolean?", "nil?", "eq", "apply", "p",
+	"str", "string_length", "substring", "chars", "string<", "symbol", "parse_number"}
 
 type wasmCompiler struct {
 	m        *wasm.Module

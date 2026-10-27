@@ -240,12 +240,20 @@ var builtins = map[string]interface{}{
 	"function?": isType("function?", "function"),
 	"boolean?":  isType("boolean?", "bool"),
 	"nil?":      isType("nil?", "nil"),
-	"eq":        Function(eq),
-	"apply":     Function(apply),
-	"p":         Function(printValues),
-	"true":      true,
-	"false":     false,
-	"nil":       nil,
+
+	"str":           Function(showJoined),
+	"string_length": Function(stringLength),
+	"substring":     Function(substring),
+	"chars":         Function(chars),
+	"string<":       Function(stringLess),
+	"symbol":        Function(toSymbol),
+	"parse_number":  Function(parseNumber),
+	"eq":            Function(eq),
+	"apply":         Function(apply),
+	"p":             Function(printValues),
+	"true":          true,
+	"false":         false,
+	"nil":           nil,
 }
 
 //go:embed stdlib.glisp

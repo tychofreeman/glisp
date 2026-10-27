@@ -11,6 +11,7 @@ type wasmRuntime struct {
 	tagOf, num, listArg, pair, cell, equal, invoke  uint32
 	putShow, putQuoted, putDescribed                uint32
 	builtins                                        map[string]uint32 // table index of each builtin
+	strArg, runeCount, runeOffset, newString        uint32            // string helpers
 }
 
 var (
@@ -54,6 +55,7 @@ func (c *wasmCompiler) runtime() {
 	rt.cell = c.declare(sig(vals(i64), i64))
 	rt.equal = c.declare(sig(vals(i64, i64), i32))
 	rt.invoke = c.declare(sig(vals(i64, i32, i32, i32), i64))
+	c.declareStrings()
 	builtinFuncs := map[string]uint32{}
 	rt.builtins = map[string]uint32{}
 	for _, name := range builtinNames {
@@ -81,6 +83,7 @@ func (c *wasmCompiler) runtime() {
 	c.define(rt.cell, vals(i32), c.cellBody())
 	c.define(rt.equal, vals(i32, i32, i32, i32), c.equalBody())
 	c.define(rt.invoke, vals(i64, i32, i32), c.invokeBody())
+	c.defineStrings()
 	for _, name := range builtinNames {
 		locals, body := c.builtinBody(name)
 		c.define(builtinFuncs[name], locals, body)
@@ -242,6 +245,32 @@ func (c *wasmCompiler) flushBody() wasm.Code {
 
 func (c *wasmCompiler) putByteBody() wasm.Code {
 	var b wasm.Code
+	// While str captures, the byte goes on the end of the string it builds,
+	// growing memory a page at a time.
+	b.GlobalGet(gCapture)
+	b.If(wasm.BlockVoid)
+	b.GlobalGet(gCapEnd)
+	b.MemorySize()
+	b.I32Const(16)
+	b.Op(wasm.I32Shl, wasm.I32GeU)
+	b.If(wasm.BlockVoid)
+	b.I32Const(1)
+	b.MemoryGrow()
+	b.I32Const(-1)
+	b.Op(wasm.I32Eq)
+	b.If(wasm.BlockVoid)
+	b.I32Const(0)
+	b.GlobalSet(gCapture)
+	c.fail(&b, "out of memory", nil)
+	b.Op(wasm.End, wasm.End)
+	b.GlobalGet(gCapEnd)
+	b.LocalGet(0)
+	b.I32Store8(0)
+	b.GlobalGet(gCapEnd)
+	b.I32Const(1)
+	b.Op(wasm.I32Add)
+	b.GlobalSet(gCapEnd)
+	b.Op(wasm.Return, wasm.End)
 	b.GlobalGet(gOutBuf)
 	b.GlobalGet(gOutLen)
 	b.Op(wasm.I32Add)
@@ -1051,6 +1080,8 @@ func (c *wasmCompiler) builtinBody(name string) ([]wasm.ValType, wasm.Code) {
 		}
 		boolean(&b)
 		return vals(i32), b
+	case "str", "string_length", "substring", "chars", "string<", "symbol", "parse_number":
+		return c.stringBuiltin(name)
 	case "eq":
 		argcIs(2, wasm.I32Ne)
 		b.If(wasm.BlockVoid)
