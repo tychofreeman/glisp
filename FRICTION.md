@@ -552,3 +552,19 @@ One entry per PR, written before committing it.
   `after` put the new builtin helper after `divide`. No refusals.
 - gofmt realigned the `builtins` map after the predicates went in as their
   own block (a blank line before them keeps the old block's alignment).
+
+### PR: self tail calls as loops (wasm)
+
+- **One refusal, from guessing arguments:** `add_field` has no `comment`
+  argument; the field's comment goes in `field` with its declaration
+  (`"blocks int // ..."`), and the struct is `name`, not `type`. The
+  refusal listed every argument with a description, so the fix took one
+  try. (CLAUDE.md says to load schemas first; through the CLI there's no
+  schema to load, and `refactor list` doesn't show arguments.)
+- The 5-step `batch` (field, two `replace_statements` by line range, one by
+  function, an `add_declaration` of three methods) went through after
+  that, and moved both line ranges past the earlier steps: 483 to 488 and
+  566 to 639. `inspect` afterwards confirmed both landed where intended.
+- The batch noted that step 2 didn't type-check alone (it calls
+  `tailExpr`, added in step 4) and re-ran itself with `check: "end"`,
+  which saved a round trip.

@@ -334,6 +334,7 @@ type wasmFunc struct {
 	boxed     []bool // slots that lambdas inside this one capture, kept in cells
 	scratch   uint32 // an i64 local
 	tmp32     uint32 // an i32 local
+	blocks    int    // blocks open inside a lambda's loop, for a tail call's br
 }
 
 func (f *wasmFunc) local(t wasm.ValType) uint32 {
@@ -347,9 +348,13 @@ func (f *wasmFunc) body(nodes []Node) {
 		f.code.I64Const(addrNil)
 	}
 	for i, node := range nodes {
-		f.expr(node)
 		if i < len(nodes)-1 {
+			f.expr(node)
 			f.code.Op(wasm.Drop)
+		} else if f.lambda != nil {
+			f.tailExpr(node)
+		} else {
+			f.expr(node)
 		}
 	}
 }
@@ -480,6 +485,12 @@ func (f *wasmFunc) apply(n Apply) {
 		f.code.Op(wasm.I32Add)
 		f.code.GlobalSet(gSP)
 	}
+	f.invoke(fn, n)
+}
+
+// invoke calls the function in local fn with n's arguments, already on the
+// argument stack, and pops them.
+func (f *wasmFunc) invoke(fn uint32, n Apply) {
 	size := int32(8 * len(n.Args))
 	f.code.LocalGet(fn)
 	f.code.GlobalGet(gSP)
@@ -494,6 +505,68 @@ func (f *wasmFunc) apply(n Apply) {
 		f.code.Op(wasm.I32Sub)
 		f.code.GlobalSet(gSP)
 	}
+}
+
+// tailExpr compiles node, whose value the lambda returns. In tail position,
+// a call to the lambda itself is a jump back to the start of its loop.
+func (f *wasmFunc) tailExpr(node Node) {
+	switch n := node.(type) {
+	case If:
+		f.expr(n.Cond)
+		f.code.I64Const(addrTrue)
+		f.code.Op(wasm.I64Eq)
+		f.code.If(wasm.BlockI64)
+		f.blocks++
+		f.tailExpr(n.Then)
+		f.code.Op(wasm.Else)
+		f.tailExpr(n.Else)
+		f.blocks--
+		f.code.Op(wasm.End)
+	case Apply:
+		if len(n.Args) == len(f.lambda.Params) {
+			f.tailApply(n)
+		} else {
+			f.apply(n)
+		}
+	default:
+		f.expr(node)
+	}
+}
+
+// tailApply compiles a call in tail position. If the function called is
+// this closure itself (local 0), its arguments become the parameters and it
+// jumps back to the top of the loop; otherwise it is an ordinary call.
+func (f *wasmFunc) tailApply(n Apply) {
+	fn := f.local(wasm.I64)
+	f.expr(n.Fn)
+	f.code.LocalSet(fn)
+	args := make([]uint32, len(n.Args))
+	for i, arg := range n.Args {
+		args[i] = f.local(wasm.I64)
+		f.expr(arg)
+		f.code.LocalSet(args[i])
+	}
+	f.code.LocalGet(fn)
+	f.code.LocalGet(0)
+	f.code.Op(wasm.I64Eq)
+	f.code.If(wasm.BlockI64)
+	for i, arg := range args {
+		f.code.LocalGet(arg)
+		f.code.LocalSet(f.slotLocal[i])
+	}
+	f.code.Br(uint32(f.blocks + 1))
+	f.code.Op(wasm.Else)
+	for _, arg := range args {
+		f.code.GlobalGet(gSP)
+		f.code.LocalGet(arg)
+		f.code.I64Store(0)
+		f.code.GlobalGet(gSP)
+		f.code.I32Const(8)
+		f.code.Op(wasm.I32Add)
+		f.code.GlobalSet(gSP)
+	}
+	f.invoke(fn, n)
+	f.code.Op(wasm.End)
 }
 
 // lambdaValue compiles n's body as a function and leaves a closure of it.
@@ -563,14 +636,23 @@ func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 	})
 	f.code.Op(wasm.End)
 
+	// The parameters, as passed; then a loop that a self tail call jumps back
+	// to with new ones. Each pass gives captured variables fresh cells, so a
+	// closure made in one pass keeps its own, and starts local defs unbound.
+	for i := range n.Params {
+		f.code.LocalGet(1)
+		f.code.I64Load(uint32(8 * i))
+		f.code.LocalSet(f.slotLocal[i])
+	}
+	f.code.Loop(wasm.BlockI64)
 	for i := range f.slots {
 		if i < len(n.Params) {
-			f.code.LocalGet(1)
-			f.code.I64Load(uint32(8 * i))
-		} else if f.boxed[i] {
-			f.code.I64Const(0)
+			if !f.boxed[i] {
+				continue
+			}
+			f.code.LocalGet(f.slotLocal[i])
 		} else {
-			continue
+			f.code.I64Const(0)
 		}
 		if f.boxed[i] {
 			f.code.Call(c.rt.cell)
@@ -578,6 +660,7 @@ func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 		f.code.LocalSet(f.slotLocal[i])
 	}
 	f.body(n.Body)
+	f.code.Op(wasm.End)
 	c.define(index, f.locals, f.code)
 	return table
 }

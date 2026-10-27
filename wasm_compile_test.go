@@ -129,6 +129,11 @@ var wasmPrograms = []string{
 	`(p (number? 5) (number? (quote a)) (string? "s") (string? (quote s)) (symbol? (quote s)) (symbol? "s"))`,
 	`(p (list? (quote (1 2))) (list? (quote ())) (list? nil) (function? car) (function? (lambda (x) x)) (function? (quote car)))`,
 	`(p (boolean? false) (boolean? true) (boolean? nil) (nil? nil) (nil? (quote ())) (nil? 0))`,
+	`(defn collect (n fs) (if (eq n 0) fs (collect (- n 1) (cons (lambda () n) fs)))) (def fs (collect 3 nil)) (p ((car fs)) ((car (cdr fs))) ((car (cdr (cdr fs)))))`,
+	`(defn h (n) (def m (* n 2)) (if (eq n 0) m (h (- n 1)))) (h 5)`,
+	`(defn g (n acc) (if (< n 1) acc (if (even n) (g (- n 1) (cons n acc)) (g (- n 1) acc)))) (defn even (n) (eq (mod n 2) 0)) (g 10 nil)`,
+	`(defn adder (k) (lambda (x) (if (eq k 0) x ((adder (- k 1)) (plus x 1))))) ((adder 5) 10)`,
+	`(def f (lambda (n) (if (eq n 0) (quote done) (f (- n 1))))) (def g f) (def f (lambda (n) (quote other))) (g 3)`,
 	// Errors.
 	`(car 1)`,
 	`(cdr "s")`,
@@ -156,6 +161,8 @@ var wasmPrograms = []string{
 	`(>= 1 2 3)`,
 	`(number? 1 2)`,
 	`(list?)`,
+	`(defn k (n) (if (eq n 0) 0 (k))) (k 1)`,
+	`(defn k (n) (if (eq n 0) (car 5) (k (- n 1)))) (k 3)`,
 }
 
 func TestCompiledProgramsPrintWhatTheInterpreterDoes(t *testing.T) {
@@ -187,6 +194,16 @@ func TestCompiledFunctionsPrintAsFunctions(t *testing.T) {
 func TestCompiledRecursionGoesDeep(t *testing.T) {
 	program := `(defn count (n) (if (eq n 0) 0 (plus 1 (count (- n 1))))) (count 200000)`
 	if got := runCompiled(t, program); got != "=> 200000\n" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// A call in tail position to the function itself is a jump, not a call, so
+// a loop written as recursion runs in constant stack.
+func TestCompiledSelfTailCallsAreLoops(t *testing.T) {
+	program := `(defn count_down (n acc) (if (eq n 0) acc (count_down (- n 1) (plus acc 1))))
+		(count_down 5000000 0)`
+	if got := runCompiled(t, program); got != "=> 5000000\n" {
 		t.Errorf("got %q", got)
 	}
 }
