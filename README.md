@@ -36,7 +36,7 @@ loaded before every program; it defines `mult`.
   - [x] Characters other than letters, digits, `- _ ?` and `"` are dropped as
     separators, so `(+ 1 2)` reads as `(1 2)`.
   - [x] A lone `"` panics.
-  - [ ] Input is read byte by byte, so non-ASCII text is mangled
+  - [x] Input is read byte by byte, so non-ASCII text is mangled
     (`héllo` becomes `hÃ©llo`).
   - [ ] An unmatched `)` ends parsing: `(plus 1 2)) (plus 10 10)` returns 3.
 - [x] Evaluating an empty list panicked.

@@ -183,3 +183,8 @@ One entry per PR, written before committing it.
   import block's existing indentation.
 - Otherwise none: `insert_statements` before a line put the check exactly
   where wanted.
+
+### PR: non-ASCII text
+
+- No tool issues: a one-line `replace_statements` by line range swapped the
+  byte read for `bs.ReadRune()`.
