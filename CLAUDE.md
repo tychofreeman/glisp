@@ -2,11 +2,16 @@
 
 ## Using gorefactor well
 
-The server is started from this checkout (`.mcp.json` runs
-`go run ./cmd/refactor-mcp`), so a session's tools are the code as it was
-when the session started. After changing the server, test the change with
-`go test`, not by calling the tool: the running server is the old build
-until the MCP is reconnected.
+`.mcp.json` runs the published server (`go run …/cmd/refactor-mcp@latest`),
+and a session keeps the build it started with: to pick up a new gorefactor
+release, start a new session. `@latest` comes from the Go module proxy and
+can lag a fresh commit; `go install` the exact pseudo-version
+(`…@v0.0.0-<date>-<commit>`) when you need one sooner. Outside Claude Code,
+`refactor` (`cmd/refactor`) runs the same tools from the shell, including
+`check` and `undo`.
+
+The tool names below assume Claude Code's `gorefactor` server; through the
+desktop app's device bridge they are `mcp__remote-devices__gorefactor__…`.
 
 1. **Load every schema at once.** The tools are deferred: load all the
    gorefactor tools you expect to use in one ToolSearch
@@ -51,7 +56,8 @@ until the MCP is reconnected.
    range that cuts a statement is refused with the range to use. Every
    step can be undone with `undo`.
 
-Known gaps (do these by hand and log them): nothing restores a file.
+Known gaps (do these by hand and log them in [FRICTION.md](FRICTION.md)):
+nothing restores a file.
 remove_dead_code removes an unused struct field (`Type.Field`).
 Refactorings change exported code and note when the module's API
 changed. Files and directories move and go with
