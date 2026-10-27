@@ -10,6 +10,14 @@ runs a program and prints each `p` call, then the value of the last
 expression. [`examples/numbers.glisp`](examples/numbers.glisp) builds
 map, filter, fold, sorting, primes and more out of the builtins.
 
+```
+go run ./cmd/glisp -wasm numbers.wasm examples/numbers.glisp
+wasmtime numbers.wasm        # or: wazero run numbers.wasm
+```
+
+compiles the program to a WebAssembly module instead, which runs in any
+WASI runtime (including Node's `node:wasi`) and prints the same output.
+
 Builtins: `quote car cdr atom cons plus if eq apply def defmacro p`, plus
 `lambda`. [`stdlib.glisp`](stdlib.glisp) is embedded in the package and
 loaded before every program; it defines `mult`.
@@ -126,3 +134,31 @@ Decisions this makes:
   runs, so a macro defined later still works; that stops.
 - **Macros aren't values.** A macro name can't be passed to a function or
   returned, since it's gone after expansion.
+
+### WebAssembly backend
+
+`glisp -wasm OUT.wasm FILE.glisp` compiles the core AST to a WASI module,
+with no dependencies: the [`wasm`](wasm) package encodes the binary format.
+The tests run each module in [wazero](https://wazero.io) and check that it
+prints exactly what the interpreter does, error messages included.
+
+- [x] An encoder for the binary format (`wasm`).
+- [x] Values in linear memory: tagged `i64`s, with integers inline and
+  everything else (strings, symbols, list cells, closures) a tagged object.
+- [x] Closures: each lambda is a function in the table; variables that inner
+  lambdas capture live in cells, so a closure sees later `def`s.
+- [x] Calls pass arguments on a stack in memory, so builtins like `plus` and
+  `p` take any number and arity errors are reported, not trapped.
+- [x] The builtins, printing and errors written in wasm, through WASI's
+  `fd_write` and `proc_exit`.
+- [x] Macros expand while compiling. Their helpers (top-level `def`s of
+  lambdas) are evaluated in the interpreter too; other `def`s aren't, so a
+  macro can't use a value computed at run time.
+- [ ] Garbage collection: the heap is a bump allocator that never frees.
+- [ ] Tail calls: recursion depth is limited by the stack (about 500,000
+  calls). The wasm tail-call proposal (`return_call`) would fix tail calls,
+  but wazero v1.10 doesn't support it.
+- [ ] Integers are 63 bits (one bit tags them); the interpreter's are 64.
+- [ ] Functions print as `<function>`, not a Go address.
+- [ ] Every call goes through `invoke` and the table; calls to builtins that
+  aren't redefined could be direct, or inline (`plus`, `car`).
