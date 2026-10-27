@@ -1,8 +1,8 @@
 ; tour.glisp: a longer tour of glisp.
 ;
-; Everything here is built from a handful of builtins (car cdr cons atom eq
-; plus - < > p), lambda, def and defmacro: control macros, a list library,
-; fast arithmetic made from addition, primes, three sorting algorithms,
+; Everything here is built from a handful of builtins (car cdr cons atom eq,
+; arithmetic, type predicates, p), lambda, def and defmacro: control macros,
+; a list library, number theory, primes, three sorting algorithms,
 ; symbolic differentiation, an RPN calculator, binary trees, N-queens,
 ; Church numerals and lazy streams.
 ;
@@ -57,8 +57,6 @@
     nil))
 (defmacro when (lambda (xs) (when_expand xs)))
 
-(defn le (a b) (not (> a b)))
-(defn ge (a b) (not (< a b)))
 (defn abs (n) (if (< n 0) (- n) n))
 (defn min (a b) (if (< a b) a b))
 (defn max (a b) (if (> a b) a b))
@@ -153,59 +151,34 @@
             (rle (drop (length run) l))))))
 
 ; ======================================================================
-; Arithmetic from plus and -
-;
-; The stdlib's mult adds y to itself x times. divmod halves the work at
-; each step instead: to divide a by b, divide a by 2b, then fix up the
-; last bit. times multiplies by doubling.
+; Arithmetic
 ; ======================================================================
 
-; (divmod a b) is (quotient remainder), for a >= 0 and b > 0.
-(defn divmod (a b)
-  (if (< a b) (list2 0 a)
-    (let (qr (divmod a (plus b b))
-          q (car qr)
-          r (second qr))
-      (if (< r b)
-        (list2 (plus q q) r)
-        (list2 (plus q q 1) (- r b))))))
-
-(defn div (a b) (car (divmod a b)))
-(defn mod (a b) (second (divmod a b)))
-
-(defn times (a b)
-  (cond (< a 0) (- (times (- a) b))
-        (eq a 0) 0
-        true (let (qr (divmod a 2)
-                   h (times (car qr) b))
-               (if (eq (second qr) 1) (plus h h b) (plus h h)))))
-
-(defn square (n) (times n n))
+(defn square (n) (* n n))
 (defn even (n) (eq (mod n 2) 0))
 (defn odd (n) (not (even n)))
 
 (defn expt (b e)
   (cond (eq e 0) 1
-        (even e) (square (expt b (div e 2)))
-        true (times b (expt b (- e 1)))))
+        (even e) (square (expt b (/ e 2)))
+        true (* b (expt b (- e 1)))))
 
 (defn gcd (a b) (if (eq b 0) a (gcd b (mod a b))))
-(defn lcm (a b) (div (times a b) (gcd a b)))
+(defn lcm (a b) (/ (* a b) (gcd a b)))
 
-(defn fact (n) (if (eq n 0) 1 (times n (fact (- n 1)))))
+(defn fact (n) (if (eq n 0) 1 (* n (fact (- n 1)))))
 
 (defn fib_iter (a b n) (if (eq n 0) a (fib_iter b (plus a b) (- n 1))))
 (defn fib (n) (fib_iter 0 1 n))
 
 (defn digits (n)
   (if (< n 10) (list1 n)
-    (let (qr (divmod n 10))
-      (append (digits (car qr)) (list1 (second qr))))))
+    (append (digits (/ n 10)) (list1 (mod n 10)))))
 
 ; Integer square root by binary search.
 (defn isqrt_search (n lo hi)
   (if (> lo hi) hi
-    (let (mid (div (plus lo hi) 2))
+    (let (mid (/ (plus lo hi) 2))
       (if (> (square mid) n)
         (isqrt_search n lo (- mid 1))
         (isqrt_search n (plus mid 1) hi)))))
@@ -232,15 +205,15 @@
 (defn factors_from (n d)
   (cond (eq n 1) empty
         (> (square d) n) (list1 n)
-        (divides d n) (cons d (factors_from (div n d) d))
+        (divides d n) (cons d (factors_from (/ n d) d))
         true (factors_from n (plus d 1))))
 (defn factors (n) (factors_from n 2))
 
 (defn divisor_sum (n)
-  (sum (filter (lambda (d) (divides d n)) (range 1 (div n 2)))))
+  (sum (filter (lambda (d) (divides d n)) (range 1 (/ n 2)))))
 (defn perfect (n) (and (> n 1) (eq (divisor_sum n) n)))
 
-(defn collatz_next (n) (if (even n) (div n 2) (plus (times 3 n) 1)))
+(defn collatz_next (n) (if (even n) (/ n 2) (plus (* 3 n) 1)))
 (defn collatz_steps (n)
   (if (eq n 1) 0 (plus 1 (collatz_steps (collatz_next n)))))
 
@@ -258,14 +231,14 @@
 ; ======================================================================
 
 ; A linear congruential generator for repeatable "random" numbers.
-(defn next_random (x) (mod (plus (times x 25173) 13849) 65536))
+(defn next_random (x) (mod (plus (* x 25173) 13849) 65536))
 (defn randoms (n seed)
   (if (eq n 0) empty
     (cons (mod seed 100) (randoms (- n 1) (next_random seed)))))
 
 (defn insert (x sorted)
   (cond (null sorted) (list1 x)
-        (le x (car sorted)) (cons x sorted)
+        (<= x (car sorted)) (cons x sorted)
         true (cons (car sorted) (insert x (cdr sorted)))))
 (defn insertion_sort (l) (foldr insert empty l))
 
@@ -279,7 +252,7 @@
 (defn merge (a b)
   (cond (null a) b
         (null b) a
-        (le (car a) (car b)) (cons (car a) (merge (cdr a) b))
+        (<= (car a) (car b)) (cons (car a) (merge (cdr a) b))
         true (cons (car b) (merge a (cdr b)))))
 
 (defn merge_sort (l)
@@ -293,12 +266,12 @@
     (let (pivot (car l)
           rest (cdr l))
       (append (quicksort (filter (lambda (x) (< x pivot)) rest))
-              (cons pivot (quicksort (filter (lambda (x) (ge x pivot)) rest)))))))
+              (cons pivot (quicksort (filter (lambda (x) (>= x pivot)) rest)))))))
 
 (defn sorted (l)
   (or (null l)
       (null (cdr l))
-      (and (le (car l) (second l)) (sorted (cdr l)))))
+      (and (<= (car l) (second l)) (sorted (cdr l)))))
 
 ; ======================================================================
 ; Symbolic differentiation: expressions are lists like (plus x 3) and
@@ -307,13 +280,16 @@
 
 (defn is_op (e op) (and (not (atom e)) (eq (car e) op)))
 
+; Constants fold: (plus 2 3) is 5.
 (defn make_sum (a b)
-  (cond (eq a 0) b
+  (cond (and (number? a) (number? b)) (plus a b)
+        (eq a 0) b
         (eq b 0) a
         true (list3 (quote plus) a b)))
 
 (defn make_product (a b)
-  (cond (or (eq a 0) (eq b 0)) 0
+  (cond (and (number? a) (number? b)) (* a b)
+        (or (eq a 0) (eq b 0)) 0
         (eq a 1) b
         (eq b 1) a
         true (list3 (quote times) a b)))
@@ -340,7 +316,7 @@
         (is_op e (quote plus))
           (plus (evaluate (second e) env) (evaluate (third e) env))
         (is_op e (quote times))
-          (times (evaluate (second e) env) (evaluate (third e) env))
+          (* (evaluate (second e) env) (evaluate (third e) env))
         true (quote unknown)))
 
 ; x^3 + 2x^2 + 5x + 7
@@ -359,7 +335,7 @@
         under (cdr (cdr stack)))
     (cond (eq word (quote add)) (cons (plus b a) under)
           (eq word (quote sub)) (cons (- b a) under)
-          (eq word (quote mul)) (cons (times b a) under)
+          (eq word (quote mul)) (cons (* b a) under)
           (eq word (quote dup)) (cons a stack)
           (eq word (quote swap)) (cons b (cons a under))
           true (cons word stack))))
@@ -501,15 +477,15 @@
 (p "run-length:" (rle (quote (a a a b c c a a d d d d))))
 
 (p "--- arithmetic ---")
-(p "divmod 1000 7:" (divmod 1000 7))
-(p "times 123456 789:" (times 123456 789))
+(p "1000 / 7, mod 7:" (/ 1000 7) (mod 1000 7))
+(p "123456 * 789:" (* 123456 789))
 (p "2^62 - 1:" (- (expt 2 62) 1))
 (p "20!:" (fact 20))
 (p "fib 90:" (fib 90))
 (p "gcd, lcm of 1071 462:" (gcd 1071 462) (lcm 1071 462))
 (p "digits of 9876543210:" (digits 9876543210))
 (p "digit sum of 2^50:" (sum (digits (expt 2 50))))
-(p "isqrt 2*10^12:" (isqrt (times 2 (expt 10 12))))
+(p "isqrt 2*10^12:" (isqrt (* 2 (expt 10 12))))
 
 (p "--- primes ---")
 (p "sieve to 100:" (sieve (range 2 100)))
@@ -536,6 +512,7 @@
 (p "f':" slope)
 (p "f(3), f'(3):" (evaluate polynomial (quote ((x 3)))) (evaluate slope (quote ((x 3)))))
 (p "d/dx (x * y):" (deriv (quote (times x y)) (quote x)))
+(p "d/dx (3x * 4x):" (deriv (quote (times (times 3 x) (times 4 x))) (quote x)))
 (p "rpn (3 4 add 5 mul dup mul 2 sub):" (rpn (quote (3 4 add 5 mul dup mul 2 sub))))
 
 (p "--- trees ---")
