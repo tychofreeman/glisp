@@ -258,10 +258,16 @@ by hand. In the order to do them; each makes the next cheaper.
   Argument kinds are sets of type names, so the interpreter checks them
   with `typeName` too. `putValue` still switches on tags itself: printing
   differs per kind in more than layout.
-- [ ] **The calling convention.** How a call lays out the argument stack
-  is known separately by `pushCall`, `compileLambda`'s frame, `tailCall`
-  and the runtime's `invoke` (the pending-call protocol), and the
-  collector's roots. Wanted: one description of a frame and a call.
+- [x] **The calling convention.** How a call lays out the argument stack
+  was spelled out as raw offsets by `pushCall`, `invoke`, `tailApply`,
+  `tailCall`, the inline paths and `compileLambda`'s frame. Now a call on
+  the stack is a `stackCall` (`fn`, `arg(i)`, `args`, `pop`), a frame is
+  written through `selfSet`/`slotSet`, and both share `valueOffset`, since
+  both are a function followed by values. The runtime's indirect call and
+  stack check are `callValue` and `checkStack`, and a lambda's arity
+  message uses the builtins' `arguments`. Compiled modules are unchanged,
+  byte for byte. The pending-tail-call protocol still has its one
+  producer (`tailCall`) and one consumer (the runtime's `invoke`).
 - [ ] **One memory-growth policy.** `memory.grow` is called in five places
   in three functions (`alloc` doubles, `putByte` grows a page, `gc`
   doubles for to-space), each with its own "out of memory". Wanted: one

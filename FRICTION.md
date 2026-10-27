@@ -750,3 +750,19 @@ One entry per PR, written before committing it.
   regardless of uses (`delete_declaration`) would have made them
   unnecessary.
 - By hand: this entry.
+
+### PR: the calling convention (`stackCall`)
+
+- Two batches (17 and 4 steps), each followed by hashing every compiled
+  module: identical to the commit before, so a pure refactoring.
+- The batch was refused once more for a `replace_declaration` whose
+  content held a new helper beside the replaced function (slotStore with
+  slotSet, pushCall with stackCall and its methods): "content must be one
+  declaration". A script now splits such steps into `replace_declaration`
+  plus `add_declaration` with `after`; the tool could do that split
+  itself.
+- `compileLambda` changed by substring replacements inside its text
+  (computed in Python, sent as one `replace_declaration`); an edit
+  addressed to "these statements in this function" would have been
+  smaller.
+- By hand: this entry.
