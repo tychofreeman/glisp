@@ -9,7 +9,7 @@ import (
 
 func TokenizeString(input string) List {
     b := bytes.NewBufferString(input)
-    return Tokenize(b)
+    return tokenizeList(b, false)
 }
 
 func TokenizeFile(fname string) List {
@@ -18,17 +18,24 @@ func TokenizeFile(fname string) List {
         return nil
     }
     b := bytes.NewBuffer(fileBytes)
-    return Tokenize(b)
+    return tokenizeList(b, false)
 }
 
+// Tokenize reads every form in bs. It panics on unbalanced parens or an
+// unterminated string.
 func Tokenize(bs *bytes.Buffer) List {
-    if bs.Len() == 0 {
+    return tokenizeList(bs, false)
+}
+
+func tokenizeList(bs *bytes.Buffer, nested bool) List {
+    if bs.Len() == 0 && !nested {
         return nil
     }
     r := List{}
 
     inQuote := false;
 
+    closed := false
     acc := ""
     for ; bs.Len() > 0 ; {
         c, _, _ := bs.ReadRune()
@@ -38,9 +45,12 @@ func Tokenize(bs *bytes.Buffer) List {
         } else if !unicode.IsSpace(c) && c != '(' && c != ')' && c != '"' {
             acc += string(c)
         } else if c == '(' {
-            nested := Tokenize(bs)
-            r = append(r, nested)
+            r = append(r, tokenizeList(bs, true))
         } else if c == ')' {
+            if !nested {
+                panic("unexpected )")
+            }
+            closed = true
             break
         } else if c == '"' {
             inQuote = !inQuote
@@ -55,6 +65,9 @@ func Tokenize(bs *bytes.Buffer) List {
     }
     if inQuote {
         panic(fmt.Sprintf("unterminated string: %s", acc))
+    }
+    if nested && !closed {
+        panic("missing )")
     }
     if acc != "" {
         r = append(r, token(acc))

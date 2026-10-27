@@ -188,3 +188,29 @@ One entry per PR, written before committing it.
 
 - No tool issues: a one-line `replace_statements` by line range swapped the
   byte read for `bs.ReadRune()`.
+
+### PR: unbalanced parens
+
+- **Batch refused after a rename.** A 9-step batch began with `rename`
+  (`Tokenize` → `tokenizeList`) and then addressed line 41 — the recursive
+  call — with `replace_expression`. The rename had rewritten that line (only
+  the identifier changed), so the batch refused: "line 41 … was rewritten by
+  step 1, so it is not there to address". The refusal was clear and rolled
+  everything back. Workaround: rename and `add_parameter` in one call, then a
+  fresh `inspect` and the remaining steps in a second call. It would help if a
+  line whose only change was a rename stayed addressable.
+- **`add_parameter` didn't flag shadowing.** The new parameter `nested` was
+  shadowed by an existing local `nested := …` in one branch of the body. Legal
+  Go, and the body didn't use the parameter yet, but a note would have saved a
+  read; I removed the local with `replace_statements`.
+- **Helpful:** `rename` noted that renaming the exported `Tokenize` changes the
+  module's API (so I re-added `Tokenize` as a wrapper); `batch` noticed that
+  step 2 used a variable step 3 declares, and re-ran with `check: "end"` on its
+  own.
+- **Correct refusal:** `move_statement_up` refused to put the
+  unterminated-string check above the missing-paren check, because both panic
+  and swapping them changes which error wins — which was the point.
+  `replace_statements` over both did it.
+- The new checks exposed two existing tests whose input was missing a `)`
+  (`TestCdrGrabsTail`, `TestAtomIsFalseForComplexExpres`) besides
+  `TestApplyCallsFunctions`; fixed with `replace_text`.
