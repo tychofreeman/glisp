@@ -270,31 +270,39 @@ func TestCompiledBuiltinCallsAreDirect(t *testing.T) {
 // Memory grows by doubling, so a program that allocates a lot grows it a few
 // times, not once per allocation past the end (which crashed Node's WASI).
 func TestCompiledMemoryGrowsByDoubling(t *testing.T) {
-	module, err := CompileWasm(`(defn build (n acc) (if (eq n 0) acc (build (- n 1) (cons n acc))))
-		(defn churn (k) (if (eq k 0) 0 (plus (car (build 10000 nil)) (churn (- k 1)))))
-		(churn 100)`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ctx := context.Background()
-	r := wazero.NewRuntime(ctx)
-	defer r.Close(ctx)
-	wasi_snapshot_preview1.MustInstantiate(ctx, r)
-	var out bytes.Buffer
-	mod, err := r.InstantiateWithConfig(ctx, module, wazero.NewModuleConfig().WithStdout(&out).WithStartFunctions())
-	if err != nil {
-		t.Fatal(err)
-	}
-	initial := mod.Memory().Size()
-	if _, err := mod.ExportedFunction("_start").Call(ctx); err != nil {
-		t.Fatal(err)
-	}
-	final := mod.Memory().Size()
-	if out.String() != "=> 100\n" {
-		t.Errorf("printed %q", out.String())
-	}
-	if ratio := final / initial; final <= initial || final%initial != 0 || ratio&(ratio-1) != 0 {
-		t.Errorf("memory grew from %d to %d bytes, not by doubling", initial, final)
+	for _, tc := range []struct{ name, program, want string }{
+		{"allocating", `(defn build (n acc) (if (eq n 0) acc (build (- n 1) (cons n acc))))
+			(defn churn (k) (if (eq k 0) 0 (plus (car (build 10000 nil)) (churn (- k 1)))))
+			(churn 100)`, "=> 100\n"},
+		{"building a string", `(defn twice (s k) (if (eq k 0) s (twice (str s s) (- k 1))))
+			(string_length (twice "ab" 24))`, "=> 33554432\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			module, err := CompileWasm(tc.program)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := context.Background()
+			r := wazero.NewRuntime(ctx)
+			defer r.Close(ctx)
+			wasi_snapshot_preview1.MustInstantiate(ctx, r)
+			var out bytes.Buffer
+			mod, err := r.InstantiateWithConfig(ctx, module, wazero.NewModuleConfig().WithStdout(&out).WithStartFunctions())
+			if err != nil {
+				t.Fatal(err)
+			}
+			initial := mod.Memory().Size()
+			if _, err := mod.ExportedFunction("_start").Call(ctx); err != nil {
+				t.Fatal(err)
+			}
+			final := mod.Memory().Size()
+			if out.String() != tc.want {
+				t.Errorf("printed %q", out.String())
+			}
+			if ratio := final / initial; final <= initial || final%initial != 0 || ratio&(ratio-1) != 0 {
+				t.Errorf("memory grew from %d to %d bytes, not by doubling", initial, final)
+			}
+		})
 	}
 }
 

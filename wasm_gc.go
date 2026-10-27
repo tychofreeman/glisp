@@ -201,39 +201,7 @@ func (c *wasmCompiler) gcBody(b *wasmBody) {
 	b.Op(wasm.I32Sub, wasm.I32Add)
 	b.LocalSet(end)
 	b.LocalGet(end)
-	b.MemorySize()
-	b.I32Const(16)
-	b.Op(wasm.I32Shl, wasm.I32GtU)
-	b.when(func() {
-		b.LocalGet(end)
-		b.MemorySize()
-		b.I32Const(16)
-		b.Op(wasm.I32Shl, wasm.I32Sub)
-		b.I32Const(65535)
-		b.Op(wasm.I32Add)
-		b.I32Const(16)
-		b.Op(wasm.I32ShrU)
-		b.LocalSet(p)
-		// Grow as alloc does: by the larger of what's needed and the memory's
-		// size, or by what's needed if that much isn't available.
-		b.MemorySize()
-		b.LocalGet(p)
-		b.MemorySize()
-		b.LocalGet(p)
-		b.Op(wasm.I32GtU, wasm.Select)
-		b.MemoryGrow()
-		b.I32Const(-1)
-		b.Op(wasm.I32Eq)
-		b.when(func() {
-			b.LocalGet(p)
-			b.MemoryGrow()
-			b.I32Const(-1)
-			b.Op(wasm.I32Eq)
-			b.when(func() {
-				c.fail(b, "out of memory", nil)
-			})
-		})
-	})
+	b.Call(c.rt.reserve)
 
 	// Copy what the roots reach, then what the copies reach.
 	roots(c.rt.gcCopy)

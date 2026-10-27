@@ -766,3 +766,20 @@ One entry per PR, written before committing it.
   addressed to "these statements in this function" would have been
   smaller.
 - By hand: this entry.
+
+### PR: one memory-growth policy (`reserve`)
+
+- One batch of 9 steps (`add_declaration` for `reserve`, `replace_text`
+  for the three growth blocks, the declaration and the struct field), then
+  a one-step fix: I had inverted the test after the doubling grow
+  (`I32Eq` for `I32Ne`). It type-checked and every test passed; only the
+  doubling test, had it reached that path, would have seen it. Writing
+  the new test case first would have caught it at once.
+- The first program I wrote for the test expected the wrong value: I
+  thought `apply` spread a list into arguments (it doesn't, in either
+  backend). The mismatch looked like memory corruption until I worked out
+  the printed length. The second program didn't exercise the change
+  (memory had already doubled past what the string needed); checking the
+  test against the old code (`git stash` of the two source files) showed
+  that, and the third program fails on the old code and passes on the new.
+- By hand: this entry.
