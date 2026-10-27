@@ -82,3 +82,8 @@ func TestOperatorCharactersAreSymbols(t *testing.T) {
     AssertThat(t, TokenizeString("(+ 1 2)"), HasExactly(HasExactly(symbol("+"), token("1"), token("2"))))
     AssertThat(t, TokenizeString("(<= a.b *x*)"), HasExactly(HasExactly(symbol("<="), symbol("a.b"), symbol("*x*"))))
 }
+
+func TestUnterminatedStringsFail(t *testing.T) {
+    assertPanicsWith(t, "(quote \")", "unterminated string")
+    assertPanicsWith(t, "\"abc", "unterminated string: \"abc")
+}

@@ -175,3 +175,11 @@ One entry per PR, written before committing it.
   for the old text isn't named in `refactor list`'s description ("its source
   text"); I guessed `expression` and it was right, but naming the arguments in
   the description would remove the guess.
+
+### PR: unterminated strings
+
+- The added `fmt` import was tab-indented among space-indented imports again
+  (third time); fixed with `replace_text`. Worth fixing in the tool: match the
+  import block's existing indentation.
+- Otherwise none: `insert_statements` before a line put the check exactly
+  where wanted.
