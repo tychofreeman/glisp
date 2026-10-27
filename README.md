@@ -54,6 +54,9 @@ loaded before every program; it defines `mult`.
   `(quote ())`.
 - [x] Quoted numbers stay tokens: `plus` accepts them, but
   `(eq (car (quote (1))) 1)` is false.
+- [x] Mutual recursion between `def`s (a disabled test). It works since
+  lexical scoping; the test's program had a malformed three-argument `def`,
+  which now reports "expects a name and a value".
 - [x] Macros: `isMacroScope` and `createNonEvaluatingScope` were never used, and a
   macro's expansion wasn't evaluated. Expansions are now evaluated in the
   caller's scope, and the unused machinery is gone.

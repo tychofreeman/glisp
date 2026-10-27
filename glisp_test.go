@@ -102,8 +102,20 @@ func TestCanPullOffYCombinatorTypeTrick(t *testing.T) {
 	AssertThat(t, Process("(def r1 (lambda (x r) (if (eq 10 x) \"true\" (r (plus 1 x) r)))) (r1 0 r1)"), Equals("true"))
 }
 
-func THIS_FAILS_FIND_A_GOOD_WAY_TO_CATCH_THIS_ERROR_TestMutualRecursionFails(t *testing.T) {
-	AssertThat(t, Process("(def x1 (lambda (x) (p x) (if (eq x 10) x (x2 (plus 1 x))))) (def x2 (p x) (lambda (x) (x1 x))) (x1 5)"), Equals(int64(0)))
+func TestMutualRecursion(t *testing.T) {
+	AssertThat(t, Process("(def x1 (lambda (x) (if (eq x 10) x (x2 (plus 1 x))))) (def x2 (lambda (x) (x1 x))) (x1 5)"), Equals(int64(10)))
+	evenOdd := "(def is_even (lambda (n) (if (eq n 0) true (is_odd (- n 1))))) (def is_odd (lambda (n) (if (eq n 0) false (is_even (- n 1)))))"
+	AssertThat(t, Process(evenOdd+"(is_even 10)"), IsTrue)
+	AssertThat(t, Process(evenOdd+"(is_odd 7)"), IsTrue)
+	AssertThat(t, Process(evenOdd+"(is_even 7)"), IsFalse)
+}
+
+// The malformed (def x2 (p x) (lambda ...)) that the old disabled mutual
+// recursion test used: def evaluated (p x) as the value and ignored the rest.
+func TestDefWithTheWrongNumberOfArgumentsFails(t *testing.T) {
+	assertPanicsWith(t, "(def x2 (p x) (lambda (x) (x1 x)))", "def: expects a name and a value, got 3 arguments")
+	assertPanicsWith(t, "(def x)", "def: expects a name and a value, got 1 argument")
+	assertPanicsWith(t, "(defmacro m (lambda (xs) 1) 2)", "defmacro: expects a name and a value, got 3 arguments")
 }
 
 func COMPILE_IN_MULTIPLE_PASSES_TO_GET_THIS_TO_WORK_TestFunctionsCanBeDefinedWithShortcuts(t *testing.T) {
