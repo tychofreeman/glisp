@@ -134,3 +134,11 @@ func TestFunctionsCanBePassedAsArguments(t *testing.T) {
 func TestFunctionsCanBeReturned(t *testing.T) {
     AssertThat(t, Process("(def make_inc (lambda () (lambda (n) (plus n 1)))) ((make_inc) 41)"), Equals(int64(42)))
 }
+
+func TestClosuresCaptureTheirDefiningScope(t *testing.T) {
+    AssertThat(t, Process("(def make_adder (lambda (x) (lambda (y) (plus x y)))) (def add5 (make_adder 5)) (add5 10)"), Equals(int64(15)))
+}
+
+func TestFreeVariablesDoNotSeeTheCallersParameters(t *testing.T) {
+    AssertThat(t, Process("(def outer_v 100) (def get_v (lambda () outer_v)) (def shadow (lambda (outer_v) (get_v))) (shadow 1)"), Equals(int64(100)))
+}
