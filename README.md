@@ -54,7 +54,9 @@ loaded before every program; it defines `mult`.
   `(quote ())`.
 - [x] Quoted numbers stay tokens: `plus` accepts them, but
   `(eq (car (quote (1))) 1)` is false.
-- [ ] Macros: `isMacroScope` and `createNonEvaluatingScope` are never used.
+- [x] Macros: `isMacroScope` and `createNonEvaluatingScope` were never used, and a
+  macro's expansion wasn't evaluated. Expansions are now evaluated in the
+  caller's scope, and the unused machinery is gone.
 
 ### Design
 
@@ -75,4 +77,4 @@ loaded before every program; it defines `mult`.
   (which shadows Go's builtin).
 - [x] Replace deprecated `ioutil`; fix the "Could nt" typo and `%t` verb in
   `macro`.
-- [ ] Tests for errors, arity and functions as values.
+- [x] Tests for errors, arity and functions as values.
