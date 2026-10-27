@@ -128,7 +128,7 @@ func compileWasm(tokens List) []byte {
 	start.LocalSet(0)
 	c.text(&start, "=> ")
 	start.LocalGet(0)
-	start.Call(c.rt.putValue)
+	start.Call(c.rt.putShow)
 	start.I32Const('\n')
 	start.Call(c.rt.putByte)
 	start.Call(c.rt.flush)

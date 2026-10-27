@@ -513,3 +513,15 @@ One entry per PR, written before committing it.
   FRICTION.md entry that was still on an unmerged branch. The refusal said
   exactly that ("old was not found") and rolled back the README step
   before it, so rerunning the same batch after merging was all it took.
+
+## Printing, arithmetic, predicates and tail calls (stacked PRs)
+
+### PR: readable printing
+
+- This session was restarted partway through the PR, and the edits made
+  before the restart were found uncommitted in the working tree; whatever
+  tool friction came up then wasn't recorded. Nothing in gorefactor keeps
+  a log of the edits it made, so there was no way to reconstruct it.
+  `undo` history doesn't survive a restart either (each `refactor` call is
+  its own process, though the CLI's on-disk undo would cover the last one).
+- After the restart: `replace_text` for README and this entry; no issues.

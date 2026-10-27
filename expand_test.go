@@ -55,10 +55,10 @@ func TestExpandingReportsMalformedForms(t *testing.T) {
 		`(if 1 2)`:       "IF requires 3 parts",
 		`(quote)`:        "QUOTE takes exactly 1 argument",
 		`(lambda)`:       "lambda: expects a parameter list",
-		`(lambda (1) 1)`: "lambda: parameters must be symbols, got int64 1",
-		`(def 1 2)`:      "def: expected a symbol to define, got int64 1",
+		`(lambda (1) 1)`: "lambda: parameters must be symbols, got number 1",
+		`(def 1 2)`:      "def: expected a symbol to define, got number 1",
 		`(def x 1 2)`:    "def: expects a name and a value, got 3 arguments",
-		`(defmacro m 5)`: "defmacro: expected a function, got int64 5",
+		`(defmacro m 5)`: "defmacro: expected a function, got number 5",
 	} {
 		func() {
 			defer func() {

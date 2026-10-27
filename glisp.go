@@ -19,7 +19,7 @@ func listParam(fn string, params List) List {
 	if x, isList := params[0].(List); isList {
 		return x
 	}
-	panic(fmt.Sprintf("%s: expected a list, got %T %v", fn, params[0], params[0]))
+	panic(fmt.Sprintf("%s: expected a list, got %s", fn, described(params[0])))
 }
 
 func car(_ *Scope, params List) interface{} {
@@ -80,7 +80,7 @@ func number(fn string, p interface{}) int64 {
 	if n, isNumber := p.(int64); isNumber {
 		return n
 	}
-	panic(fmt.Sprintf("%s: expected a number, got %T %v", fn, p, p))
+	panic(fmt.Sprintf("%s: expected a number, got %s", fn, described(p)))
 }
 
 // minus is (- a b c ...), a-b-c..., and (- a), -a.
@@ -110,7 +110,7 @@ func compare(op string, less func(a, b int64) bool) Function {
 
 func eq(_ *Scope, params List) interface{} {
 	if len(params) != 2 {
-		panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %v - %v", len(params), params))
+		panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %d - %s", len(params), Write(params)))
 	}
 	return equal(params[0], params[1])
 }
@@ -147,7 +147,7 @@ func apply(scope *Scope, params List) interface{} {
 	}
 	fn, isFunction := params[0].(Function)
 	if !isFunction {
-		panic(fmt.Sprintf("apply: expected a function, got %T %v", params[0], params[0]))
+		panic(fmt.Sprintf("apply: expected a function, got %s", described(params[0])))
 	}
 	return fn(scope, params.Rest())
 }
@@ -158,7 +158,7 @@ func apply(scope *Scope, params List) interface{} {
 func definedName(fn string, params List) string {
 	sym, isSymbol := params.First().(Symbol)
 	if !isSymbol {
-		panic(fmt.Sprintf("%s: expected a symbol to define, got %T %v", fn, params.First(), params.First()))
+		panic(fmt.Sprintf("%s: expected a symbol to define, got %s", fn, described(params.First())))
 	}
 	if len(params) != 2 {
 		arguments := "arguments"
@@ -171,7 +171,11 @@ func definedName(fn string, params List) string {
 }
 
 func printValues(scope *Scope, params List) interface{} {
-	fmt.Printf("%v\n", params)
+	shown := make([]string, len(params))
+	for i, v := range params {
+		shown[i] = Show(v)
+	}
+	fmt.Println(strings.Join(shown, " "))
 	os.Stdout.Sync()
 	return List{}
 }

@@ -67,12 +67,12 @@ func (e *Expander) expandList(f List) Node {
 		switch head.Str() {
 		case "quote":
 			if len(f) < 2 {
-				panic(fmt.Sprintf("QUOTE takes exactly 1 argument; you have %v - %v\n", len(f)-1, f.Rest()))
+				panic(fmt.Sprintf("QUOTE takes exactly 1 argument; you have %d - %s\n", len(f)-1, Write(f.Rest())))
 			}
 			return Quote{f[1]}
 		case "if":
 			if len(f) != 4 {
-				panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %v parts - %v.", len(f)-1, f.Rest()))
+				panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %d parts - %s.", len(f)-1, Write(f.Rest())))
 			}
 			return If{e.Expand(f[1]), e.Expand(f[2]), e.Expand(f[3])}
 		case "lambda":
@@ -88,7 +88,7 @@ func (e *Expander) expandList(f List) Node {
 			value := e.evalMacroBody(f[2])
 			fn, isFunction := value.(Function)
 			if !isFunction {
-				panic(fmt.Sprintf("defmacro: expected a function, got %T %v\n", value, value))
+				panic(fmt.Sprintf("defmacro: expected a function, got %s\n", described(value)))
 			}
 			e.scope.add(name, Macro{fn})
 			return Quote{List{}}
@@ -119,13 +119,13 @@ func (e *Expander) evalMacroBody(form interface{}) interface{} {
 func paramNames(decls interface{}) []string {
 	list, isList := decls.(List)
 	if !isList {
-		panic(fmt.Sprintf("Cannot build param bindings with unknown declaration type %T (expected a List of symbols)\n", decls))
+		panic(fmt.Sprintf("Cannot build param bindings with unknown declaration type %s (expected a list of symbols)\n", typeName(decls)))
 	}
 	names := make([]string, len(list))
 	for i, decl := range list {
 		sym, isSymbol := decl.(Symbol)
 		if !isSymbol {
-			panic(fmt.Sprintf("lambda: parameters must be symbols, got %T %v", decl, decl))
+			panic(fmt.Sprintf("lambda: parameters must be symbols, got %s", described(decl)))
 		}
 		names[i] = sym.Str()
 	}

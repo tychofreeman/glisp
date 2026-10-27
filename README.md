@@ -72,6 +72,10 @@ loaded before every program; it defines `mult`.
 - [x] Macros: `isMacroScope` and `createNonEvaluatingScope` were never used, and a
   macro's expansion wasn't evaluated. Expansions are now evaluated in the
   caller's scope, and the unused machinery is gone.
+- [x] Readable printing: values printed with Go's `%v` (`[1 2]`, `{x}`,
+  `<nil>`, a function's address). `p` and the `=>` line now print glisp:
+  `(1 2)`, `x`, `nil`, `<function>`, strings quoted inside lists; errors
+  name glisp types (`got number 5`, `got list (a b)`).
 
 ### Design
 
@@ -165,6 +169,5 @@ prints exactly what the interpreter does, error messages included.
   calls). The wasm tail-call proposal (`return_call`) would fix tail calls,
   but wazero v1.10 doesn't support it.
 - [ ] Integers are 63 bits (one bit tags them); the interpreter's are 64.
-- [ ] Functions print as `<function>`, not a Go address.
 - [ ] Every call goes through `invoke` and the table; calls to builtins that
   aren't redefined could be direct, or inline (`plus`, `car`).

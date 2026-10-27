@@ -62,16 +62,10 @@ func (Def) node()    {}
 func (Apply) node()  {}
 
 func (n Const) String() string {
-	if s, isString := n.Value.(string); isString {
-		return fmt.Sprintf("%q", s)
-	}
-	if n.Value == nil {
-		return "nil"
-	}
-	return fmt.Sprint(n.Value)
+	return Write(n.Value)
 }
 
-func (n Quote) String() string { return "(quote " + datumString(n.Datum) + ")" }
+func (n Quote) String() string { return "(quote " + Write(n.Datum) + ")" }
 
 func (n Ref) String() string {
 	if n.Loc != nil {
@@ -103,24 +97,4 @@ func nodesString(nodes []Node) string {
 		b.WriteString(" " + n.String())
 	}
 	return b.String()
-}
-
-// datumString prints quoted data the way it would be written in glisp.
-func datumString(datum interface{}) string {
-	switch d := datum.(type) {
-	case List:
-		parts := make([]string, len(d))
-		for i, item := range d {
-			parts[i] = datumString(item)
-		}
-		return "(" + strings.Join(parts, " ") + ")"
-	case Symbol:
-		return d.Str()
-	case nil:
-		return "nil"
-	case string:
-		return fmt.Sprintf("%q", d)
-	default:
-		return fmt.Sprint(d)
-	}
 }
