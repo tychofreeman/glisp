@@ -479,3 +479,18 @@ One entry per PR, written before committing it.
 - `go get` and `go mod tidy` wrote `go.mod` (outside gorefactor); merging
   its two `require` blocks was a `replace_text` on a non-Go file, which
   worked fine.
+
+### PR: compiling to wasm
+
+- Three `create_file` steps in one `batch` (compiler, runtime, test;
+  ~1,700 lines) applied cleanly, and every test passed on the first run, so
+  no edits were needed while debugging.
+- `create_file` reported 627 and 890 lines for files I had guessed at 470
+  and 620; the counts were right. Reporting the line count is useful.
+- `replace_statements` with `function: main` rewrote `cmd/glisp`'s `main`
+  for the `-wasm` flag and added the `flag` import itself (with a note), at
+  the right indentation this time.
+- `add_declaration` with `after` put the new test where I wanted it.
+- Experiments (a larger stack, timing probes) were done with a throwaway
+  `_test.go` file and `sed`, outside the tools, then restored; `undo` would
+  have covered the constant, but not a file created and deleted by hand.
