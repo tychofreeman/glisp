@@ -3,6 +3,7 @@ package glisp
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	. "github.com/tychofreeman/go-matchers"
 	"testing"
@@ -119,7 +120,7 @@ func TestCanSubtractByAddingNegativeNumbers(t *testing.T) {
 }
 
 func TestEmptyListEvaluatesToNil(t *testing.T) {
-	AssertThat(t, GetValue(baseScope, List{}) == nil, IsTrue)
+	AssertThat(t, GetValue(builtinScope, List{}) == nil, IsTrue)
 }
 
 func TestStdlibIsLoaded(t *testing.T) {
@@ -204,4 +205,159 @@ func IsNil(actual interface{}) (bool, string) {
 
 func TestDefmacroOfANonFunctionFails(t *testing.T) {
 	assertPanicsWith(t, "(defmacro m 5) (m)", "defmacro: expected a function, got int64 5")
+}
+
+func TestDefinitionsDoNotLeakBetweenRuns(t *testing.T) {
+	Process("(def leaked_def 1)")
+	assertPanicsWith(t, "leaked_def", "Cannot resolve symbol leaked_def")
+}
+
+func TestDefDoesNotChangeTheBuiltins(t *testing.T) {
+	Process("(def car 5) (def builtin_leak 1)")
+	if _, isFunction := builtins["car"].(Function); !isFunction {
+		t.Errorf("builtins[car] was replaced: %v", builtins["car"])
+	}
+	if _, found := builtins["builtin_leak"]; found {
+		t.Errorf("def added builtin_leak to the builtins")
+	}
+}
+
+func TestRunsCanHappenConcurrently(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := int64(0); i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			src := fmt.Sprintf("(def n %d) (def twice (lambda (x) (plus x x))) (twice n)", i)
+			if got := Process(src); got != i+i {
+				t.Errorf("%s: got %v, want %d", src, got, i+i)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+func TestRunReturnsTheValue(t *testing.T) {
+	value, err := Run("(plus 1 2)")
+	if err != nil || value != int64(3) {
+		t.Errorf("Run: got %v, %v; want 3, nil", value, err)
+	}
+}
+
+func TestRunReturnsErrorsInsteadOfPanicking(t *testing.T) {
+	for src, want := range map[string]string{
+		"(plus 1 \"a\")":   "plus: expected a number, got string a",
+		"(undefined_fn 1)": "Cannot resolve symbol undefined_fn",
+		"(plus 1 2":        "missing )",
+	} {
+		value, err := Run(src)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Run(%q): got %v, %v; want an error containing %q", src, value, err, want)
+		}
+	}
+}
+
+func TestRunFileReportsAMissingFile(t *testing.T) {
+	if _, err := RunFile("no/such/file.glisp"); err == nil {
+		t.Errorf("RunFile of a missing file: got no error")
+	}
+}
+
+func TestQuotedNumbersEqualComputedOnes(t *testing.T) {
+	AssertThat(t, Process("(eq (car (quote (1))) 1)"), IsTrue)
+	AssertThat(t, Process("(eq (car (quote (\"a\"))) \"a\")"), IsTrue)
+}
+
+func TestQuotedListsHoldGoValues(t *testing.T) {
+	got := Process("(quote (1 \"a\" b))").(List)
+	if got[0] != int64(1) || got[1] != "a" || got[2] != symbol("b") {
+		t.Errorf("got %#v, want int64 1, string a, symbol b", got)
+	}
+}
+
+func TestMinusSubtracts(t *testing.T) {
+	AssertThat(t, Process("(- 10 3)"), Equals(int64(7)))
+	AssertThat(t, Process("(- 10 3 2)"), Equals(int64(5)))
+	AssertThat(t, Process("(- 5)"), Equals(int64(-5)))
+	assertPanicsWith(t, "(- 1 \"a\")", "-: expected a number, got string a")
+}
+
+func TestLessAndGreaterCompare(t *testing.T) {
+	AssertThat(t, Process("(< 1 2)"), IsTrue)
+	AssertThat(t, Process("(< 2 1)"), IsFalse)
+	AssertThat(t, Process("(< 2 2)"), IsFalse)
+	AssertThat(t, Process("(> 2 1)"), IsTrue)
+	AssertThat(t, Process("(> 1 2)"), IsFalse)
+	assertPanicsWith(t, "(< 1)", "<: expects 2 arguments, got 1")
+	assertPanicsWith(t, "(> 1 \"a\")", ">: expected a number, got string a")
+}
+
+func TestTrueFalseAndNilAreDefined(t *testing.T) {
+	AssertThat(t, Process("true"), IsTrue)
+	AssertThat(t, Process("false"), IsFalse)
+	AssertThat(t, Process("nil"), IsNil)
+	AssertThat(t, Process("(if true 1 2)"), Equals(int64(1)))
+	AssertThat(t, Process("(eq (car (quote ())) nil)"), IsTrue)
+}
+
+func TestConsOntoNilMakesAOneElementList(t *testing.T) {
+	AssertThat(t, Process("(cons 1 nil)"), HasExactly(num(1)))
+	AssertThat(t, Process("(cons 1 (cons 2 nil))"), HasExactly(num(1), num(2)))
+}
+
+func TestConsWithTheWrongNumberOfArgumentsFails(t *testing.T) {
+	assertPanicsWith(t, "(cons)", "cons: expects 1 or 2 arguments, got 0")
+	assertPanicsWith(t, "(cons 1 2 3)", "cons: expects 1 or 2 arguments, got 3")
+}
+
+// unless expands (unless c a b) into (if c b a).
+const unlessMacro = `(defmacro unless (lambda (args)
+	(cons (quote if)
+		(cons (car args)
+			(cons (car (cdr (cdr args)))
+				(cons (car (cdr args)) nil))))))`
+
+func TestMacroExpansionsAreEvaluated(t *testing.T) {
+	AssertThat(t, Process(unlessMacro+"(unless (eq 1 2) 10 20)"), Equals(int64(10)))
+	AssertThat(t, Process(unlessMacro+"(unless (eq 1 1) 10 20)"), Equals(int64(20)))
+}
+
+func TestMacroExpansionsAreEvaluatedInTheCallersScope(t *testing.T) {
+	AssertThat(t, Process(unlessMacro+"(def f (lambda (x) (unless (eq x 0) x 99))) (f 5)"), Equals(int64(5)))
+}
+
+func TestBuiltinsReportTheWrongNumberOfArguments(t *testing.T) {
+	assertPanicsWith(t, "(if true 1)", "IF requires 3 parts")
+	assertPanicsWith(t, "(eq 1)", "EQ requires exactly 2 parameters")
+	assertPanicsWith(t, "(quote)", "QUOTE takes exactly 1 argument")
+}
+
+func TestCallingSomethingThatIsNotAFunctionFails(t *testing.T) {
+	assertPanicsWith(t, "(1 2)", "Cannot call int64 1")
+	assertPanicsWith(t, "(\"f\" 2)", "Cannot call string f")
+}
+
+func TestDefNeedsASymbolToDefine(t *testing.T) {
+	assertPanicsWith(t, "(def 1 2)", "def: expected a symbol to define, got int64 1")
+	assertPanicsWith(t, "(def)", "def: expected a symbol to define, got <nil>")
+	assertPanicsWith(t, "(defmacro 1 (lambda (xs) 1))", "defmacro: expected a symbol to define, got int64 1")
+}
+
+func TestLambdaNeedsAParameterList(t *testing.T) {
+	assertPanicsWith(t, "((lambda x x) 1)", "Cannot build param bindings")
+}
+
+func TestFunctionsCanBeStoredInLists(t *testing.T) {
+	AssertThat(t, Process("((car (cons plus nil)) 1 2)"), Equals(int64(3)))
+}
+
+func TestFunctionsCanBeApplied(t *testing.T) {
+	AssertThat(t, Process("(def twice (lambda (f x) (f (f x)))) (twice (lambda (n) (- n 1)) 10)"), Equals(int64(8)))
+	AssertThat(t, Process("(apply (lambda (a b) (- a b)) 10 3)"), Equals(int64(7)))
+}
+
+func TestRunReportsArityErrors(t *testing.T) {
+	if _, err := Run("((lambda (a) a))"); err == nil || !strings.Contains(err.Error(), "expects 1 argument, got 0") {
+		t.Errorf("Run of a call with too few arguments: got %v", err)
+	}
 }
