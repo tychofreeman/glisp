@@ -97,3 +97,12 @@ func TestUnbalancedParensFail(t *testing.T) {
 	assertPanicsWith(t, "(plus 1 (plus 2 3)", "missing )")
 	assertPanicsWith(t, "(", "missing )")
 }
+
+func TestCommentsRunToTheEndOfTheLine(t *testing.T) {
+	AssertThat(t, Process("; leading\n(plus 1 2) ; trailing\n; last line"), Equals(int64(3)))
+	AssertThat(t, Process("(plus 1 2;no space before it\n)"), Equals(int64(3)))
+}
+
+func TestSemicolonsInStringsAreNotComments(t *testing.T) {
+	AssertThat(t, Process("(quote \"a;b\")"), Equals("a;b"))
+}

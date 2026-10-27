@@ -80,38 +80,61 @@ func atom(_ *Scope, params List) interface{} {
 }
 
 func cons(_ *Scope, params List) interface{} {
-	if len(params) == 1 {
-		return params
-	} else if len(params) == 2 {
-		if atom(nil, params.Rest()) == true {
-			return params
-		} else {
-			switch x := params[1].(type) {
-			case List:
-				output := List{params[0]}
-				for _, i := range x {
-					output = append(output, i)
-				}
-				return output
-			}
+	switch len(params) {
+	case 1:
+		return List{params[0]}
+	case 2:
+		switch rest := params[1].(type) {
+		case nil:
+			return List{params[0]}
+		case List:
+			return append(List{params[0]}, rest...)
+		default:
+			return List{params[0], rest}
 		}
 	}
-	return nil
+	panic(fmt.Sprintf("cons: expects 1 or 2 arguments, got %d", len(params)))
 }
 
 func plus(_ *Scope, params List) interface{} {
 	var sum int64 = 0
 	for _, p := range params {
-		switch x := p.(type) {
-		case int64:
-			sum = sum + x
-		case NumberToken:
-			sum = sum + x.Value()
-		default:
-			panic(fmt.Sprintf("plus: expected a number, got %T %v", p, p))
-		}
+		sum += number("plus", p)
 	}
 	return sum
+}
+
+// number returns p as an int64, or panics naming the builtin fn.
+func number(fn string, p interface{}) int64 {
+	if n, isNumber := p.(int64); isNumber {
+		return n
+	}
+	panic(fmt.Sprintf("%s: expected a number, got %T %v", fn, p, p))
+}
+
+// minus is (- a b c ...), a-b-c..., and (- a), -a.
+func minus(_ *Scope, params List) interface{} {
+	if len(params) == 0 {
+		panic("-: expects at least 1 argument, got 0")
+	}
+	if len(params) == 1 {
+		return -number("-", params[0])
+	}
+	result := number("-", params[0])
+	for _, p := range params[1:] {
+		result -= number("-", p)
+	}
+	return result
+}
+
+// compare returns a builtin (op a b) that compares two numbers with less.
+func compare(op string, less func(a, b int64) bool) Function {
+	return func(_ *Scope, params List) interface{} {
+		if len(params) != 2 {
+			panic(fmt.Sprintf("%s: expects 2 arguments, got %d", op, len(params)))
+		}
+		return less(number(op, params[0]), number(op, params[1]))
+	}
 }
 
 func ifThenElse(scope *Scope, params List) interface{} {
@@ -161,19 +184,28 @@ func apply(scope *Scope, params List) interface{} {
 	return GetValue(scope, params)
 }
 
+// definedName returns the symbol a (def name ...) or (defmacro name ...) form
+// defines, or panics naming the form fn.
+func definedName(fn string, params List) string {
+	if sym, isSymbol := params.First().(Symbol); isSymbol {
+		return sym.Str()
+	}
+	panic(fmt.Sprintf("%s: expected a symbol to define, got %T %v", fn, params.First(), params.First()))
+}
+
 func define(scope *Scope, params List) interface{} {
-	name := params.First().(Token).Str()
+	name := definedName("def", params)
 	scope.add(name, GetValue(scope, params.Second()))
 	return List{}
 }
 
 func macro(scope *Scope, params List) interface{} {
-	name := params.First().(Token).Str()
+	name := definedName("defmacro", params)
 	body := GetValue(scope, params.Second())
 	macroFn := NonEvaluatingFunction(func(macroScope *Scope, macroParams List) interface{} {
 		switch b := body.(type) {
 		case Function:
-			return b(macroScope, List{macroParams})
+			return GetValue(macroScope, b(macroScope, List{macroParams}))
 		case NonEvaluatingFunction:
 			return b(macroScope, macroParams)
 		default:
@@ -197,12 +229,18 @@ var builtins = map[string]interface{}{
 	"atom":     Function(atom),
 	"cons":     Function(cons),
 	"plus":     Function(plus),
+	"-":        Function(minus),
+	"<":        compare("<", func(a, b int64) bool { return a < b }),
+	">":        compare(">", func(a, b int64) bool { return a > b }),
 	"if":       NonEvaluatingFunction(ifThenElse),
 	"eq":       Function(eq),
 	"apply":    Function(apply),
 	"def":      NonEvaluatingFunction(define),
 	"defmacro": NonEvaluatingFunction(macro),
 	"p":        Function(printValues),
+	"true":     true,
+	"false":    false,
+	"nil":      nil,
 }
 
 func paramBinder(decls interface{}) func(interface{}) map[string]interface{} {
@@ -250,7 +288,7 @@ type Lambda struct {
 
 func (l Lambda) Eval(scope *Scope) interface{} {
 	return Function(func(_ *Scope, params List) interface{} {
-		local := &Scope{scope, l.bind(params), false}
+		local := &Scope{prev: scope, table: l.bind(params)}
 		var last interface{}
 		for _, element := range l.body {
 			last = GetValue(local, element)
@@ -262,9 +300,9 @@ func (l Lambda) Eval(scope *Scope) interface{} {
 func Parse(source interface{}) interface{} {
 	switch node := source.(type) {
 	case NumberToken:
-		return node
+		return node.Value()
 	case StringToken:
-		return node
+		return node.Value()
 	case Symbol:
 		return node
 	case List:
@@ -289,7 +327,7 @@ func ParseMany(input List) List {
 //go:embed stdlib.glisp
 var stdlib string
 
-var builtinScope = &Scope{nil, builtins, false}
+var builtinScope = &Scope{table: builtins}
 
 // stdlibForms is stdlib.glisp, parsed once.
 var stdlibForms = ParseMany(TokenizeString(stdlib))
@@ -297,7 +335,7 @@ var stdlibForms = ParseMany(TokenizeString(stdlib))
 // newScope makes the top-level scope for one run: its own definitions over
 // the builtins, which it never changes, with the stdlib loaded.
 func newScope() *Scope {
-	scope := &Scope{builtinScope, map[string]interface{}{}, false}
+	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}}
 	for _, form := range stdlibForms {
 		GetValue(scope, form)
 	}
@@ -312,10 +350,36 @@ func ProcessTokens(scope *Scope, tokenized List) interface{} {
 	return value
 }
 
+// Process evaluates the program in input and returns the value of its last
+// form. It panics on an error in the program; Run returns the error instead.
 func Process(input string) interface{} {
 	return ProcessTokens(newScope(), TokenizeString(input))
 }
 
 func ProcessFile(fname string) interface{} {
 	return ProcessTokens(newScope(), TokenizeFile(fname))
+}
+
+// Run evaluates the program in input and returns the value of its last form.
+// Errors in the program, such as unbalanced parens, an unknown symbol or an
+// argument of the wrong type, are returned rather than panicking.
+func Run(input string) (value interface{}, err error) {
+	defer recoverError(&err)
+	return Process(input), nil
+}
+
+// RunFile is Run for the program in the file fname.
+func RunFile(fname string) (interface{}, error) {
+	program, err := os.ReadFile(fname)
+	if err != nil {
+		return nil, err
+	}
+	return Run(string(program))
+}
+
+// recoverError, deferred, turns a panic into an error in *err.
+func recoverError(err *error) {
+	if r := recover(); r != nil {
+		*err = fmt.Errorf("%s", strings.TrimSpace(fmt.Sprint(r)))
+	}
 }
