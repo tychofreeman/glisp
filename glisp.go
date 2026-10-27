@@ -24,6 +24,8 @@ func GetValue(scope *Scope, source interface{}) interface{} {
         return value.Eval(scope)
     case Valuable:
         return value.Eval(scope)
+    case Function, NonEvaluatingFunction:
+        return value
     default:
         panic(fmt.Sprintf("Couldn't find anything of type %T (%v)\n", value, value))
     }
@@ -246,12 +248,14 @@ var stdlib string
 var baseScope = &Scope{nil, builtins, false}
 
 func ProcessTokens(scope *Scope, tokenized List, includeStdLib bool) interface{} {
-    if includeStdLib {
-        ProcessTokens(scope, TokenizeString(stdlib), false)
-    }
-    parsed := ParseMany(tokenized)
-    value := GetValue(scope, parsed)
-    return value
+	if includeStdLib {
+		ProcessTokens(scope, TokenizeString(stdlib), false)
+	}
+	var value interface{}
+	for _, form := range ParseMany(tokenized) {
+		value = GetValue(scope, form)
+	}
+	return value
 }
 
 func Process(input string)  interface{} {

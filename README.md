@@ -20,7 +20,7 @@ loaded before every program; it defines `mult`.
 
 - [x] `def` stores the unevaluated expression, so `(def y (plus 1 2)) (plus y 1)`
   returns 1.
-- [ ] Functions can't be used as values: `GetValue` has no case for `Function`,
+- [x] Functions can't be used as values: `GetValue` has no case for `Function`,
   so a lambda passed inline as an argument, or returned from a function, panics.
   Every function passed to `map`/`filter`/`fold` has to be a named `def`.
 - [ ] Scoping is dynamic, not lexical: a lambda body runs in its caller's scope,

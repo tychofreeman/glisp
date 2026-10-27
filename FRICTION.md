@@ -96,3 +96,21 @@ also goes through `GOPROXY`.
 - **Would help:** tagging releases, so `@latest` (and `.mcp.json`'s
   `go run …@latest`) moves when the tools change; `refactor -version` /
   `refactor-mcp -version` reporting the commit, since both still print 0.2.0.
+
+## Fixing the roadmap bugs (stacked PRs)
+
+One entry per PR, written before committing it.
+
+### PR: functions as values
+
+- `add_case` with only `line` (the `switch`) put the new clause **after
+  `default:`**. That's what its description says ("at the end of the
+  switch"), but a clause after `default` reads badly; `where: "before"` at the
+  `default` line put it in the right place.
+- `add_case` indented the clause body by appending the content's own
+  indentation to the file's: content written with a tab came out as
+  4 spaces + tab (`    \treturn value`). Writing the content with 4 spaces
+  came out right. Same family as the `replace_statements` tab issue above, but
+  the opposite rule (`replace_statements` re-indents with tabs).
+- `batch` with `"report": "summary"` worked well: three dependent edits in one
+  call, names (`List.Eval`, `ProcessTokens`) stayed valid across steps.

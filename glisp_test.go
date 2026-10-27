@@ -126,3 +126,11 @@ func TestStdlibIsLoaded(t *testing.T) {
 func TestDefStoresTheValueOfItsExpression(t *testing.T) {
     AssertThat(t, Process("(def y (plus 1 2)) (plus y 1)"), Equals(int64(4)))
 }
+
+func TestFunctionsCanBePassedAsArguments(t *testing.T) {
+    AssertThat(t, Process("((lambda (f x) (f x)) (lambda (n) (plus n 1)) 41)"), Equals(int64(42)))
+}
+
+func TestFunctionsCanBeReturned(t *testing.T) {
+    AssertThat(t, Process("(def make_inc (lambda () (lambda (n) (plus n 1)))) ((make_inc) 41)"), Equals(int64(42)))
+}
