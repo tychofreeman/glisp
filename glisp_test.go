@@ -325,3 +325,39 @@ func TestMacroExpansionsAreEvaluated(t *testing.T) {
 func TestMacroExpansionsAreEvaluatedInTheCallersScope(t *testing.T) {
 	AssertThat(t, Process(unlessMacro+"(def f (lambda (x) (unless (eq x 0) x 99))) (f 5)"), Equals(int64(5)))
 }
+
+func TestBuiltinsReportTheWrongNumberOfArguments(t *testing.T) {
+	assertPanicsWith(t, "(if true 1)", "IF requires 3 parts")
+	assertPanicsWith(t, "(eq 1)", "EQ requires exactly 2 parameters")
+	assertPanicsWith(t, "(quote)", "QUOTE takes exactly 1 argument")
+}
+
+func TestCallingSomethingThatIsNotAFunctionFails(t *testing.T) {
+	assertPanicsWith(t, "(1 2)", "Cannot call int64 1")
+	assertPanicsWith(t, "(\"f\" 2)", "Cannot call string f")
+}
+
+func TestDefNeedsASymbolToDefine(t *testing.T) {
+	assertPanicsWith(t, "(def 1 2)", "def: expected a symbol to define, got int64 1")
+	assertPanicsWith(t, "(def)", "def: expected a symbol to define, got <nil>")
+	assertPanicsWith(t, "(defmacro 1 (lambda (xs) 1))", "defmacro: expected a symbol to define, got int64 1")
+}
+
+func TestLambdaNeedsAParameterList(t *testing.T) {
+	assertPanicsWith(t, "((lambda x x) 1)", "Cannot build param bindings")
+}
+
+func TestFunctionsCanBeStoredInLists(t *testing.T) {
+	AssertThat(t, Process("((car (cons plus nil)) 1 2)"), Equals(int64(3)))
+}
+
+func TestFunctionsCanBeApplied(t *testing.T) {
+	AssertThat(t, Process("(def twice (lambda (f x) (f (f x)))) (twice (lambda (n) (- n 1)) 10)"), Equals(int64(8)))
+	AssertThat(t, Process("(apply (lambda (a b) (- a b)) 10 3)"), Equals(int64(7)))
+}
+
+func TestRunReportsArityErrors(t *testing.T) {
+	if _, err := Run("((lambda (a) a))"); err == nil || !strings.Contains(err.Error(), "expects 1 argument, got 0") {
+		t.Errorf("Run of a call with too few arguments: got %v", err)
+	}
+}
