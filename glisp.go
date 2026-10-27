@@ -312,10 +312,36 @@ func ProcessTokens(scope *Scope, tokenized List) interface{} {
 	return value
 }
 
+// Process evaluates the program in input and returns the value of its last
+// form. It panics on an error in the program; Run returns the error instead.
 func Process(input string) interface{} {
 	return ProcessTokens(newScope(), TokenizeString(input))
 }
 
 func ProcessFile(fname string) interface{} {
 	return ProcessTokens(newScope(), TokenizeFile(fname))
+}
+
+// Run evaluates the program in input and returns the value of its last form.
+// Errors in the program, such as unbalanced parens, an unknown symbol or an
+// argument of the wrong type, are returned rather than panicking.
+func Run(input string) (value interface{}, err error) {
+	defer recoverError(&err)
+	return Process(input), nil
+}
+
+// RunFile is Run for the program in the file fname.
+func RunFile(fname string) (interface{}, error) {
+	program, err := os.ReadFile(fname)
+	if err != nil {
+		return nil, err
+	}
+	return Run(string(program))
+}
+
+// recoverError, deferred, turns a panic into an error in *err.
+func recoverError(err *error) {
+	if r := recover(); r != nil {
+		*err = fmt.Errorf("%s", strings.TrimSpace(fmt.Sprint(r)))
+	}
 }

@@ -271,3 +271,20 @@ One entry per PR, written before committing it.
 - `check` has no way to pass `-race`; I ran `go test -race` directly. A
   `race` (or general `test_flags`) option on `check` would keep it in the
   tool.
+
+### PR: `Run` returns errors
+
+- **A refusal pointed at an argument the tool doesn't take.** Adding the
+  tests with `add_declaration` was refused because `RunFile`'s first result
+  can't be inferred from `_, err := RunFile(…)`. The refusal said to "give
+  them in results, e.g. {"RunFile": "(int, error)"}", but `add_declaration`
+  rejected `results` as an unknown field. `results` belongs to
+  `create_from_usage`. What worked: one `batch` with `check: "end"` —
+  `add_declaration` of the tests, then `create_from_usage` with `results` and
+  `to_file: "glisp.go"`. The hint should name `create_from_usage`, or
+  `add_declaration` should accept `results` and pass it through.
+- `create_from_usage` named the stubs' parameter `s` (the calls pass string
+  literals); the real declarations then replaced the stubs, as documented,
+  with a note for each.
+- Otherwise smooth: `replace_text` to add a doc comment above `Process`,
+  `replace_statements` by `function` for `cmd/glisp`'s `main`.

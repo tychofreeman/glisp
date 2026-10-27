@@ -236,3 +236,29 @@ func TestRunsCanHappenConcurrently(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestRunReturnsTheValue(t *testing.T) {
+	value, err := Run("(plus 1 2)")
+	if err != nil || value != int64(3) {
+		t.Errorf("Run: got %v, %v; want 3, nil", value, err)
+	}
+}
+
+func TestRunReturnsErrorsInsteadOfPanicking(t *testing.T) {
+	for src, want := range map[string]string{
+		"(plus 1 \"a\")":   "plus: expected a number, got string a",
+		"(undefined_fn 1)": "Cannot resolve symbol undefined_fn",
+		"(plus 1 2":        "missing )",
+	} {
+		value, err := Run(src)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("Run(%q): got %v, %v; want an error containing %q", src, value, err, want)
+		}
+	}
+}
+
+func TestRunFileReportsAMissingFile(t *testing.T) {
+	if _, err := RunFile("no/such/file.glisp"); err == nil {
+		t.Errorf("RunFile of a missing file: got no error")
+	}
+}
