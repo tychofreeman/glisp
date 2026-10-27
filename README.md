@@ -29,7 +29,7 @@ loaded before every program; it defines `mult`.
 - [x] Calling a lambda with too few arguments panics (index out of range); extra
   arguments are silently dropped.
 - [x] `eq` on two lists crashes the Go runtime ("comparing uncomparable type").
-- [ ] Silent wrong answers: `plus` skips non-integers (`(plus 1 "a")` is 1), and
+- [x] Silent wrong answers: `plus` skips non-integers (`(plus 1 "a")` is 1), and
   `car`/`cdr` of a non-list return nil.
 - [ ] Tokenizer:
   - [ ] `(` or `)` inside a string splits the string.
@@ -52,7 +52,8 @@ loaded before every program; it defines `mult`.
   `(eq 1 1)`, `(eq 1 2)` and `(car (quote ()))`.
 - [ ] `cons` onto `nil` gives `(x nil)`, not `(x)`; lists have to be built on
   `(quote ())`.
-- [ ] Quoted numbers stay tokens, so `(plus (car (quote (1 2))) 1)` is 1.
+- [ ] Quoted numbers stay tokens: `plus` accepts them, but
+  `(eq (car (quote (1))) 1)` is false.
 - [ ] Macros: `isMacroScope` and `createNonEvaluatingScope` are never used.
 
 ### Design
