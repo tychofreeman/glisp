@@ -499,3 +499,17 @@ One entry per PR, written before committing it.
 
 - No gorefactor use: the PR adds one glisp file, written directly. (This
   entry went in with `replace_text`, which worked fine.)
+
+### PR: doubling wasm memory
+
+- No tool issues. The test went in first with `add_declaration` (`after`
+  the last wasm test) and failed as expected; `replace_statements` with
+  `function: wasmCompiler.allocBody` (a method, addressed as
+  `Type.Method`) replaced the allocator's body, and two `replace_text`
+  steps changed its locals and comment, in one `batch`.
+- `inspect` with `names` showed just `allocBody`, with line numbers, which
+  was all the reading this change needed.
+- One refusal, my mistake: a `batch` anchored a `replace_text` on a
+  FRICTION.md entry that was still on an unmerged branch. The refusal said
+  exactly that ("old was not found") and rolled back the README step
+  before it, so rerunning the same batch after merging was all it took.
