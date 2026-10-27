@@ -677,3 +677,10 @@ One entry per PR, written before committing it.
 - The 9-step batch otherwise applied as planned: constants and globals by
   `replace_text`, the body of `invoke` by line range, its locals and
   `define` call by `replace_text`.
+
+### PR: roadmap of missing abstractions
+
+- Docs only: appended with a heredoc, not through the tools (README
+  isn't Go, and `replace_text` needs an anchor; appending at the end
+  has none). `create_file`/`replace_text` with an "append" mode would
+  cover it.

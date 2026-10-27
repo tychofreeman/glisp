@@ -218,3 +218,44 @@ prints exactly what the interpreter does, error messages included.
   redefining it works), falling back to the ordinary call for anything the
   inline path doesn't handle, so results and errors are the same. A loop of
   tail calls through `plus` got 1.7x faster; arithmetic-heavy code 1.25x.
+
+### Missing abstractions
+
+What a review of the code found: concepts each restated in several places,
+by hand. In the order to do them; each makes the next cheaper.
+
+- [ ] **Structured wasm generation.** Runtime functions are assembled by
+  hand: `If … Else … End` spelled out everywhere (`returnIf`, `ifIntegers`
+  and `ifTag` are three local attempts at a helper), locals numbered by
+  hand (`const v, p, n = 0, 1, 2`) with their types listed apart in
+  `define`, so the two can disagree, and twenty `fail` sites each printing
+  their parts their own way. Wanted: a function builder that allocates
+  locals by name and type, `ifElse`/loop helpers, and `fail(parts…)`.
+- [ ] **A builtin, defined once.** One builtin is written in up to five
+  places: the interpreter's `builtins`, `builtinNames` (or
+  `stringBuiltinNames`), a case in `builtinBody` (which repeats the string
+  names), and `inlineBuiltins`. Its error messages are written twice, in Go
+  and in wasm, kept in step only by the parity tests (`eq`'s wasm message
+  has already drifted). Wanted: a spec per builtin (name, arity, argument
+  kinds) from which both backends make the checks and messages, leaving
+  each implementation only the operation.
+- [ ] **A value kind.** What each kind of value is lives in `typeName`,
+  the predicates' tag map, `objSize`, the collector's field scan and
+  `putValue`. Wanted: a row per kind (tag, name, size, which fields hold
+  values) the collector, printer and predicates derive from, so a new heap
+  kind can't be missed by the collector.
+- [ ] **The calling convention.** How a call lays out the argument stack
+  is known separately by `pushCall`, `compileLambda`'s frame, `tailCall`
+  and the runtime's `invoke` (the pending-call protocol), and the
+  collector's roots. Wanted: one description of a frame and a call.
+- [ ] **One memory-growth policy.** `memory.grow` is called in five places
+  in three functions (`alloc` doubles, `putByte` grows a page, `gc`
+  doubles for to-space), each with its own "out of memory". Wanted: one
+  `grow(bytes)`.
+- [ ] **Tail position and lines as facts of the AST.** The interpreter's
+  loop and the compiler's `tailExpr` each decide what is in tail position,
+  and both record a call's line twice. Resolve could mark `Apply.Tail` as
+  it marks `Loc` and `Captured`.
+- [ ] **A parity case.** The compiled-vs-interpreted tests are a list of
+  programs; GC thresholds, expected errors and known differences (63-bit
+  integers) are handled case by case. Wanted: a case type with options.
