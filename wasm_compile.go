@@ -139,39 +139,40 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 	}
 
 	c := newWasmCompiler(scope)
-	main := &wasmFunc{c: c}
+	main := &wasmFunc{c: c, wasmBody: &wasmBody{}}
 	main.scratch = main.local(wasm.I64)
 	main.tmp32 = main.local(wasm.I32)
 	for _, node := range stdlibNodes {
 		main.expr(node)
-		main.code.Op(wasm.Drop)
+		main.Op(wasm.Drop)
 	}
 	// Each top-level form starts at its own line, as in the interpreter.
 	if len(programNodes) == 0 {
-		main.code.I64Const(addrNil)
+		main.I64Const(addrNil)
 	}
 	for i, node := range programNodes {
-		main.code.I32Const(int32(programLines[i]))
-		main.code.GlobalSet(gLine)
+		main.I32Const(int32(programLines[i]))
+		main.GlobalSet(gLine)
 		main.expr(node)
 		if i < len(programNodes)-1 {
-			main.code.Op(wasm.Drop)
+			main.Op(wasm.Drop)
 		}
 	}
 	mainIndex := c.declare(wasm.FuncType{Results: []wasm.ValType{wasm.I64}})
-	c.define(mainIndex, main.locals, main.code)
+	c.setBody(mainIndex, main.wasmBody)
 
-	var start wasm.Code
-	start.Call(mainIndex)
-	start.LocalSet(0)
-	c.text(&start, "=> ")
-	start.LocalGet(0)
-	start.Call(c.rt.putShow)
-	start.I32Const('\n')
-	start.Call(c.rt.putByte)
-	start.Call(c.rt.flush)
 	startIndex := c.declare(wasm.FuncType{})
-	c.define(startIndex, []wasm.ValType{wasm.I64}, start)
+	c.define(startIndex, func(b *wasmBody) {
+		result := b.local(i64)
+		b.Call(mainIndex)
+		b.LocalSet(result)
+		c.text(b, "=> ")
+		b.LocalGet(result)
+		b.Call(c.rt.putShow)
+		b.I32Const('\n')
+		b.Call(c.rt.putByte)
+		b.Call(c.rt.flush)
+	})
 	c.m.Exports = []wasm.Export{
 		{Name: "_start", Kind: wasm.ExportFunc, Index: startIndex},
 		{Name: "memory", Kind: wasm.ExportMemory},
@@ -231,11 +232,51 @@ func (c *wasmCompiler) declare(ft wasm.FuncType) uint32 {
 	return uint32(len(c.m.Imports) + len(c.m.Funcs) - 1)
 }
 
-func (c *wasmCompiler) define(f uint32, locals []wasm.ValType, body wasm.Code) {
+// setBody gives function f the body b, already built.
+func (c *wasmCompiler) setBody(f uint32, b *wasmBody) {
 	i := f - uint32(len(c.m.Imports))
-	c.m.Funcs[i].Locals = locals
-	c.m.Funcs[i].Body = body
+	c.m.Funcs[i].Locals = b.locals
+	c.m.Funcs[i].Body = b.Code
 }
+
+// wasmBody is a function's body as it is built: its code, and the locals it
+// declares, numbered after its parameters.
+type wasmBody struct {
+	wasm.Code
+	nparams uint32
+	locals  []wasm.ValType
+}
+
+// param is the index of parameter i.
+func (b *wasmBody) param(i uint32) uint32 {
+	if i >= b.nparams {
+		panic(fmt.Sprintf("parameter %d of a function with %d", i, b.nparams))
+	}
+	return i
+}
+
+// local declares a local of type t and returns its index.
+func (b *wasmBody) local(t wasm.ValType) uint32 {
+	b.locals = append(b.locals, t)
+	return b.nparams + uint32(len(b.locals)-1)
+}
+
+// define gives function f the body that build makes.
+func (c *wasmCompiler) define(f uint32, build func(b *wasmBody)) {
+	i := f - uint32(len(c.m.Imports))
+	b := &wasmBody{nparams: uint32(len(c.m.Types[c.m.Funcs[i].Type].Params))}
+	build(b)
+	c.setBody(f, b)
+}
+
+// The parameters of every glisp function, a compiled lambda or a builtin:
+// the closure called, the address of its arguments on the argument stack,
+// and how many there are.
+const (
+	paramSelf uint32 = iota
+	paramArgs
+	paramArgc
+)
 
 // declareFn declares a glisp function and puts it in the table, returning
 // its function and table indices.
@@ -347,14 +388,14 @@ func (c *wasmCompiler) global(name string) uint32 {
 }
 
 // text appends code that prints s to the output buffer.
-func (c *wasmCompiler) text(code *wasm.Code, s string) {
+func (c *wasmCompiler) text(code *wasmBody, s string) {
 	code.I32Const(int32(c.str(s)))
 	code.Call(c.rt.putStr)
 }
 
 // fail appends code that reports the error "glisp: " + msg + whatever more
 // prints, and exits.
-func (c *wasmCompiler) fail(code *wasm.Code, msg string, more func()) {
+func (c *wasmCompiler) fail(code *wasmBody, msg string, more func()) {
 	code.Call(c.rt.failBegin)
 	c.text(code, msg)
 	if more != nil {
@@ -364,12 +405,16 @@ func (c *wasmCompiler) fail(code *wasm.Code, msg string, more func()) {
 	code.Op(wasm.Unreachable)
 }
 
+// failIf appends code that fails as fail does if the i32 on the stack is
+// true.
+func (c *wasmCompiler) failIf(code *wasmBody, msg string, more func()) {
+	code.when(func() { c.fail(code, msg, more) })
+}
+
 // wasmFunc compiles the body of main or of one lambda.
 type wasmFunc struct {
-	c       *wasmCompiler
-	code    wasm.Code
-	nparams uint32
-	locals  []wasm.ValType
+	c *wasmCompiler
+	*wasmBody
 	lambda  *Lambda // nil in main
 	slots   []string
 	boxed   []bool // slots that lambdas inside this one capture, kept in cells
@@ -379,51 +424,46 @@ type wasmFunc struct {
 	blocks  int    // blocks open inside a lambda's loop, for a tail call's br
 }
 
-func (f *wasmFunc) local(t wasm.ValType) uint32 {
-	f.locals = append(f.locals, t)
-	return f.nparams + uint32(len(f.locals)-1)
-}
-
 // A lambda keeps its values in a frame on the argument stack, where the
 // collector finds them: its closure, then its slots.
 
 // slotLoad leaves slot i of the lambda's frame.
 func (f *wasmFunc) slotLoad(i int) {
-	f.code.LocalGet(f.frame)
-	f.code.I64Load(uint32(8 * (1 + i)))
+	f.LocalGet(f.frame)
+	f.I64Load(uint32(8 * (1 + i)))
 }
 
 // slotStore stores the value in local v in slot i of the lambda's frame.
 func (f *wasmFunc) slotStore(i int, v uint32) {
-	f.code.LocalGet(f.frame)
-	f.code.LocalGet(v)
-	f.code.I64Store(uint32(8 * (1 + i)))
+	f.LocalGet(f.frame)
+	f.LocalGet(v)
+	f.I64Store(uint32(8 * (1 + i)))
 }
 
 // selfLoad leaves the lambda's closure.
 func (f *wasmFunc) selfLoad() {
-	f.code.LocalGet(f.frame)
-	f.code.I64Load(0)
+	f.LocalGet(f.frame)
+	f.I64Load(0)
 }
 
 // at records, for errors, that the program is making the call on line, if
 // it is known.
 func (f *wasmFunc) at(line int) {
 	if line > 0 {
-		f.code.I32Const(int32(line))
-		f.code.GlobalSet(gLine)
+		f.I32Const(int32(line))
+		f.GlobalSet(gLine)
 	}
 }
 
 // body compiles nodes, leaving the last one's value, or nil if there are none.
 func (f *wasmFunc) body(nodes []Node) {
 	if len(nodes) == 0 {
-		f.code.I64Const(addrNil)
+		f.I64Const(addrNil)
 	}
 	for i, node := range nodes {
 		if i < len(nodes)-1 {
 			f.expr(node)
-			f.code.Op(wasm.Drop)
+			f.Op(wasm.Drop)
 		} else if f.lambda != nil {
 			f.tailExpr(node)
 		} else {
@@ -435,20 +475,20 @@ func (f *wasmFunc) body(nodes []Node) {
 func (f *wasmFunc) expr(node Node) {
 	switch n := node.(type) {
 	case Const:
-		f.code.I64Const(f.c.constant(n.Value))
+		f.I64Const(f.c.constant(n.Value))
 	case Quote:
-		f.code.I64Const(f.c.datum(n.Datum))
+		f.I64Const(f.c.datum(n.Datum))
 	case Ref:
 		f.ref(n)
 	case If:
 		f.expr(n.Cond)
-		f.code.I64Const(addrTrue)
-		f.code.Op(wasm.I64Eq)
-		f.code.If(wasm.BlockI64)
-		f.expr(n.Then)
-		f.code.Op(wasm.Else)
-		f.expr(n.Else)
-		f.code.Op(wasm.End)
+		f.I64Const(addrTrue)
+		f.Op(wasm.I64Eq)
+		f.ifElse(wasm.BlockI64, func() {
+			f.expr(n.Then)
+		}, func() {
+			f.expr(n.Else)
+		})
 	case Lambda:
 		f.lambdaValue(n)
 	case Def:
@@ -483,37 +523,35 @@ func (f *wasmFunc) ref(n Ref) {
 	case n.Loc == nil:
 		if value, found := f.c.scope.lookup(symbol(n.Name)); found {
 			if _, isMacro := value.(Macro); isMacro {
-				f.c.fail(&f.code, n.Name+" is a macro, not a value", nil)
+				f.c.fail(f.wasmBody, n.Name+" is a macro, not a value", nil)
 				return
 			}
 		}
-		f.code.GlobalGet(f.c.global(n.Name))
+		f.GlobalGet(f.c.global(n.Name))
 		f.checkBound(n.Name)
 	case n.Loc.Depth == 0:
 		f.slotLoad(n.Loc.Index)
 		if f.boxed[n.Loc.Index] {
-			f.code.Op(wasm.I32WrapI64)
-			f.code.I64Load(8)
+			f.Op(wasm.I32WrapI64)
+			f.I64Load(8)
 		}
 		if n.Loc.Index >= len(f.lambda.Params) {
 			f.checkBound(n.Name)
 		}
 	default:
 		f.cellOf(n.Name)
-		f.code.Op(wasm.I32WrapI64)
-		f.code.I64Load(8)
+		f.Op(wasm.I32WrapI64)
+		f.I64Load(8)
 		f.checkBound(n.Name)
 	}
 }
 
 // checkBound fails if the value on the stack is 0: a name not yet defined.
 func (f *wasmFunc) checkBound(name string) {
-	f.code.LocalTee(f.scratch)
-	f.code.Op(wasm.I64Eqz)
-	f.code.If(wasm.BlockVoid)
-	f.c.fail(&f.code, "Cannot resolve symbol "+name, nil)
-	f.code.Op(wasm.End)
-	f.code.LocalGet(f.scratch)
+	f.LocalTee(f.scratch)
+	f.Op(wasm.I64Eqz)
+	f.c.failIf(f.wasmBody, "Cannot resolve symbol "+name, nil)
+	f.LocalGet(f.scratch)
 }
 
 // cellOf leaves the cell of name, a slot of this lambda that inner lambdas
@@ -524,25 +562,25 @@ func (f *wasmFunc) cellOf(name string) {
 		return
 	}
 	f.selfLoad()
-	f.code.Op(wasm.I32WrapI64)
-	f.code.I64Load(16 + 8*f.captured(name))
+	f.Op(wasm.I32WrapI64)
+	f.I64Load(16 + 8*f.captured(name))
 }
 
 func (f *wasmFunc) def(n Def) {
 	f.expr(n.Value)
 	if f.lambda == nil {
-		f.code.GlobalSet(f.c.global(n.Name))
+		f.GlobalSet(f.c.global(n.Name))
 	} else if i := f.slot(n.Name); f.boxed[i] {
-		f.code.LocalSet(f.scratch)
+		f.LocalSet(f.scratch)
 		f.slotLoad(i)
-		f.code.Op(wasm.I32WrapI64)
-		f.code.LocalGet(f.scratch)
-		f.code.I64Store(8)
+		f.Op(wasm.I32WrapI64)
+		f.LocalGet(f.scratch)
+		f.I64Store(8)
 	} else {
-		f.code.LocalSet(f.scratch)
+		f.LocalSet(f.scratch)
 		f.slotStore(i, f.scratch)
 	}
-	f.code.I64Const(addrEmpty)
+	f.I64Const(addrEmpty)
 }
 
 // apply pushes the function and arguments on the argument stack and calls
@@ -557,16 +595,16 @@ func (f *wasmFunc) apply(n Apply) {
 // local holding the function's address there.
 func (f *wasmFunc) pushCall(n Apply) uint32 {
 	base := f.local(wasm.I32)
-	f.code.GlobalGet(gSP)
-	f.code.LocalSet(base)
+	f.GlobalGet(gSP)
+	f.LocalSet(base)
 	for _, node := range append([]Node{n.Fn}, n.Args...) {
-		f.code.GlobalGet(gSP)
+		f.GlobalGet(gSP)
 		f.expr(node)
-		f.code.I64Store(0)
-		f.code.GlobalGet(gSP)
-		f.code.I32Const(8)
-		f.code.Op(wasm.I32Add)
-		f.code.GlobalSet(gSP)
+		f.I64Store(0)
+		f.GlobalGet(gSP)
+		f.I32Const(8)
+		f.Op(wasm.I32Add)
+		f.GlobalSet(gSP)
 	}
 	return base
 }
@@ -578,34 +616,34 @@ func (f *wasmFunc) pushCall(n Apply) uint32 {
 func (f *wasmFunc) invoke(base uint32, n Apply) {
 	f.at(n.Line) // again, after the arguments' calls
 	call := func() {
-		f.c.safePoint(&f.code)
-		f.code.LocalGet(base)
-		f.code.I64Load(0)
-		f.code.LocalGet(base)
-		f.code.I32Const(8)
-		f.code.Op(wasm.I32Add)
-		f.code.I32Const(int32(len(n.Args)))
-		f.code.I32Const(int32(f.c.str(unresolved(n).String())))
-		f.code.Call(f.c.rt.invoke)
+		f.c.safePoint(f.wasmBody)
+		f.LocalGet(base)
+		f.I64Load(0)
+		f.LocalGet(base)
+		f.I32Const(8)
+		f.Op(wasm.I32Add)
+		f.I32Const(int32(len(n.Args)))
+		f.I32Const(int32(f.c.str(unresolved(n).String())))
+		f.Call(f.c.rt.invoke)
 	}
 	if name, inline, found := f.c.inlineFor(n); found {
-		f.code.LocalGet(base)
-		f.code.I64Load(0)
-		f.code.I64Const(int64(f.c.closure(f.c.rt.builtins[name])))
-		f.code.Op(wasm.I64Eq)
-		f.code.If(wasm.BlockI64)
-		inline.emit(&f.code, &f.c.rt, func(i int) {
-			f.code.LocalGet(base)
-			f.code.I64Load(uint32(8 * (1 + i)))
-		}, call)
-		f.code.Op(wasm.Else)
-		call()
-		f.code.Op(wasm.End)
+		f.LocalGet(base)
+		f.I64Load(0)
+		f.I64Const(int64(f.c.closure(f.c.rt.builtins[name])))
+		f.Op(wasm.I64Eq)
+		f.ifElse(wasm.BlockI64, func() {
+			inline.emit(f.wasmBody, &f.c.rt, func(i int) {
+				f.LocalGet(base)
+				f.I64Load(uint32(8 * (1 + i)))
+			}, call)
+		}, func() {
+			call()
+		})
 	} else {
 		call()
 	}
-	f.code.LocalGet(base)
-	f.code.GlobalSet(gSP)
+	f.LocalGet(base)
+	f.GlobalSet(gSP)
 }
 
 // tailExpr compiles node, whose value the lambda returns. In tail position,
@@ -615,15 +653,15 @@ func (f *wasmFunc) tailExpr(node Node) {
 	switch n := node.(type) {
 	case If:
 		f.expr(n.Cond)
-		f.code.I64Const(addrTrue)
-		f.code.Op(wasm.I64Eq)
-		f.code.If(wasm.BlockI64)
-		f.blocks++
-		f.tailExpr(n.Then)
-		f.code.Op(wasm.Else)
-		f.tailExpr(n.Else)
-		f.blocks--
-		f.code.Op(wasm.End)
+		f.I64Const(addrTrue)
+		f.Op(wasm.I64Eq)
+		f.ifElse(wasm.BlockI64, func() {
+			f.blocks++
+			f.tailExpr(n.Then)
+		}, func() {
+			f.tailExpr(n.Else)
+			f.blocks--
+		})
 	case Apply:
 		f.tailApply(n)
 	default:
@@ -642,23 +680,23 @@ func (f *wasmFunc) tailApply(n Apply) {
 		f.tailCall(base, n)
 		return
 	}
-	f.code.LocalGet(base)
-	f.code.I64Load(0)
+	f.LocalGet(base)
+	f.I64Load(0)
 	f.selfLoad()
-	f.code.Op(wasm.I64Eq)
-	f.code.If(wasm.BlockI64)
-	for i := range n.Args {
-		f.code.LocalGet(f.frame)
-		f.code.LocalGet(base)
-		f.code.I64Load(uint32(8 * (1 + i)))
-		f.code.I64Store(uint32(8 * (1 + i)))
-	}
-	f.code.LocalGet(base)
-	f.code.GlobalSet(gSP)
-	f.code.Br(uint32(f.blocks + 1))
-	f.code.Op(wasm.Else)
-	f.tailCall(base, n)
-	f.code.Op(wasm.End)
+	f.Op(wasm.I64Eq)
+	f.ifElse(wasm.BlockI64, func() {
+		for i := range n.Args {
+			f.LocalGet(f.frame)
+			f.LocalGet(base)
+			f.I64Load(uint32(8 * (1 + i)))
+			f.I64Store(uint32(8 * (1 + i)))
+		}
+		f.LocalGet(base)
+		f.GlobalSet(gSP)
+		f.Br(uint32(f.blocks + 1))
+	}, func() {
+		f.tailCall(base, n)
+	})
 }
 
 // tailCall calls the function at base, in tail position, with the arguments
@@ -669,69 +707,69 @@ func (f *wasmFunc) tailApply(n Apply) {
 // (or reported) as usual.
 func (f *wasmFunc) tailCall(base uint32, n Apply) {
 	fn := func() {
-		f.code.LocalGet(base)
-		f.code.I64Load(0)
+		f.LocalGet(base)
+		f.I64Load(0)
 	}
 	fn()
-	f.code.Call(f.c.rt.tagOf)
-	f.code.I32Const(tagClosure)
-	f.code.Op(wasm.I32Eq)
-	f.code.If(wasm.BlockI32)
-	fn()
-	f.code.Op(wasm.I32WrapI64)
-	f.code.I32Load(4)
-	f.code.I32Const(int32(len(builtinNames)))
-	f.code.Op(wasm.I32GeU)
-	f.code.Op(wasm.Else)
-	f.code.I32Const(0)
-	f.code.Op(wasm.End)
-	f.code.If(wasm.BlockI64)
-	fn()
-	f.code.GlobalSet(gPendingFn)
-	f.code.LocalGet(base)
-	f.code.I32Const(8)
-	f.code.Op(wasm.I32Add)
-	f.code.GlobalSet(gPendingArgs)
-	f.code.I32Const(int32(len(n.Args)))
-	f.code.GlobalSet(gPendingArgc)
-	f.code.LocalGet(f.frame)
-	f.code.GlobalSet(gSP)
-	f.code.I64Const(pending)
-	f.code.Op(wasm.Return)
-	f.code.Op(wasm.Else)
-	f.invoke(base, n)
-	f.code.Op(wasm.End)
+	f.Call(f.c.rt.tagOf)
+	f.I32Const(tagClosure)
+	f.Op(wasm.I32Eq)
+	f.ifElse(wasm.BlockI32, func() {
+		fn()
+		f.Op(wasm.I32WrapI64)
+		f.I32Load(4)
+		f.I32Const(int32(len(builtinNames)))
+		f.Op(wasm.I32GeU)
+	}, func() {
+		f.I32Const(0)
+	})
+	f.ifElse(wasm.BlockI64, func() {
+		fn()
+		f.GlobalSet(gPendingFn)
+		f.LocalGet(base)
+		f.I32Const(8)
+		f.Op(wasm.I32Add)
+		f.GlobalSet(gPendingArgs)
+		f.I32Const(int32(len(n.Args)))
+		f.GlobalSet(gPendingArgc)
+		f.LocalGet(f.frame)
+		f.GlobalSet(gSP)
+		f.I64Const(pending)
+		f.Op(wasm.Return)
+	}, func() {
+		f.invoke(base, n)
+	})
 }
 
 // lambdaValue compiles n's body as a function and leaves a closure of it.
 func (f *wasmFunc) lambdaValue(n Lambda) {
 	table := f.c.compileLambda(n)
 	if len(n.Captured) == 0 {
-		f.code.I64Const(int64(f.c.closure(table)))
+		f.I64Const(int64(f.c.closure(table)))
 		return
 	}
-	f.code.I32Const(int32(16 + 8*len(n.Captured)))
-	f.code.Call(f.c.rt.alloc)
-	f.code.LocalSet(f.tmp32)
+	f.I32Const(int32(16 + 8*len(n.Captured)))
+	f.Call(f.c.rt.alloc)
+	f.LocalSet(f.tmp32)
 	for offset, v := range []int32{tagClosure, int32(table), int32(len(n.Captured))} {
-		f.code.LocalGet(f.tmp32)
-		f.code.I32Const(v)
-		f.code.I32Store(uint32(4 * offset))
+		f.LocalGet(f.tmp32)
+		f.I32Const(v)
+		f.I32Store(uint32(4 * offset))
 	}
 	for k, name := range n.Captured {
-		f.code.LocalGet(f.tmp32)
+		f.LocalGet(f.tmp32)
 		f.cellOf(name)
-		f.code.I64Store(uint32(16 + 8*k))
+		f.I64Store(uint32(16 + 8*k))
 	}
-	f.code.LocalGet(f.tmp32)
-	f.code.Op(wasm.I64ExtendI32U)
+	f.LocalGet(f.tmp32)
+	f.Op(wasm.I64ExtendI32U)
 }
 
 // compileLambda compiles n as a glisp function and returns its table index.
 // Its slots are those Resolve gave it: parameters, then local defs.
 func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 	index, table := c.declareFn()
-	f := &wasmFunc{c: c, nparams: 3, lambda: &n}
+	f := &wasmFunc{c: c, wasmBody: &wasmBody{nparams: 3}, lambda: &n}
 	f.slots = append([]string(nil), n.Params...)
 	for _, name := range localDefs(n.Body) {
 		f.slots = appendNew(f.slots, name)
@@ -748,65 +786,65 @@ func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 	f.scratch = f.local(wasm.I64)
 	f.tmp32 = f.local(wasm.I32)
 
-	f.code.LocalGet(2)
-	f.code.I32Const(int32(len(n.Params)))
-	f.code.Op(wasm.I32Ne)
-	f.code.If(wasm.BlockVoid)
-	arguments := "arguments"
-	if len(n.Params) == 1 {
-		arguments = "argument"
-	}
-	msg := fmt.Sprintf("lambda (%s) expects %d %s, got ", strings.Join(n.Params, " "), len(n.Params), arguments)
-	c.fail(&f.code, msg, func() {
-		f.code.LocalGet(2)
-		f.code.Op(wasm.I64ExtendI32U)
-		f.code.Call(c.rt.putInt)
-		c.text(&f.code, ": ")
-		f.code.LocalGet(1)
-		f.code.LocalGet(2)
-		f.code.Call(c.rt.putArgs)
+	f.LocalGet(paramArgc)
+	f.I32Const(int32(len(n.Params)))
+	f.Op(wasm.I32Ne)
+	f.when(func() {
+		arguments := "arguments"
+		if len(n.Params) == 1 {
+			arguments = "argument"
+		}
+		msg := fmt.Sprintf("lambda (%s) expects %d %s, got ", strings.Join(n.Params, " "), len(n.Params), arguments)
+		c.fail(f.wasmBody, msg, func() {
+			f.LocalGet(paramArgc)
+			f.Op(wasm.I64ExtendI32U)
+			f.Call(c.rt.putInt)
+			c.text(f.wasmBody, ": ")
+			f.LocalGet(paramArgs)
+			f.LocalGet(paramArgc)
+			f.Call(c.rt.putArgs)
+		})
 	})
-	f.code.Op(wasm.End)
 
 	// The frame, at the top of the argument stack: the closure, then the
 	// parameters as passed; then a loop that a self tail call jumps back to
 	// with new ones. Each pass gives captured variables fresh cells, so a
 	// closure made in one pass keeps its own, and starts local defs unbound.
-	f.code.GlobalGet(gSP)
-	f.code.LocalTee(f.frame)
-	f.code.I32Const(int32(8 * (1 + len(f.slots))))
-	f.code.Op(wasm.I32Add)
-	f.code.GlobalSet(gSP)
-	f.code.LocalGet(f.frame)
-	f.code.LocalGet(0)
-	f.code.I64Store(0)
+	f.GlobalGet(gSP)
+	f.LocalTee(f.frame)
+	f.I32Const(int32(8 * (1 + len(f.slots))))
+	f.Op(wasm.I32Add)
+	f.GlobalSet(gSP)
+	f.LocalGet(f.frame)
+	f.LocalGet(paramSelf)
+	f.I64Store(0)
 	for i := range n.Params {
-		f.code.LocalGet(f.frame)
-		f.code.LocalGet(1)
-		f.code.I64Load(uint32(8 * i))
-		f.code.I64Store(uint32(8 * (1 + i)))
+		f.LocalGet(f.frame)
+		f.LocalGet(paramArgs)
+		f.I64Load(uint32(8 * i))
+		f.I64Store(uint32(8 * (1 + i)))
 	}
-	f.code.Loop(wasm.BlockI64)
+	f.Loop(wasm.BlockI64)
 	for i := range f.slots {
 		if i < len(n.Params) && !f.boxed[i] {
 			continue
 		}
-		f.code.LocalGet(f.frame)
+		f.LocalGet(f.frame)
 		if i < len(n.Params) {
 			f.slotLoad(i)
 		} else {
-			f.code.I64Const(0)
+			f.I64Const(0)
 		}
 		if f.boxed[i] {
-			f.code.Call(c.rt.cell)
+			f.Call(c.rt.cell)
 		}
-		f.code.I64Store(uint32(8 * (1 + i)))
+		f.I64Store(uint32(8 * (1 + i)))
 	}
 	f.body(n.Body)
-	f.code.Op(wasm.End)
-	f.code.LocalGet(f.frame)
-	f.code.GlobalSet(gSP)
-	c.define(index, f.locals, f.code)
+	f.Op(wasm.End)
+	f.LocalGet(f.frame)
+	f.GlobalSet(gSP)
+	c.setBody(index, f.wasmBody)
 	return table
 }
 

@@ -224,13 +224,17 @@ prints exactly what the interpreter does, error messages included.
 What a review of the code found: concepts each restated in several places,
 by hand. In the order to do them; each makes the next cheaper.
 
-- [ ] **Structured wasm generation.** Runtime functions are assembled by
-  hand: `If … Else … End` spelled out everywhere (`returnIf`, `ifIntegers`
-  and `ifTag` are three local attempts at a helper), locals numbered by
+- [x] **Structured wasm generation.** Runtime functions were assembled by
+  hand: `If … Else … End` spelled out everywhere, and locals numbered by
   hand (`const v, p, n = 0, 1, 2`) with their types listed apart in
-  `define`, so the two can disagree, and twenty `fail` sites each printing
-  their parts their own way. Wanted: a function builder that allocates
-  locals by name and type, `ifElse`/loop helpers, and `fail(parts…)`.
+  `define`, so the two could disagree. Now every function, runtime,
+  builtin or lambda, is built on a `wasmBody`: parameters by
+  `b.param(i)` (the glisp convention's as `paramSelf`, `paramArgs`,
+  `paramArgc`), locals declared where they're named
+  (`n := b.local(i32)`), and control as `b.when`, `b.ifElse`, `b.until`
+  and `c.failIf`; the helpers are its methods. The compiled modules are
+  byte for byte what they were. Left for the builtin spec: each `fail`
+  still prints its parts its own way.
 - [ ] **A builtin, defined once.** One builtin is written in up to five
   places: the interpreter's `builtins`, `builtinNames` (or
   `stringBuiltinNames`), a case in `builtinBody` (which repeats the string
