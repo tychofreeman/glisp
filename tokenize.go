@@ -3,7 +3,7 @@ package glisp
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"unicode"
 )
 
@@ -13,7 +13,7 @@ func TokenizeString(input string) List {
 }
 
 func TokenizeFile(fname string) List {
-	fileBytes, err := ioutil.ReadFile(fname)
+	fileBytes, err := os.ReadFile(fname)
 	if err != nil {
 		return nil
 	}

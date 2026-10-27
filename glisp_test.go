@@ -201,3 +201,7 @@ func TestCarAndCdrOfNilAreNil(t *testing.T) {
 func IsNil(actual interface{}) (bool, string) {
 	return actual == nil, fmt.Sprintf("expected nil, got %T %v", actual, actual)
 }
+
+func TestDefmacroOfANonFunctionFails(t *testing.T) {
+	assertPanicsWith(t, "(defmacro m 5) (m)", "defmacro: expected a function, got int64 5")
+}

@@ -248,3 +248,12 @@ One entry per PR, written before committing it.
 - Small wish: `remove_dead_code` takes extra names to remove "with it", but
   the argument for them isn't named in `refactor list`; two separate steps
   were simpler than guessing.
+
+### PR: `ioutil` and the `macro` message
+
+- No tool issues, and one nice touch: `replace_expression` swapping
+  `ioutil.ReadFile` for `os.ReadFile` added the `os` import *and* removed
+  `io/ioutil` because nothing else used it — and with the file gofmt'd, the
+  import came out correctly indented this time.
+- Writing `\n` inside a Go string, inside JSON, inside a shell heredoc took
+  `\\\\n` in the heredoc; again the shell, not the tool.

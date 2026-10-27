@@ -177,7 +177,7 @@ func macro(scope *Scope, params List) interface{} {
 		case NonEvaluatingFunction:
 			return b(macroScope, macroParams)
 		default:
-			panic(fmt.Sprintf("Could nt execute a function: %t %v\n%v\n", b, b, macroScope))
+			panic(fmt.Sprintf("defmacro: expected a function, got %T %v\n", b, b))
 		}
 	})
 	scope.add(name, macroFn)
