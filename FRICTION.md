@@ -37,6 +37,8 @@ way to type-check or run the tests through the CLI.
   result; used it for `check {"run_tests": true}` and then for every edit.
 - **Would help:** `refactor check [run_tests=true]` in the CLI, or a
   `refactor mcp-call <tool> '<json>'` passthrough.
+- **Resolved** in go-refactor-mcp `3f4b7d8`: `refactor check [run_tests=true]
+  [packages=./...]`.
 
 ### `undo` doesn't survive between calls
 
@@ -46,6 +48,9 @@ and re-loads the module.
 - **Workaround:** relied on `git diff` / `git checkout` instead of `undo`.
 - **Would help:** the CLI keeping undo state on disk (e.g. under `.git/` or a
   cache dir), or a long-running mode.
+- **Resolved** in go-refactor-mcp `3f4b7d8`: `refactor undo` reverts the last
+  edit made by an earlier `refactor` process, and leaves no files in the
+  repo.
 
 ### `replace_statements` re-indents with tabs; `add_declaration` doesn't
 
@@ -77,3 +82,17 @@ go-refactor-mcp requires Go 1.26; the container has 1.24.7. With
 `GOTOOLCHAIN=auto` (the default) `go run`/`go install …@latest` fetched
 go1.26.10 automatically, so no hand-built Go was needed. Worth noting in the
 README for machines with `GOTOOLCHAIN=local`.
+
+### Picking up a fresh go-refactor-mcp commit
+
+After the fix above was pushed, `go install …@latest` still installed the old
+build: the module proxy resolves `@latest` from a cached list. `@master` failed
+(the branch is `main`), and `GOPROXY=direct` with the commit hash downloaded
+the code but then couldn't switch to Go 1.26, because fetching the toolchain
+also goes through `GOPROXY`.
+
+- **Workaround:** install the exact pseudo-version through the normal proxy:
+  `go install …/cmd/refactor@v0.0.0-20261027143145-3f4b7d8dbecc`.
+- **Would help:** tagging releases, so `@latest` (and `.mcp.json`'s
+  `go run …@latest`) moves when the tools change; `refactor -version` /
+  `refactor-mcp -version` reporting the commit, since both still print 0.2.0.
