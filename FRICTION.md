@@ -167,3 +167,11 @@ One entry per PR, written before committing it.
   whole `if` chain (one statement) and kept the file's indentation. Passing Go
   rune literals like `'"'` inside JSON inside a shell argument took awkward
   quoting; that's the shell, not the tool, and `batch @file` avoids it.
+
+### PR: operator characters as symbols
+
+- No tool issues. `replace_expression` changed just the condition of one
+  `else if`, so nothing else in the chain had to be restated. Its argument
+  for the old text isn't named in `refactor list`'s description ("its source
+  text"); I guessed `expression` and it was right, but naming the arguments in
+  the description would remove the guess.

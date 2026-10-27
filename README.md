@@ -33,7 +33,7 @@ loaded before every program; it defines `mult`.
   `car`/`cdr` of a non-list return nil.
 - [ ] Tokenizer:
   - [x] `(` or `)` inside a string splits the string.
-  - [ ] Characters other than letters, digits, `- _ ?` and `"` are dropped as
+  - [x] Characters other than letters, digits, `- _ ?` and `"` are dropped as
     separators, so `(+ 1 2)` reads as `(1 2)`.
   - [ ] A lone `"` panics.
   - [ ] Input is read byte by byte, so non-ASCII text is mangled

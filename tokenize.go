@@ -34,7 +34,7 @@ func Tokenize(bs *bytes.Buffer) List {
         
         if inQuote && c != '"' {
             acc += string(c)
-        } else if unicode.IsLetter(c) || unicode.IsNumber(c) || c == '-' || c == '_' || c == '?' {
+        } else if !unicode.IsSpace(c) && c != '(' && c != ')' && c != '"' {
             acc += string(c)
         } else if c == '(' {
             nested := Tokenize(bs)
