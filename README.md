@@ -59,6 +59,8 @@ loaded before every program; it defines `mult`.
   which now reports "expects a name and a value".
 - [x] `defn` (a disabled test): `(defn name (params) body...)`, a stdlib macro.
   Macros can now expand to `lambda`, which is also a run-time special form.
+- [x] `let` (the last disabled test): `(let (name value ...) body...)`, a stdlib
+  macro. Bindings apply in order, so a value can use the names before it.
 - [x] Macros: `isMacroScope` and `createNonEvaluatingScope` were never used, and a
   macro's expansion wasn't evaluated. Expansions are now evaluated in the
   caller's scope, and the unused machinery is gone.

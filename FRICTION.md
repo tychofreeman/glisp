@@ -457,3 +457,10 @@ One entry per PR, written before committing it.
   clause first. `to_file` creating the file would save a step.
 - Otherwise smooth: `add_declaration` replaced the stub (and said so), and
   `replace_declaration` swapped two `String` methods.
+
+### PR: `let`
+
+- No tool issues: `add_declaration` + `remove_dead_code` replaced the last
+  disabled test (the exported-name API note again, for a `_test.go`
+  function), `replace_text` added the macro to `stdlib.glisp`, and
+  `replace_statements` updated a test helper.

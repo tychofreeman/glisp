@@ -6,3 +6,16 @@
   (cons (quote def)
     (cons (car xs)
       (cons (cons (quote lambda) (cdr xs)) nil)))))
+
+; (let (name value name value ...) body...) binds each name to its value, in
+; order, so a value can use the names before it, then evaluates body.
+; (let (a 1 b a) body) is ((lambda (a) ((lambda (b) ((lambda () body))) a)) 1).
+(defn let_expand (bindings body)
+  (if (eq (car bindings) nil)
+    (cons (cons (quote lambda) (cons (quote ()) body)) nil)
+    (cons
+      (cons (quote lambda)
+        (cons (cons (car bindings) nil)
+          (cons (cons (quote let) (cons (cdr (cdr bindings)) body)) nil)))
+      (cons (car (cdr bindings)) nil))))
+(defmacro let (lambda (xs) (let_expand (car xs) (cdr xs))))
