@@ -118,9 +118,18 @@ func TestDefWithTheWrongNumberOfArgumentsFails(t *testing.T) {
 	assertPanicsWith(t, "(defmacro m (lambda (xs) 1) 2)", "defmacro: expects a name and a value, got 3 arguments")
 }
 
-func COMPILE_IN_MULTIPLE_PASSES_TO_GET_THIS_TO_WORK_TestFunctionsCanBeDefinedWithShortcuts(t *testing.T) {
-	AssertThat(t, Process("(defmacro defn (lambda (xs) (def (car (xs) (cdr xs))))) (defn x1 (x) (plus x 1)) (x1 4)"), Equals(int64(5)))
+func TestDefnDefinesFunctions(t *testing.T) {
 	AssertThat(t, Process("(defn x1 (x) (plus x 1)) (x1 4)"), Equals(int64(5)))
+	AssertThat(t, Process("(defn add (a b) (plus a b)) (add 2 3)"), Equals(int64(5)))
+	AssertThat(t, Process("(defn fact (n) (if (eq n 0) 1 (mult n (fact (- n 1))))) (fact 5)"), Equals(int64(120)))
+}
+
+func TestDefnBodiesCanHaveSeveralForms(t *testing.T) {
+	AssertThat(t, Process("(defn f (x) (plus x 100) (plus x 1)) (f 4)"), Equals(int64(5)))
+}
+
+func TestMacrosCanExpandToLambdas(t *testing.T) {
+	AssertThat(t, Process("(defmacro fn (lambda (xs) (cons (quote lambda) xs))) ((fn (x) (plus x 1)) 4)"), Equals(int64(5)))
 }
 
 func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {

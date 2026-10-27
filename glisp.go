@@ -147,6 +147,16 @@ func ifThenElse(scope *Scope, params List) interface{} {
 	return GetValue(scope, params[2])
 }
 
+// lambdaForm is (lambda (params...) body...) evaluated at run time, as when a
+// macro builds one. A lambda written in the source becomes a Lambda value when
+// it is parsed, so it never gets here.
+func lambdaForm(scope *Scope, params List) interface{} {
+	if len(params) == 0 {
+		panic("lambda: expects a parameter list")
+	}
+	return Lambda{paramBinder(params.First()), ParseMany(params.Rest())}.Eval(scope)
+}
+
 func eq(_ *Scope, params List) interface{} {
 	if len(params) != 2 {
 		panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %v - %v", len(params), params))
@@ -242,6 +252,7 @@ var builtins = map[string]interface{}{
 	"<":        compare("<", func(a, b int64) bool { return a < b }),
 	">":        compare(">", func(a, b int64) bool { return a > b }),
 	"if":       NonEvaluatingFunction(ifThenElse),
+	"lambda":   NonEvaluatingFunction(lambdaForm),
 	"eq":       Function(eq),
 	"apply":    Function(apply),
 	"def":      NonEvaluatingFunction(define),

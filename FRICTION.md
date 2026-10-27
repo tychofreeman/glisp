@@ -372,3 +372,16 @@ One entry per PR, written before committing it.
   was never part of the API; the note is a false positive there.
 - Otherwise smooth: `replace_statements` by `function` and `replace_text` for
   the doc comment, in one `batch`.
+
+### PR: `defn`
+
+- No refusals. `add_declaration` + `remove_dead_code` replaced the disabled
+  test (the same route as for mutual recursion; `remove_dead_code` again
+  called removing a `_test.go` function an API change). `add_declaration`
+  with `after`, `add_element` with `after "\"if\""`, and `replace_text` on
+  `stdlib.glisp` added the feature in one `batch`.
+- A 32-step `batch` of `replace_text` converted the example's definitions to
+  `defn`. Each step needed the definition's exact text, so a script found the
+  forms' extents; a structural "rewrite this s-expression" step would only
+  make sense for Go, so that's no gap in a Go tool — just a note that
+  non-Go bulk edits are text edits.
