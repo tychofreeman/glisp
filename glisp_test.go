@@ -114,3 +114,7 @@ func NOT_YET_DO_IT_WITH_MACROS_TestSupportsLetBindings(t *testing.T) {
 func TestCanSubtractByAddingNegativeNumbers(t *testing.T) {
     AssertThat(t, Process("(plus -1 1)"), Equals(int64(0)))
 }
+
+func TestEmptyListEvaluatesToNil(t *testing.T) {
+    AssertThat(t, GetValue(baseScope, List{}) == nil, IsTrue)
+}

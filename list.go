@@ -34,6 +34,9 @@ func (value List) Eval(scope *Scope) interface{} {
     if scope.isMacroScope {
         return value
     }
+    if len(value) == 0 {
+        return nil
+    }
     switch firstValue := value[0].(type) {
     case NonEvaluatingFunction:
         return firstValue(scope, value.Rest())
