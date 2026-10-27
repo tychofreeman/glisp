@@ -494,3 +494,8 @@ One entry per PR, written before committing it.
 - Experiments (a larger stack, timing probes) were done with a throwaway
   `_test.go` file and `sed`, outside the tools, then restored; `undo` would
   have covered the constant, but not a file created and deleted by hand.
+
+### PR: the tour example
+
+- No gorefactor use: the PR adds one glisp file, written directly. (This
+  entry went in with `replace_text`, which worked fine.)

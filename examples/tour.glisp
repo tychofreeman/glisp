@@ -1,0 +1,563 @@
+; tour.glisp: a longer tour of glisp.
+;
+; Everything here is built from a handful of builtins (car cdr cons atom eq
+; plus - < > p), lambda, def and defmacro: control macros, a list library,
+; fast arithmetic made from addition, primes, three sorting algorithms,
+; symbolic differentiation, an RPN calculator, binary trees, N-queens,
+; Church numerals and lazy streams.
+;
+; Run it in the interpreter, or compile it to WebAssembly and run that:
+;   go run ./cmd/glisp examples/tour.glisp
+;   go run ./cmd/glisp -wasm tour.wasm examples/tour.glisp
+;   wasmtime tour.wasm
+
+; ======================================================================
+; Basics
+; ======================================================================
+
+(defn not (b) (if b false true))
+
+; nil and the empty list both end a list.
+(defn null (l) (if (eq l nil) true (eq l (quote ()))))
+
+(defn second (l) (car (cdr l)))
+(defn third (l) (car (cdr (cdr l))))
+(defn list3 (a b c) (cons a (cons b (cons c nil))))
+(defn list4 (a b c d) (cons a (list3 b c d)))
+
+; ======================================================================
+; Macros. Each expands into ifs before the program runs, so they cost
+; nothing at run time. Their helpers are ordinary functions.
+; ======================================================================
+
+; (and a b c) is (if a (and b c) false); (and) is true.
+(defn and_expand (xs)
+  (if (null xs) true
+    (list4 (quote if) (car xs) (cons (quote and) (cdr xs)) false)))
+(defmacro and (lambda (xs) (and_expand xs)))
+
+; (or a b c) is (if a true (or b c)); (or) is false.
+(defn or_expand (xs)
+  (if (null xs) false
+    (list4 (quote if) (car xs) true (cons (quote or) (cdr xs)))))
+(defmacro or (lambda (xs) (or_expand xs)))
+
+; (cond test value test value ...) tries each test in turn; use true as
+; the last test for a default. With no test true, it is nil.
+(defn cond_expand (xs)
+  (if (null xs) nil
+    (list4 (quote if) (car xs) (second xs)
+      (cons (quote cond) (cdr (cdr xs))))))
+(defmacro cond (lambda (xs) (cond_expand xs)))
+
+; (when test body...) runs body, in order, if test is true.
+(defn when_expand (xs)
+  (list4 (quote if) (car xs)
+    (cons (cons (quote lambda) (cons (quote ()) (cdr xs))) nil)
+    nil))
+(defmacro when (lambda (xs) (when_expand xs)))
+
+(defn le (a b) (not (> a b)))
+(defn ge (a b) (not (< a b)))
+(defn abs (n) (if (< n 0) (- n) n))
+(defn min (a b) (if (< a b) a b))
+(defn max (a b) (if (> a b) a b))
+
+; ======================================================================
+; A list library
+; ======================================================================
+
+(def empty (quote ()))
+(defn list1 (a) (cons a empty))
+(defn list2 (a b) (cons a (list1 b)))
+
+(defn fold (f acc l)
+  (if (null l) acc
+    (fold f (f acc (car l)) (cdr l))))
+
+(defn foldr (f init l)
+  (if (null l) init
+    (f (car l) (foldr f init (cdr l)))))
+
+(defn map (f l)
+  (if (null l) empty
+    (cons (f (car l)) (map f (cdr l)))))
+
+(defn map2 (f a b)
+  (if (or (null a) (null b)) empty
+    (cons (f (car a) (car b)) (map2 f (cdr a) (cdr b)))))
+
+(defn filter (pred l)
+  (cond (null l) empty
+        (pred (car l)) (cons (car l) (filter pred (cdr l)))
+        true (filter pred (cdr l))))
+
+(defn for_each (f l)
+  (when (not (null l))
+    (f (car l))
+    (for_each f (cdr l))))
+
+(defn length (l) (fold (lambda (n x) (plus n 1)) 0 l))
+(defn sum (l) (fold plus 0 l))
+(defn maximum (l) (fold max (car l) (cdr l)))
+(defn reverse (l) (fold (lambda (acc x) (cons x acc)) empty l))
+(defn append (a b) (foldr cons b a))
+
+(defn range (a b)
+  (if (> a b) empty
+    (cons a (range (plus a 1) b))))
+
+(defn nth (l n) (if (eq n 0) (car l) (nth (cdr l) (- n 1))))
+(defn last (l) (if (null (cdr l)) (car l) (last (cdr l))))
+
+(defn take (n l)
+  (if (or (eq n 0) (null l)) empty
+    (cons (car l) (take (- n 1) (cdr l)))))
+
+(defn drop (n l)
+  (if (or (eq n 0) (null l)) l
+    (drop (- n 1) (cdr l))))
+
+(defn take_while (pred l)
+  (if (and (not (null l)) (pred (car l)))
+    (cons (car l) (take_while pred (cdr l)))
+    empty))
+
+(defn zip (a b) (map2 list2 a b))
+
+(defn member (x l)
+  (cond (null l) false
+        (eq x (car l)) true
+        true (member x (cdr l))))
+
+(defn all (pred l)
+  (cond (null l) true
+        (pred (car l)) (all pred (cdr l))
+        true false))
+
+(defn any (pred l)
+  (cond (null l) false
+        (pred (car l)) true
+        true (any pred (cdr l))))
+
+(defn flatten (x)
+  (cond (null x) empty
+        (atom x) (list1 x)
+        true (append (flatten (car x)) (flatten (cdr x)))))
+
+; Run-length encoding: (a a b) is ((2 a) (1 b)).
+(defn rle (l)
+  (if (null l) empty
+    (let (run (take_while (lambda (x) (eq x (car l))) l))
+      (cons (list2 (length run) (car l))
+            (rle (drop (length run) l))))))
+
+; ======================================================================
+; Arithmetic from plus and -
+;
+; The stdlib's mult adds y to itself x times. divmod halves the work at
+; each step instead: to divide a by b, divide a by 2b, then fix up the
+; last bit. times multiplies by doubling.
+; ======================================================================
+
+; (divmod a b) is (quotient remainder), for a >= 0 and b > 0.
+(defn divmod (a b)
+  (if (< a b) (list2 0 a)
+    (let (qr (divmod a (plus b b))
+          q (car qr)
+          r (second qr))
+      (if (< r b)
+        (list2 (plus q q) r)
+        (list2 (plus q q 1) (- r b))))))
+
+(defn div (a b) (car (divmod a b)))
+(defn mod (a b) (second (divmod a b)))
+
+(defn times (a b)
+  (cond (< a 0) (- (times (- a) b))
+        (eq a 0) 0
+        true (let (qr (divmod a 2)
+                   h (times (car qr) b))
+               (if (eq (second qr) 1) (plus h h b) (plus h h)))))
+
+(defn square (n) (times n n))
+(defn even (n) (eq (mod n 2) 0))
+(defn odd (n) (not (even n)))
+
+(defn expt (b e)
+  (cond (eq e 0) 1
+        (even e) (square (expt b (div e 2)))
+        true (times b (expt b (- e 1)))))
+
+(defn gcd (a b) (if (eq b 0) a (gcd b (mod a b))))
+(defn lcm (a b) (div (times a b) (gcd a b)))
+
+(defn fact (n) (if (eq n 0) 1 (times n (fact (- n 1)))))
+
+(defn fib_iter (a b n) (if (eq n 0) a (fib_iter b (plus a b) (- n 1))))
+(defn fib (n) (fib_iter 0 1 n))
+
+(defn digits (n)
+  (if (< n 10) (list1 n)
+    (let (qr (divmod n 10))
+      (append (digits (car qr)) (list1 (second qr))))))
+
+; Integer square root by binary search.
+(defn isqrt_search (n lo hi)
+  (if (> lo hi) hi
+    (let (mid (div (plus lo hi) 2))
+      (if (> (square mid) n)
+        (isqrt_search n lo (- mid 1))
+        (isqrt_search n (plus mid 1) hi)))))
+(defn isqrt (n) (isqrt_search n 0 (min n 2000000000)))
+
+; ======================================================================
+; Primes and other number theory
+; ======================================================================
+
+(defn divides (d n) (eq (mod n d) 0))
+
+(defn no_divisor_from (n d)
+  (cond (> (square d) n) true
+        (divides d n) false
+        true (no_divisor_from n (plus d 1))))
+(defn prime (n) (and (> n 1) (no_divisor_from n 2)))
+
+; The sieve of Eratosthenes on a list: keep the head, strike its multiples.
+(defn sieve (l)
+  (if (null l) empty
+    (cons (car l)
+      (sieve (filter (lambda (x) (not (divides (car l) x))) (cdr l))))))
+
+(defn factors_from (n d)
+  (cond (eq n 1) empty
+        (> (square d) n) (list1 n)
+        (divides d n) (cons d (factors_from (div n d) d))
+        true (factors_from n (plus d 1))))
+(defn factors (n) (factors_from n 2))
+
+(defn divisor_sum (n)
+  (sum (filter (lambda (d) (divides d n)) (range 1 (div n 2)))))
+(defn perfect (n) (and (> n 1) (eq (divisor_sum n) n)))
+
+(defn collatz_next (n) (if (even n) (div n 2) (plus (times 3 n) 1)))
+(defn collatz_steps (n)
+  (if (eq n 1) 0 (plus 1 (collatz_steps (collatz_next n)))))
+
+; The start below limit whose Collatz sequence takes the most steps, and
+; how many.
+(defn longest_collatz (limit)
+  (fold (lambda (best n)
+          (let (len (collatz_steps n))
+            (if (> len (second best)) (list2 n len) best)))
+        (list2 1 0)
+        (range 1 limit)))
+
+; ======================================================================
+; Sorting
+; ======================================================================
+
+; A linear congruential generator for repeatable "random" numbers.
+(defn next_random (x) (mod (plus (times x 25173) 13849) 65536))
+(defn randoms (n seed)
+  (if (eq n 0) empty
+    (cons (mod seed 100) (randoms (- n 1) (next_random seed)))))
+
+(defn insert (x sorted)
+  (cond (null sorted) (list1 x)
+        (le x (car sorted)) (cons x sorted)
+        true (cons (car sorted) (insert x (cdr sorted)))))
+(defn insertion_sort (l) (foldr insert empty l))
+
+; Merge sort: split into alternate elements, sort each, merge.
+(defn split (l)
+  (if (or (null l) (null (cdr l))) (list2 l empty)
+    (let (rest (split (cdr (cdr l))))
+      (list2 (cons (car l) (car rest))
+             (cons (second l) (second rest))))))
+
+(defn merge (a b)
+  (cond (null a) b
+        (null b) a
+        (le (car a) (car b)) (cons (car a) (merge (cdr a) b))
+        true (cons (car b) (merge a (cdr b)))))
+
+(defn merge_sort (l)
+  (if (or (null l) (null (cdr l))) l
+    (let (halves (split l))
+      (merge (merge_sort (car halves)) (merge_sort (second halves))))))
+
+; Quicksort: the lambdas close over the pivot.
+(defn quicksort (l)
+  (if (null l) empty
+    (let (pivot (car l)
+          rest (cdr l))
+      (append (quicksort (filter (lambda (x) (< x pivot)) rest))
+              (cons pivot (quicksort (filter (lambda (x) (ge x pivot)) rest)))))))
+
+(defn sorted (l)
+  (or (null l)
+      (null (cdr l))
+      (and (le (car l) (second l)) (sorted (cdr l)))))
+
+; ======================================================================
+; Symbolic differentiation: expressions are lists like (plus x 3) and
+; (times 2 x), built and taken apart with the list functions.
+; ======================================================================
+
+(defn is_op (e op) (and (not (atom e)) (eq (car e) op)))
+
+(defn make_sum (a b)
+  (cond (eq a 0) b
+        (eq b 0) a
+        true (list3 (quote plus) a b)))
+
+(defn make_product (a b)
+  (cond (or (eq a 0) (eq b 0)) 0
+        (eq a 1) b
+        (eq b 1) a
+        true (list3 (quote times) a b)))
+
+; d/dv of e, by the sum and product rules.
+(defn deriv (e v)
+  (cond (eq e v) 1
+        (atom e) 0
+        (is_op e (quote plus))
+          (make_sum (deriv (second e) v) (deriv (third e) v))
+        (is_op e (quote times))
+          (make_sum (make_product (second e) (deriv (third e) v))
+                    (make_product (deriv (second e) v) (third e)))
+        true (quote unknown)))
+
+; env is a list of (name value) pairs.
+(defn lookup (k env default)
+  (cond (null env) default
+        (eq k (car (car env))) (second (car env))
+        true (lookup k (cdr env) default)))
+
+(defn evaluate (e env)
+  (cond (atom e) (lookup e env e)
+        (is_op e (quote plus))
+          (plus (evaluate (second e) env) (evaluate (third e) env))
+        (is_op e (quote times))
+          (times (evaluate (second e) env) (evaluate (third e) env))
+        true (quote unknown)))
+
+; x^3 + 2x^2 + 5x + 7
+(def polynomial
+  (quote (plus (times x (times x x))
+               (plus (times 2 (times x x))
+                     (plus (times 5 x) 7)))))
+
+; ======================================================================
+; An RPN calculator: numbers push themselves; words work on the stack.
+; ======================================================================
+
+(defn rpn_step (stack word)
+  (let (a (car stack)
+        b (second stack)
+        under (cdr (cdr stack)))
+    (cond (eq word (quote add)) (cons (plus b a) under)
+          (eq word (quote sub)) (cons (- b a) under)
+          (eq word (quote mul)) (cons (times b a) under)
+          (eq word (quote dup)) (cons a stack)
+          (eq word (quote swap)) (cons b (cons a under))
+          true (cons word stack))))
+
+(defn rpn (program) (car (fold rpn_step empty program)))
+
+; ======================================================================
+; Binary search trees: a tree is nil or (value left right).
+; ======================================================================
+
+(defn tree_insert (t x)
+  (cond (eq t nil) (list3 x nil nil)
+        (< x (car t)) (list3 (car t) (tree_insert (second t) x) (third t))
+        (> x (car t)) (list3 (car t) (second t) (tree_insert (third t) x))
+        true t))
+
+(defn tree_from (l) (fold tree_insert nil l))
+
+(defn tree_has (t x)
+  (cond (eq t nil) false
+        (eq x (car t)) true
+        (< x (car t)) (tree_has (second t) x)
+        true (tree_has (third t) x)))
+
+(defn inorder (t)
+  (if (eq t nil) empty
+    (append (inorder (second t)) (cons (car t) (inorder (third t))))))
+
+(defn height (t)
+  (if (eq t nil) 0
+    (plus 1 (max (height (second t)) (height (third t))))))
+
+; ======================================================================
+; N-queens. placed holds the column of each queen so far, latest first.
+; ======================================================================
+
+(defn safe (col placed distance)
+  (cond (null placed) true
+        (or (eq col (car placed))
+            (eq (abs (- col (car placed))) distance)) false
+        true (safe col (cdr placed) (plus distance 1))))
+
+(defn count_queens (n row placed)
+  (if (eq row n) 1
+    (sum (map (lambda (col)
+                (if (safe col placed 1)
+                  (count_queens n (plus row 1) (cons col placed))
+                  0))
+              (range 0 (- n 1))))))
+
+(defn first_queens (n row placed)
+  (if (eq row n) (reverse placed) (try_columns n row placed 0)))
+
+(defn try_columns (n row placed col)
+  (cond (eq col n) false
+        (safe col placed 1)
+          (let (found (first_queens n (plus row 1) (cons col placed)))
+            (if (eq found false) (try_columns n row placed (plus col 1)) found))
+        true (try_columns n row placed (plus col 1))))
+
+; ======================================================================
+; Functions as values
+; ======================================================================
+
+(defn identity (x) x)
+(defn compose (f g) (lambda (x) (f (g x))))
+(defn curry (f) (lambda (a) (lambda (b) (f a b))))
+(defn repeat (f n) (if (eq n 0) identity (compose f (repeat f (- n 1)))))
+
+(def add5 ((curry plus) 5))
+(def double (lambda (x) (plus x x)))
+
+; Church numerals: n is "apply f n times".
+(defn church (n) (lambda (f) (repeat f n)))
+(defn unchurch (c) ((c (lambda (x) (plus x 1))) 0))
+(defn church_add (m n) (lambda (f) (compose (m f) (n f))))
+(defn church_mul (m n) (lambda (f) (m (n f))))
+
+; Towers of Hanoi: the list of (from to) moves.
+(defn hanoi (n from to via)
+  (if (eq n 0) empty
+    (append (hanoi (- n 1) from via to)
+            (cons (list2 from to) (hanoi (- n 1) via to from)))))
+
+; Pascal's triangle: each row is the last, shifted and added to itself.
+(defn next_row (row) (map2 plus (cons 0 row) (append row (list1 0))))
+(defn pascal (n row)
+  (if (eq n 0) empty
+    (cons row (pascal (- n 1) (next_row row)))))
+
+; ======================================================================
+; Lazy streams: (head thunk), where calling thunk gives the rest.
+; ======================================================================
+
+(defn stream (head thunk) (list2 head thunk))
+(defn stream_rest (s) ((second s)))
+
+(defn integers_from (n) (stream n (lambda () (integers_from (plus n 1)))))
+
+(defn stream_take (n s)
+  (if (eq n 0) empty
+    (cons (car s) (stream_take (- n 1) (stream_rest s)))))
+
+(defn stream_map (f s)
+  (stream (f (car s)) (lambda () (stream_map f (stream_rest s)))))
+
+(defn stream_filter (pred s)
+  (if (pred (car s))
+    (stream (car s) (lambda () (stream_filter pred (stream_rest s))))
+    (stream_filter pred (stream_rest s))))
+
+; The infinite list of primes, sieved lazily.
+(defn sieve_stream (s)
+  (stream (car s)
+    (lambda ()
+      (sieve_stream
+        (stream_filter (lambda (x) (not (divides (car s) x)))
+                       (stream_rest s))))))
+
+(def primes (sieve_stream (integers_from 2)))
+
+; ======================================================================
+; The tour
+; ======================================================================
+
+(p "--- lists ---")
+(def nums (range 1 12))
+(p "range 1..12:" nums)
+(p "squares:" (map square nums))
+(p "odd ones:" (filter odd nums))
+(p "sum, length, maximum:" (sum nums) (length nums) (maximum (map (lambda (x) (- 50 (square (- x 7)))) nums)))
+(p "reverse:" (reverse nums))
+(p "take 4, drop 9:" (take 4 nums) (drop 9 nums))
+(p "nth 5, last:" (nth nums 5) (last nums))
+(p "zip:" (zip (range 1 4) (quote (a b c d))))
+(p "flatten:" (flatten (quote (1 (2 (3 4)) ((5)) 6))))
+(p "member 7, member 70:" (member 7 nums) (member 70 nums))
+(p "all positive, any over 11:" (all (lambda (x) (> x 0)) nums) (any (lambda (x) (> x 11)) nums))
+(p "run-length:" (rle (quote (a a a b c c a a d d d d))))
+
+(p "--- arithmetic ---")
+(p "divmod 1000 7:" (divmod 1000 7))
+(p "times 123456 789:" (times 123456 789))
+(p "2^62 - 1:" (- (expt 2 62) 1))
+(p "20!:" (fact 20))
+(p "fib 90:" (fib 90))
+(p "gcd, lcm of 1071 462:" (gcd 1071 462) (lcm 1071 462))
+(p "digits of 9876543210:" (digits 9876543210))
+(p "digit sum of 2^50:" (sum (digits (expt 2 50))))
+(p "isqrt 2*10^12:" (isqrt (times 2 (expt 10 12))))
+
+(p "--- primes ---")
+(p "sieve to 100:" (sieve (range 2 100)))
+(p "primes by trial division, 100..150:" (filter prime (range 100 150)))
+(p "factors of 360, 9973, 123456789:" (factors 360) (factors 9973) (factors 123456789))
+(p "perfect numbers under 500:" (filter perfect (range 1 500)))
+(p "collatz from 27:" (collatz_steps 27) "steps")
+(p "longest collatz under 1000:" (longest_collatz 1000))
+(p "first 20 primes, lazily:" (stream_take 20 primes))
+
+(p "--- sorting ---")
+(def unsorted (randoms 25 42))
+(p "unsorted:" unsorted)
+(def by_insertion (insertion_sort unsorted))
+(def by_merging (merge_sort unsorted))
+(def by_quicksort (quicksort unsorted))
+(p "merge sort:" by_merging)
+(p "all three agree:" (and (eq by_insertion by_merging) (eq by_merging by_quicksort)))
+(p "sorted before, after:" (sorted unsorted) (sorted by_quicksort))
+
+(p "--- symbols ---")
+(def slope (deriv polynomial (quote x)))
+(p "f:" polynomial)
+(p "f':" slope)
+(p "f(3), f'(3):" (evaluate polynomial (quote ((x 3)))) (evaluate slope (quote ((x 3)))))
+(p "d/dx (x * y):" (deriv (quote (times x y)) (quote x)))
+(p "rpn (3 4 add 5 mul dup mul 2 sub):" (rpn (quote (3 4 add 5 mul dup mul 2 sub))))
+
+(p "--- trees ---")
+(def tree (tree_from unsorted))
+(p "in order (duplicates dropped):" (inorder tree))
+(p "height:" (height tree) "for" (length (inorder tree)) "values")
+(p "has 42, has 43:" (tree_has tree 42) (tree_has tree 43))
+
+(p "--- search ---")
+(p "4..8 queens solutions:" (map (lambda (n) (count_queens n 0 empty)) (range 4 8)))
+(p "a solution for 8:" (first_queens 8 0 empty))
+(p "hanoi 3:" (hanoi 3 1 3 2))
+(p "hanoi 10 takes" (length (hanoi 10 1 3 2)) "moves")
+
+(p "--- functions ---")
+(p "add5 7, double 21:" (add5 7) (double 21))
+(p "compose add5 double, 10:" ((compose add5 double) 10))
+(p "double 10 times, 1:" ((repeat double 10) 1))
+(p "church 6+7, 6*7:" (unchurch (church_add (church 6) (church 7))) (unchurch (church_mul (church 6) (church 7))))
+(p "squares, lazily:" (stream_take 10 (stream_map square (integers_from 1))))
+(p "pascal's triangle:")
+(for_each (lambda (row) (p row)) (pascal 10 (list1 1)))
+
+; The program's value: the sum of the squares of 1..100.
+(sum (map square (range 1 100)))
