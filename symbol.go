@@ -1,9 +1,5 @@
 package glisp
 
-import (
-	"fmt"
-)
-
 type Symbol struct{ name string }
 
 func (sym Symbol) Str() string {
@@ -11,13 +7,10 @@ func (sym Symbol) Str() string {
 }
 
 func (sym Symbol) Eval(scope *Scope) interface{} {
-	if scope.isMacroScope {
-		return sym
-	} else if resolved, ok := scope.lookup(sym); ok {
+	if resolved, ok := scope.lookup(sym); ok {
 		return resolved
-	} else {
-		panic(fmt.Sprintf("Cannot resolve symbol %v in lookup %#v\n", sym.name, scope))
 	}
+	panic("Cannot resolve symbol " + sym.name)
 }
 
 func symbol(s string) Symbol {

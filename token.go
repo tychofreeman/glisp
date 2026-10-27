@@ -112,11 +112,3 @@ func num(n int64) NumberToken {
 func str(s string) StringToken {
 	return StringToken{s}
 }
-
-func str_token(s string) StringToken {
-	return StringToken{s}
-}
-
-func num_token(s string) NumberToken {
-	return NumberToken{s}
-}

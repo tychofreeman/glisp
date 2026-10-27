@@ -15,9 +15,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: glisp FILE.glisp")
 		os.Exit(2)
 	}
-	if _, err := os.Stat(os.Args[1]); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	value, err := glisp.RunFile(os.Args[1])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "glisp:", err)
 		os.Exit(1)
 	}
-	fmt.Println("=>", glisp.ProcessFile(os.Args[1]))
+	fmt.Println("=>", value)
 }
