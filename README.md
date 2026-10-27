@@ -268,10 +268,13 @@ by hand. In the order to do them; each makes the next cheaper.
   message uses the builtins' `arguments`. Compiled modules are unchanged,
   byte for byte. The pending-tail-call protocol still has its one
   producer (`tailCall`) and one consumer (the runtime's `invoke`).
-- [ ] **One memory-growth policy.** `memory.grow` is called in five places
-  in three functions (`alloc` doubles, `putByte` grows a page, `gc`
-  doubles for to-space), each with its own "out of memory". Wanted: one
-  `grow(bytes)`.
+- [x] **One memory-growth policy.** `memory.grow` was called in five
+  places in three functions (`alloc` and `gc` doubled, `str`'s capture
+  grew a page at a time), each with its own "out of memory". Now the
+  runtime's `reserve(end)` grows memory to reach `end`, doubling it, or by
+  what's needed if that much isn't there, and all three call it. Building
+  a long string with `str` now doubles memory too; a test that does so
+  failed on the page-at-a-time growth.
 - [ ] **Tail position and lines as facts of the AST.** The interpreter's
   loop and the compiler's `tailExpr` each decide what is in tail position,
   and both record a call's line twice. Resolve could mark `Apply.Tail` as

@@ -5,14 +5,14 @@ import "github.com/tychofreeman/glisp/wasm"
 // wasmRuntime holds the function indices of the runtime that compiled glisp
 // calls: memory, printing, errors, calls and the builtins.
 type wasmRuntime struct {
-	fdWrite, procExit                               uint32 // WASI imports
-	alloc, flush, putByte, putBytes, putStr, putInt uint32
-	putValue, putType, putArgs, failBegin, failEnd  uint32
-	tagOf, pair, cell, equal, invoke                uint32
-	putShow, putQuoted, putDescribed                uint32
-	builtins                                        map[string]uint32 // table index of each builtin
-	runeCount, runeOffset, newString                uint32            // string helpers
-	objSize, gcCopy, gcReloc, gc                    uint32            // the garbage collector
+	fdWrite, procExit                                        uint32 // WASI imports
+	reserve, alloc, flush, putByte, putBytes, putStr, putInt uint32
+	putValue, putType, putArgs, failBegin, failEnd           uint32
+	tagOf, pair, cell, equal, invoke                         uint32
+	putShow, putQuoted, putDescribed                         uint32
+	builtins                                                 map[string]uint32 // table index of each builtin
+	runeCount, runeOffset, newString                         uint32            // string helpers
+	objSize, gcCopy, gcReloc, gc                             uint32            // the garbage collector
 }
 
 var (
@@ -35,6 +35,7 @@ func (c *wasmCompiler) runtime() {
 	}
 	rt := &c.rt
 	rt.fdWrite, rt.procExit = 0, 1
+	rt.reserve = c.declare(sig(vals(i32)))
 	rt.alloc = c.declare(sig(vals(i32), i32))
 	rt.flush = c.declare(sig(nil))
 	rt.putByte = c.declare(sig(vals(i32)))
@@ -62,6 +63,7 @@ func (c *wasmCompiler) runtime() {
 		builtinFuncs[spec.name], rt.builtins[spec.name] = c.declareFn()
 	}
 
+	c.define(rt.reserve, c.reserveBody)
 	c.define(rt.alloc, c.allocBody)
 	c.define(rt.flush, c.flushBody)
 	c.define(rt.putByte, c.putByteBody)
@@ -196,9 +198,50 @@ func (c *wasmCompiler) typeAndValue(b *wasmBody, v uint32) {
 	b.Call(c.rt.putDescribed)
 }
 
+// reserve(end) grows memory, if it doesn't reach end yet, by the larger of
+// the pages needed and its size, doubling it, so a program that allocates
+// a lot grows memory a few times rather than once per allocation; if that
+// much isn't available, by the pages needed alone.
+func (c *wasmCompiler) reserveBody(b *wasmBody) {
+	end, need := b.param(0), b.local(i32)
+	b.LocalGet(end)
+	b.MemorySize()
+	b.I32Const(16)
+	b.Op(wasm.I32Shl, wasm.I32LeU)
+	b.returnIf(func() {})
+	b.LocalGet(end)
+	b.MemorySize()
+	b.I32Const(16)
+	b.Op(wasm.I32Shl, wasm.I32Sub)
+	b.I32Const(65535)
+	b.Op(wasm.I32Add)
+	b.I32Const(16)
+	b.Op(wasm.I32ShrU)
+	b.LocalSet(need)
+	b.MemorySize()
+	b.LocalGet(need)
+	b.MemorySize()
+	b.LocalGet(need)
+	b.Op(wasm.I32GtU, wasm.Select)
+	b.MemoryGrow()
+	b.I32Const(-1)
+	b.Op(wasm.I32Ne)
+	b.returnIf(func() {})
+	b.LocalGet(need)
+	b.MemoryGrow()
+	b.I32Const(-1)
+	b.Op(wasm.I32Eq)
+	b.when(func() {
+		// Report the error, not capture it into a string.
+		b.I32Const(0)
+		b.GlobalSet(gCapture)
+		c.fail(b, "out of memory", nil)
+	})
+}
+
 // alloc(size) returns size bytes of heap, doubling memory when it runs out.
 func (c *wasmCompiler) allocBody(b *wasmBody) {
-	size, p, end, need := b.param(0), b.local(i32), b.local(i32), b.local(i32)
+	size, p, end := b.param(0), b.local(i32), b.local(i32)
 	b.GlobalGet(gHP)
 	b.LocalTee(p)
 	b.LocalGet(size)
@@ -208,41 +251,7 @@ func (c *wasmCompiler) allocBody(b *wasmBody) {
 	b.I32Const(-8)
 	b.Op(wasm.I32And)
 	b.LocalTee(end)
-	b.MemorySize()
-	b.I32Const(16)
-	b.Op(wasm.I32Shl, wasm.I32GtU)
-	b.when(func() {
-		// need: the pages end is past memory.
-		b.LocalGet(end)
-		b.MemorySize()
-		b.I32Const(16)
-		b.Op(wasm.I32Shl, wasm.I32Sub)
-		b.I32Const(65535)
-		b.Op(wasm.I32Add)
-		b.I32Const(16)
-		b.Op(wasm.I32ShrU)
-		b.LocalSet(need)
-		// Grow by the larger of need and the memory's size, doubling it, so a
-		// program that allocates a lot grows memory a few times, not once per
-		// allocation. If that much isn't available, grow by need alone.
-		b.MemorySize()
-		b.LocalGet(need)
-		b.MemorySize()
-		b.LocalGet(need)
-		b.Op(wasm.I32GtU, wasm.Select)
-		b.MemoryGrow()
-		b.I32Const(-1)
-		b.Op(wasm.I32Eq)
-		b.when(func() {
-			b.LocalGet(need)
-			b.MemoryGrow()
-			b.I32Const(-1)
-			b.Op(wasm.I32Eq)
-			b.when(func() {
-				c.fail(b, "out of memory", nil)
-			})
-		})
-	})
+	b.Call(c.rt.reserve)
 	b.LocalGet(end)
 	b.GlobalSet(gHP)
 	b.LocalGet(p)
@@ -271,25 +280,13 @@ func (c *wasmCompiler) flushBody(b *wasmBody) {
 
 func (c *wasmCompiler) putByteBody(b *wasmBody) {
 	ch := b.param(0)
-	// While str captures, the byte goes on the end of the string it builds,
-	// growing memory a page at a time.
+	// While str captures, the byte goes on the end of the string it builds.
 	b.GlobalGet(gCapture)
 	b.when(func() {
 		b.GlobalGet(gCapEnd)
-		b.MemorySize()
-		b.I32Const(16)
-		b.Op(wasm.I32Shl, wasm.I32GeU)
-		b.when(func() {
-			b.I32Const(1)
-			b.MemoryGrow()
-			b.I32Const(-1)
-			b.Op(wasm.I32Eq)
-			b.when(func() {
-				b.I32Const(0)
-				b.GlobalSet(gCapture)
-				c.fail(b, "out of memory", nil)
-			})
-		})
+		b.I32Const(1)
+		b.Op(wasm.I32Add)
+		b.Call(c.rt.reserve)
 		b.GlobalGet(gCapEnd)
 		b.LocalGet(ch)
 		b.I32Store8(0)
