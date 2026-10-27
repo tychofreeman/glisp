@@ -154,7 +154,13 @@ prints exactly what the interpreter does, error messages included.
 - [x] Macros expand while compiling. Their helpers (top-level `def`s of
   lambdas) are evaluated in the interpreter too; other `def`s aren't, so a
   macro can't use a value computed at run time.
+- [x] Memory doubles when the heap runs out, so a program that allocates a
+  lot grows it a few times rather than once per allocation.
 - [ ] Garbage collection: the heap is a bump allocator that never frees.
+- [ ] Node 22 (`node:wasi`) segfaults at random on long runs such as
+  `examples/tour.glisp`, even with memory preallocated; turning off V8's
+  wasm tier-up (`--no-wasm-tier-up`) mostly avoids it, and wazero runs it
+  every time. Not yet tried on a newer Node.
 - [ ] Tail calls: recursion depth is limited by the stack (about 500,000
   calls). The wasm tail-call proposal (`return_call`) would fix tail calls,
   but wazero v1.10 doesn't support it.

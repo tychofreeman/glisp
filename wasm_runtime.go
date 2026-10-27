@@ -56,7 +56,7 @@ func (c *wasmCompiler) runtime() {
 		builtinFuncs[name], rt.builtins[name] = c.declareFn()
 	}
 
-	c.define(rt.alloc, vals(i32, i32), c.allocBody())
+	c.define(rt.alloc, vals(i32, i32, i32), c.allocBody())
 	c.define(rt.flush, nil, c.flushBody())
 	c.define(rt.putByte, nil, c.putByteBody())
 	c.define(rt.putBytes, vals(i32), c.putBytesBody())
@@ -162,9 +162,9 @@ func (c *wasmCompiler) typeAndValue(b *wasm.Code, v uint32) {
 	b.Call(c.rt.putValue)
 }
 
-// alloc(size) returns size bytes of heap, growing memory as needed.
+// alloc(size) returns size bytes of heap, doubling memory when it runs out.
 func (c *wasmCompiler) allocBody() wasm.Code {
-	const size, p, end = 0, 1, 2
+	const size, p, end, need = 0, 1, 2, 3
 	var b wasm.Code
 	b.GlobalGet(gHP)
 	b.LocalTee(p)
@@ -179,6 +179,7 @@ func (c *wasmCompiler) allocBody() wasm.Code {
 	b.I32Const(16)
 	b.Op(wasm.I32Shl, wasm.I32GtU)
 	b.If(wasm.BlockVoid)
+	// need: the pages end is past memory.
 	b.LocalGet(end)
 	b.MemorySize()
 	b.I32Const(16)
@@ -187,12 +188,26 @@ func (c *wasmCompiler) allocBody() wasm.Code {
 	b.Op(wasm.I32Add)
 	b.I32Const(16)
 	b.Op(wasm.I32ShrU)
+	b.LocalSet(need)
+	// Grow by the larger of need and the memory's size, doubling it, so a
+	// program that allocates a lot grows memory a few times, not once per
+	// allocation. If that much isn't available, grow by need alone.
+	b.MemorySize()
+	b.LocalGet(need)
+	b.MemorySize()
+	b.LocalGet(need)
+	b.Op(wasm.I32GtU, wasm.Select)
+	b.MemoryGrow()
+	b.I32Const(-1)
+	b.Op(wasm.I32Eq)
+	b.If(wasm.BlockVoid)
+	b.LocalGet(need)
 	b.MemoryGrow()
 	b.I32Const(-1)
 	b.Op(wasm.I32Eq)
 	b.If(wasm.BlockVoid)
 	c.fail(&b, "out of memory", nil)
-	b.Op(wasm.End, wasm.End)
+	b.Op(wasm.End, wasm.End, wasm.End)
 	b.LocalGet(end)
 	b.GlobalSet(gHP)
 	b.LocalGet(p)
