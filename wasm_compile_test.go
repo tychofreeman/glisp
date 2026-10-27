@@ -139,6 +139,12 @@ var wasmPrograms = []string{
 	`(defn f (x) (g x 1)) (defn g (x y) (plus x y)) (f 41)`,
 	`(defn f (n) (apply g n 1)) (defn g (n m) (if (eq n 0) m (f (- n 1)))) (f 100)`,
 	`(defn make (k) (lambda (n) (if (eq n 0) k ((make (plus k 1)) (- n 1))))) ((make 0) 1000)`,
+	`(p (plus 2 3) (- 2 3) (* -4 5) (< 1 2) (> 1 2) (<= 2 2) (>= 1 2) (eq (quote (1)) (quote (1))))`,
+	`(p (car (quote (1 2))) (cdr (quote (1 2))) (cons 1 (quote (2))) (cons 1 nil) (cons 1 2) (atom 1) (atom (quote ())))`,
+	`(p (number? 1) (number? "1") (list? nil) (list? (quote ())) (nil? nil) (nil? 0))`,
+	`(def plus (lambda (a b) (* a b))) (plus 3 4)`,
+	`(defn f (x) (car x)) (p (f (quote (1 2)))) (def car cdr) (f (quote (1 2)))`,
+	`(defn g (a b) (< a b)) (p (g 1 2)) (def < >) (g 1 2)`,
 	// Errors.
 	`(car 1)`,
 	`(cdr "s")`,
@@ -226,6 +232,28 @@ func TestCompiledMutualTailCallsUseConstantStack(t *testing.T) {
 		(ev 1000001)`
 	if got := runCompiled(t, program); got != "true\n=> false\n" {
 		t.Errorf("got %q", got)
+	}
+}
+
+// Calls to builtins run inline when the name still holds the builtin: the
+// inline paths are there, and the results are the same as without them.
+func TestCompiledBuiltinCallsAreDirect(t *testing.T) {
+	program := `(defn f (a b) (cons (plus a (car b)) (cdr b))) (p (f 1 (quote (2 3)))) (f 1 2)`
+	direct, err := CompileWasm(program)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inlineCalls = false
+	indirect, err := CompileWasm(program)
+	inlineCalls = true
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(direct) <= len(indirect) {
+		t.Errorf("with inline paths: %d bytes; without: %d", len(direct), len(indirect))
+	}
+	if got, want := runCompiled(t, program), runInterpreted(t, program); got != want {
+		t.Errorf("compiled: %q\ninterpreted: %q", got, want)
 	}
 }
 
