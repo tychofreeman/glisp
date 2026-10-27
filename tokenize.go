@@ -31,7 +31,7 @@ func Tokenize(bs *bytes.Buffer) List {
 
     acc := ""
     for ; bs.Len() > 0 ; {
-        c := rune(bs.Next(1)[0])
+        c, _, _ := bs.ReadRune()
         
         if inQuote && c != '"' {
             acc += string(c)

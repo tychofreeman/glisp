@@ -87,3 +87,7 @@ func TestUnterminatedStringsFail(t *testing.T) {
     assertPanicsWith(t, "(quote \")", "unterminated string")
     assertPanicsWith(t, "\"abc", "unterminated string: \"abc")
 }
+
+func TestNonASCIITextIsKept(t *testing.T) {
+    AssertThat(t, TokenizeString("(λ \"héllo\")"), HasExactly(HasExactly(symbol("λ"), token("\"héllo\""))))
+}
