@@ -309,3 +309,19 @@ func TestConsWithTheWrongNumberOfArgumentsFails(t *testing.T) {
 	assertPanicsWith(t, "(cons)", "cons: expects 1 or 2 arguments, got 0")
 	assertPanicsWith(t, "(cons 1 2 3)", "cons: expects 1 or 2 arguments, got 3")
 }
+
+// unless expands (unless c a b) into (if c b a).
+const unlessMacro = `(defmacro unless (lambda (args)
+	(cons (quote if)
+		(cons (car args)
+			(cons (car (cdr (cdr args)))
+				(cons (car (cdr args)) nil))))))`
+
+func TestMacroExpansionsAreEvaluated(t *testing.T) {
+	AssertThat(t, Process(unlessMacro+"(unless (eq 1 2) 10 20)"), Equals(int64(10)))
+	AssertThat(t, Process(unlessMacro+"(unless (eq 1 1) 10 20)"), Equals(int64(20)))
+}
+
+func TestMacroExpansionsAreEvaluatedInTheCallersScope(t *testing.T) {
+	AssertThat(t, Process(unlessMacro+"(def f (lambda (x) (unless (eq x 0) x 99))) (f 5)"), Equals(int64(5)))
+}
