@@ -39,7 +39,7 @@ func TestPShowsItsArguments(t *testing.T) {
 
 func TestErrorsNameGlispTypes(t *testing.T) {
 	program := `(car (quote (a "b")))  (plus 1 (quote (a "b")))`
-	want := "glisp: plus: expected a number, got list (a \"b\")\n"
+	want := "glisp: line 1: plus: expected a number, got list (a \"b\")\n"
 	if got := runInterpreted(t, program); got != want {
 		t.Errorf("interpreted: got %q, want %q", got, want)
 	}

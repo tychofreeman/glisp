@@ -620,6 +620,27 @@ One entry per PR, written before committing it.
   `MemoryCopy`, `add_field` and seven `replace_text` steps went through as
   one `batch`, built by a script from files in a scratch directory (the
   `create_file` content-from-a-file gap again).
+
+### PR: line numbers in errors
+
+- The biggest batch yet, 38 steps across both backends, the AST and the
+  tokenizer, built by a script. Three refusals, each rolling everything
+  back and naming the problem:
+  1. `replace_text` on `eval.go` didn't match: the `Apply` case is inside
+     a `for`, one tab deeper than I'd written. Reading the line with
+     `grep -n` showed the real indentation.
+  2. `remove_dead_code` (the last step) refused because the batch didn't
+     type-check: `ast_test.go` builds `Apply` with unkeyed literals, which
+     the new `Line` field breaks. The message listed all three with their
+     positions; keying them with `replace_text` fixed it. (`add_field`
+     alone refuses up front on unkeyed literals; inside a batch with
+     `check: "end"` the error surfaced at the end, on a different step.)
+  3. None: after that the batch applied, and a test run found a panic in
+     the new `readLines` (taking `&t[0]` of an empty list), fixed with one
+     `replace_text`.
+- `replace_declaration` swapped `tokenizeList` for a one-line wrapper and
+  `add_declaration` added the tokenizer type with its methods after it;
+  `remove_dead_code` took out the old `recoverError` once nothing used it.
 - The 9-step batch otherwise applied as planned: constants and globals by
   `replace_text`, the body of `invoke` by line range, its locals and
   `define` call by `replace_text`.

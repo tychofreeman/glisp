@@ -5,6 +5,12 @@ import "fmt"
 // Read turns tokenized source into data: number and string tokens become
 // int64 and string, symbols stay Symbols, and lists stay Lists.
 func Read(token interface{}) interface{} {
+	return readLines(token, nil, nil)
+}
+
+// readLines is Read, carrying the line of each list it reads, from from, to
+// the list it makes, in to.
+func readLines(token interface{}, from, to Lines) interface{} {
 	switch t := token.(type) {
 	case NumberToken:
 		return t.Value()
@@ -13,7 +19,12 @@ func Read(token interface{}) interface{} {
 	case List:
 		data := make(List, len(t))
 		for i, item := range t {
-			data[i] = Read(item)
+			data[i] = readLines(item, from, to)
+		}
+		if len(t) > 0 && to != nil {
+			if line, found := from[&t[0]]; found {
+				to[&data[0]] = line
+			}
 		}
 		return data
 	default:
@@ -30,6 +41,8 @@ type Macro struct{ fn Function }
 // so a macro applies to the forms expanded after its definition.
 type Expander struct {
 	scope *Scope
+	lines Lines // the line of each list read from source
+	line  int   // the line of the innermost list being expanded
 }
 
 // NewExpander returns an Expander that finds macros in, and defines them in,
@@ -59,9 +72,26 @@ func (e *Expander) ExpandAll(forms List) []Node {
 	return nodes
 }
 
+// formLine is the line of the top-level form, if it is a list read from
+// source, or 0.
+func (e *Expander) formLine(form interface{}) int {
+	if l, isList := form.(List); isList && len(l) > 0 {
+		return e.lines[&l[0]]
+	}
+	return 0
+}
+
 func (e *Expander) expandList(f List) Node {
 	if len(f) == 0 {
 		return Const{nil}
+	}
+	// A call gets the line of the list it was read from; code a macro made
+	// gets the line of the macro call.
+	if line, found := e.lines[&f[0]]; found {
+		saved := e.line
+		e.line = line
+		e.scope.at(line)
+		defer func() { e.line = saved }()
 	}
 	if head, isSymbol := f[0].(Symbol); isSymbol {
 		switch head.Str() {
@@ -97,7 +127,7 @@ func (e *Expander) expandList(f List) Node {
 			return e.Expand(macro.fn(e.scope, List{f.Rest()}))
 		}
 	}
-	return Apply{e.Expand(f[0]), e.ExpandAll(f[1:])}
+	return Apply{Fn: e.Expand(f[0]), Args: e.ExpandAll(f[1:]), Line: e.line}
 }
 
 // macro returns the macro sym names, if it names one.

@@ -267,7 +267,7 @@ var stdlibForms = Read(TokenizeString(stdlib)).(List)
 // newScope makes the top-level scope for one run: its own definitions over
 // the builtins, which it never changes, with the stdlib loaded.
 func newScope() *Scope {
-	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}}
+	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}, run: &runState{}}
 	expander := NewExpander(scope)
 	for _, form := range stdlibForms {
 		Eval(expander.Expand(form), scope)
@@ -276,10 +276,22 @@ func newScope() *Scope {
 }
 
 func ProcessTokens(scope *Scope, tokenized List) interface{} {
+	return processLines(scope, tokenized, nil)
+}
+
+// processLines evaluates the forms in tokens, whose lists start on the lines
+// in lines, and returns the value of the last one.
+func processLines(scope *Scope, tokens List, lines Lines) interface{} {
 	expander := NewExpander(scope)
+	expander.lines = Lines{}
 	var value interface{}
-	for _, token := range tokenized {
-		value = Eval(expander.Expand(Read(token)), scope)
+	for _, token := range tokens {
+		form := readLines(token, lines, expander.lines)
+		node := expander.Expand(form)
+		if scope.run != nil {
+			scope.run.line = expander.formLine(form)
+		}
+		value = Eval(node, scope)
 	}
 	return value
 }
@@ -287,7 +299,8 @@ func ProcessTokens(scope *Scope, tokenized List) interface{} {
 // Process evaluates the program in input and returns the value of its last
 // form. It panics on an error in the program; Run returns the error instead.
 func Process(input string) interface{} {
-	return ProcessTokens(newScope(), TokenizeString(input))
+	tokens, lines := tokenizeLines(input)
+	return processLines(newScope(), tokens, lines)
 }
 
 func ProcessFile(fname string) interface{} {
@@ -298,8 +311,10 @@ func ProcessFile(fname string) interface{} {
 // Errors in the program, such as unbalanced parens, an unknown symbol or an
 // argument of the wrong type, are returned rather than panicking.
 func Run(input string) (value interface{}, err error) {
-	defer recoverError(&err)
-	return Process(input), nil
+	scope := newScope()
+	defer recoverAt(&err, scope.run)
+	tokens, lines := tokenizeLines(input)
+	return processLines(scope, tokens, lines), nil
 }
 
 // RunFile is Run for the program in the file fname.
@@ -311,9 +326,14 @@ func RunFile(fname string) (interface{}, error) {
 	return Run(string(program))
 }
 
-// recoverError, deferred, turns a panic into an error in *err.
-func recoverError(err *error) {
+// recoverAt, deferred, turns a panic into an error in *err, naming the line
+// of the call the run was making, if it knows it.
+func recoverAt(err *error, run *runState) {
 	if r := recover(); r != nil {
-		*err = fmt.Errorf("%s", strings.TrimSpace(fmt.Sprint(r)))
+		msg := strings.TrimSpace(fmt.Sprint(r))
+		if run != nil && run.line > 0 {
+			msg = fmt.Sprintf("line %d: %s", run.line, msg)
+		}
+		*err = fmt.Errorf("%s", msg)
 	}
 }

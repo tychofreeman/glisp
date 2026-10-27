@@ -30,7 +30,7 @@ func (r *resolver) resolve(node Node) Node {
 	case Def:
 		return Def{n.Name, r.resolve(n.Value)}
 	case Apply:
-		return Apply{r.resolve(n.Fn), r.resolveAll(n.Args)}
+		return Apply{Fn: r.resolve(n.Fn), Args: r.resolveAll(n.Args), Line: n.Line}
 	case Lambda:
 		f := &frame{slots: append([]string(nil), n.Params...)}
 		for _, name := range localDefs(n.Body) {

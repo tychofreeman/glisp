@@ -47,6 +47,7 @@ type Def struct {
 type Apply struct {
 	Fn   Node
 	Args []Node
+	Line int // the source line of the call, or 0
 }
 
 // Loc is where a variable lives, for backends that compile variable access:
