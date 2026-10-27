@@ -797,3 +797,17 @@ One entry per PR, written before committing it.
   wasm_gc_test.go no longer used.
 - By hand: this entry, and a throwaway test (deleted) to see what a parity
   failure now reports.
+
+### PR: `apply` spreads its last argument
+
+- Read only through `refactor inspect` (`names`, a declaration at a time)
+  and Read for the ends of README and this file; one Grep for the uses of
+  `(apply` in tests and examples.
+- One 16-step batch, tests first (`check: "end"`), passed the first time,
+  including the parity and collect-at-every-call tests: `replace_text`
+  for the test changes and the wasm `apply` case, `add_declaration` for
+  the shared `checkKind` (both backends) and `push`, `replace_declaration`
+  for the interpreter's `apply`. `pushCall` now pushes through `push`.
+- This entry was appended with `replace_text` anchored on the last entry's
+  final lines, not a heredoc: the tools can append after all, given an
+  anchor.

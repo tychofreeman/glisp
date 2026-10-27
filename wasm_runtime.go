@@ -842,22 +842,7 @@ func (c *wasmCompiler) checkArgs(b *wasmBody, spec builtin) {
 			b.Call(c.rt.putInt)
 		})
 	}
-	var v, t uint32 // the argument checked, and its tag
-	for _, k := range spec.kinds {
-		if k != anyKind {
-			v, t = b.local(i64), b.local(i32)
-			break
-		}
-	}
-	check := func(k kind, load func()) {
-		load()
-		b.LocalTee(v)
-		b.Call(c.rt.tagOf)
-		b.LocalSet(t)
-		b.tagIn(t, k.tags())
-		b.Op(wasm.I32Eqz)
-		c.failIf(b, spec.name+": expected "+k.noun()+", got ", func() { c.typeAndValue(b, v) })
-	}
+	check := func(k kind, load func()) { c.checkKind(b, spec.name, k, load) }
 	// Each argument up to the last kind given, then, for a builtin taking
 	// any number, the rest in a loop: the last kind stands for them.
 	last := len(spec.kinds) - 1
@@ -886,6 +871,30 @@ func (c *wasmCompiler) checkArgs(b *wasmBody, spec builtin) {
 			b.incr(j)
 		})
 	}
+}
+
+// checkKind fails, as the interpreter does, unless the value load leaves,
+// an argument of the builtin name, is of kind k.
+func (c *wasmCompiler) checkKind(b *wasmBody, name string, k kind, load func()) {
+	v, t := b.local(i64), b.local(i32)
+	load()
+	b.LocalTee(v)
+	b.Call(c.rt.tagOf)
+	b.LocalSet(t)
+	b.tagIn(t, k.tags())
+	b.Op(wasm.I32Eqz)
+	c.failIf(b, name+": expected "+k.noun()+", got ", func() { c.typeAndValue(b, v) })
+}
+
+// push pushes what value leaves onto the argument stack.
+func (b *wasmBody) push(value func()) {
+	b.GlobalGet(gSP)
+	value()
+	b.I64Store(0)
+	b.GlobalGet(gSP)
+	b.I32Const(8)
+	b.Op(wasm.I32Add)
+	b.GlobalSet(gSP)
 }
 
 // tagIn leaves whether the tag in local t is one of tags.
@@ -1036,15 +1045,49 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.Call(c.rt.equal)
 		b.boolean()
 	case "apply":
-		b.arg(0)
-		b.LocalGet(paramArgs)
-		b.I32Const(8)
-		b.Op(wasm.I32Add)
+		// The arguments between the function and the list, then the list's
+		// elements, pushed as the arguments of a call.
+		last, k, list, start := b.local(i32), b.local(i32), b.local(i64), b.local(i32)
 		b.LocalGet(argc)
 		b.I32Const(1)
 		b.Op(wasm.I32Sub)
+		b.LocalSet(last)
+		c.checkKind(b, name, listKind, func() { b.argAt(last) })
+		b.GlobalGet(gSP)
+		b.LocalSet(start)
+		b.I32Const(1)
+		b.LocalSet(k)
+		b.until(func() {
+			b.LocalGet(k)
+			b.LocalGet(last)
+			b.Op(wasm.I32GeU)
+		}, func() {
+			c.checkStack(b)
+			b.push(func() { b.argAt(k) })
+			b.incr(k)
+		})
+		b.argAt(last)
+		b.LocalSet(list)
+		b.until(func() {
+			c.tagIs(b, list, tagPair)
+			b.Op(wasm.I32Eqz)
+		}, func() {
+			c.checkStack(b)
+			b.push(func() { b.field(list, 8) })
+			b.field(list, 16)
+			b.LocalSet(list)
+		})
+		b.arg(0)
+		b.LocalGet(start)
+		b.GlobalGet(gSP)
+		b.LocalGet(start)
+		b.Op(wasm.I32Sub)
+		b.I32Const(3)
+		b.Op(wasm.I32ShrU)
 		b.I32Const(0)
 		b.Call(c.rt.invoke)
+		b.LocalGet(start)
+		b.GlobalSet(gSP)
 	case "p":
 		i := b.local(i32)
 		b.until(func() {

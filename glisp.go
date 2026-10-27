@@ -134,7 +134,11 @@ func equal(a, b interface{}) bool {
 
 func apply(scope *Scope, args List) interface{} {
 	fn, _ := asFunction(args[0])
-	return fn(scope, args.Rest())
+	last := args[len(args)-1]
+	checkKind("apply", listKind, last)
+	list, _ := last.(List)
+	spread := append(append(List{}, args[1:len(args)-1]...), list...)
+	return fn(scope, spread)
 }
 
 // definedName returns the symbol a (def name value) or (defmacro name value)

@@ -96,6 +96,11 @@ every program; it defines `mult`, `defn` and `let`.
   `<nil>`, a function's address). `p` and the `=>` line now print glisp:
   `(1 2)`, `x`, `nil`, `<function>`, strings quoted inside lists; errors
   name glisp types (`got number 5`, `got list (a b)`).
+- [x] `apply` spreads its last argument, as in other Lisps:
+  `(apply f a b (quote (c d)))` calls `(f a b c d)`. It passed its
+  arguments through unchanged, so `(apply plus (quote (1 2)))` was an
+  error and `apply` added nothing over a plain call. The last argument
+  must be a list (or nil); there must be at least two.
 
 ### Design
 

@@ -78,7 +78,7 @@ func TestLambdasAreClosures(t *testing.T) {
 }
 
 func TestApplyCallsFunctions(t *testing.T) {
-	AssertThat(t, Process("(apply plus 1 1)"), Equals(int64(2)))
+	AssertThat(t, Process("(apply plus 1 (quote (1)))"), Equals(int64(2)))
 }
 
 func TestGloballyNamesFunctions(t *testing.T) {
@@ -442,11 +442,18 @@ func TestBuiltinsCheckTheirArgumentsFromTheirSpec(t *testing.T) {
 	assertPanicsWith(t, "(car)", "car: expects 1 argument, got 0")
 	assertPanicsWith(t, "(car 1 2)", "car: expects 1 argument, got 2")
 	assertPanicsWith(t, "(atom)", "atom: expects 1 argument, got 0")
-	assertPanicsWith(t, "(apply)", "apply: expects at least 1 argument, got 0")
-	assertPanicsWith(t, "(apply 1)", "apply: expected a function, got number 1")
+	assertPanicsWith(t, "(apply)", "apply: expects at least 2 arguments, got 0")
+	assertPanicsWith(t, "(apply 1 nil)", "apply: expected a function, got number 1")
 	assertPanicsWith(t, "(car 1)", "car: expected a list, got number 1")
 	assertPanicsWith(t, `(substring "abc" 1)`, "substring: expects 3 arguments, got 2")
 	assertPanicsWith(t, `(substring "abc" "x" 2)`, `substring: expected a number, got string "x"`)
+}
+
+func TestApplySpreadsItsLastArgument(t *testing.T) {
+	AssertThat(t, Process("(apply plus (quote (1 2 3)))"), Equals(int64(6)))
+	AssertThat(t, Process("(apply plus 1 2 (quote (3 4)))"), Equals(int64(10)))
+	AssertThat(t, Process("(apply plus nil)"), Equals(int64(0)))
+	assertPanicsWith(t, "(apply plus 1 2)", "apply: expected a list, got number 2")
 }
 
 func TestCallingSomethingThatIsNotAFunctionFails(t *testing.T) {
@@ -470,7 +477,7 @@ func TestFunctionsCanBeStoredInLists(t *testing.T) {
 
 func TestFunctionsCanBeApplied(t *testing.T) {
 	AssertThat(t, Process("(def twice (lambda (f x) (f (f x)))) (twice (lambda (n) (- n 1)) 10)"), Equals(int64(8)))
-	AssertThat(t, Process("(apply (lambda (a b) (- a b)) 10 3)"), Equals(int64(7)))
+	AssertThat(t, Process("(apply (lambda (a b) (- a b)) 10 (quote (3)))"), Equals(int64(7)))
 }
 
 func TestRunReportsArityErrors(t *testing.T) {
