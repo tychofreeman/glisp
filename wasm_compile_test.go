@@ -134,6 +134,11 @@ var wasmPrograms = []string{
 	`(defn g (n acc) (if (< n 1) acc (if (even n) (g (- n 1) (cons n acc)) (g (- n 1) acc)))) (defn even (n) (eq (mod n 2) 0)) (g 10 nil)`,
 	`(defn adder (k) (lambda (x) (if (eq k 0) x ((adder (- k 1)) (plus x 1))))) ((adder 5) 10)`,
 	`(def f (lambda (n) (if (eq n 0) (quote done) (f (- n 1))))) (def g f) (def f (lambda (n) (quote other))) (g 3)`,
+	`(defn ev (n) (if (eq n 0) true (od (- n 1)))) (defn od (n) (if (eq n 0) false (ev (- n 1)))) (p (ev 1000) (od 1000) (ev 7))`,
+	`(defn a (n acc) (if (eq n 0) acc (b (- n 1) (cons (quote a) acc)))) (defn b (n acc) (c n (cons (quote b) acc))) (defn c (n acc) (a n acc)) (a 3 nil)`,
+	`(defn f (x) (g x 1)) (defn g (x y) (plus x y)) (f 41)`,
+	`(defn f (n) (apply g n 1)) (defn g (n m) (if (eq n 0) m (f (- n 1)))) (f 100)`,
+	`(defn make (k) (lambda (n) (if (eq n 0) k ((make (plus k 1)) (- n 1))))) ((make 0) 1000)`,
 	// Errors.
 	`(car 1)`,
 	`(cdr "s")`,
@@ -163,6 +168,9 @@ var wasmPrograms = []string{
 	`(list?)`,
 	`(defn k (n) (if (eq n 0) 0 (k))) (k 1)`,
 	`(defn k (n) (if (eq n 0) (car 5) (k (- n 1)))) (k 3)`,
+	`(defn f () (5 1)) (f)`,
+	`(defn g (a b) a) (defn f (x) (g x)) (f 1)`,
+	`(defn ev (n) (if (eq n 0) (car 1) (od (- n 1)))) (defn od (n) (ev (- n 1))) (p 0) (ev 10)`,
 }
 
 func TestCompiledProgramsPrintWhatTheInterpreterDoes(t *testing.T) {
@@ -204,6 +212,19 @@ func TestCompiledSelfTailCallsAreLoops(t *testing.T) {
 	program := `(defn count_down (n acc) (if (eq n 0) acc (count_down (- n 1) (plus acc 1))))
 		(count_down 5000000 0)`
 	if got := runCompiled(t, program); got != "=> 5000000\n" {
+		t.Errorf("got %q", got)
+	}
+}
+
+// A tail call to another function returns it to invoke as a pending call,
+// which invoke makes after the caller's frame is gone: mutual recursion runs
+// in constant stack.
+func TestCompiledMutualTailCallsUseConstantStack(t *testing.T) {
+	program := `(defn ev (n) (if (eq n 0) true (od (- n 1))))
+		(defn od (n) (if (eq n 0) false (ev (- n 1))))
+		(p (ev 1000000))
+		(ev 1000001)`
+	if got := runCompiled(t, program); got != "true\n=> false\n" {
 		t.Errorf("got %q", got)
 	}
 }

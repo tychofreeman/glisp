@@ -177,10 +177,14 @@ prints exactly what the interpreter does, error messages included.
   itself (checked at run time, so it holds even if the name is redefined)
   jumps back to the start of the function, so loops written as recursion
   run in constant stack. Each pass gives captured variables fresh cells.
-- [ ] Other tail calls (mutual recursion, calls to other functions) still
-  use the stack, limited to about 500,000 deep. The wasm tail-call proposal
-  (`return_call`) would cover them, but wazero v1.10 doesn't support it; a
-  trampoline would, at the cost of every call.
+- [x] Tail calls to other functions, mutual recursion included, use no
+  stack: a trampoline. The caller leaves the call pending (the callee and
+  its arguments, at the top of the argument stack) and returns a reserved
+  value; `invoke` moves the arguments down to its own base and makes the
+  call, repeating while calls come back pending. Calls to builtins stay
+  direct. Only calls that aren't tail calls use the stack, about 500,000
+  deep. (wasm's `return_call` would do this natively, but wazero v1.10
+  doesn't run it.)
 - [x] The interpreter replaces frames on tail calls: `Eval` is a loop, and
   a call to a closure in tail position (or an `if` branch) carries on in
   the same loop with the callee's body and scope instead of a new Go call.

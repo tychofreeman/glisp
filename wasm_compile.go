@@ -67,14 +67,23 @@ const (
 
 // Global variables of the runtime; the program's top-level names follow.
 const (
-	gSP       = iota // argument stack pointer
-	gHP              // next free heap address
-	gOutLen          // bytes waiting in the output buffer
-	gFD              // where the output buffer goes: 1, or 2 for an error
-	gOutBuf          // address of the output buffer
-	gStackEnd        // the argument stack is full past here
+	gSP          = iota // argument stack pointer
+	gHP                 // next free heap address
+	gOutLen             // bytes waiting in the output buffer
+	gFD                 // where the output buffer goes: 1, or 2 for an error
+	gOutBuf             // address of the output buffer
+	gStackEnd           // the argument stack is full past here
+	gPendingFn          // a tail call's function (i64), for invoke to call
+	gPendingArgc        // how many arguments it has
+	gPendingArgs        // where they are
 	gNames
 )
+
+// pending is what a function returns when it makes a tail call: the call
+// is left in gPendingFn, gPendingArgc and gPendingArgs for invoke to make,
+// after the caller's frame is gone. It is never a value: integers are odd
+// and objects are at addresses from 8.
+const pending = 2
 
 // builtinNames are the builtin functions, compiled as runtime functions.
 var builtinNames = []string{"car", "cdr", "atom", "cons", "plus", "-", "*", "/", "mod", "<", ">", "<=", ">=",
@@ -159,6 +168,7 @@ func newWasmCompiler(scope *Scope) *wasmCompiler {
 	for range gNames {
 		c.m.Globals = append(c.m.Globals, wasm.Global{Type: wasm.I32, Mutable: true})
 	}
+	c.m.Globals[gPendingFn].Type = wasm.I64
 	c.fnType = c.m.Type(wasm.FuncType{Params: []wasm.ValType{wasm.I64, wasm.I32, wasm.I32}, Results: []wasm.ValType{wasm.I64}})
 	c.runtime()
 	return c
@@ -508,7 +518,8 @@ func (f *wasmFunc) invoke(fn uint32, n Apply) {
 }
 
 // tailExpr compiles node, whose value the lambda returns. In tail position,
-// a call to the lambda itself is a jump back to the start of its loop.
+// a call to the lambda itself is a jump back to the start of its loop, and
+// a call to another lambda is left for invoke to make.
 func (f *wasmFunc) tailExpr(node Node) {
 	switch n := node.(type) {
 	case If:
@@ -523,11 +534,7 @@ func (f *wasmFunc) tailExpr(node Node) {
 		f.blocks--
 		f.code.Op(wasm.End)
 	case Apply:
-		if len(n.Args) == len(f.lambda.Params) {
-			f.tailApply(n)
-		} else {
-			f.apply(n)
-		}
+		f.tailApply(n)
 	default:
 		f.expr(node)
 	}
@@ -535,7 +542,7 @@ func (f *wasmFunc) tailExpr(node Node) {
 
 // tailApply compiles a call in tail position. If the function called is
 // this closure itself (local 0), its arguments become the parameters and it
-// jumps back to the top of the loop; otherwise it is an ordinary call.
+// jumps back to the top of the loop; otherwise tailCall makes it.
 func (f *wasmFunc) tailApply(n Apply) {
 	fn := f.local(wasm.I64)
 	f.expr(n.Fn)
@@ -546,6 +553,10 @@ func (f *wasmFunc) tailApply(n Apply) {
 		f.expr(arg)
 		f.code.LocalSet(args[i])
 	}
+	if len(n.Args) != len(f.lambda.Params) {
+		f.tailCall(fn, args, n)
+		return
+	}
 	f.code.LocalGet(fn)
 	f.code.LocalGet(0)
 	f.code.Op(wasm.I64Eq)
@@ -555,6 +566,43 @@ func (f *wasmFunc) tailApply(n Apply) {
 		f.code.LocalSet(f.slotLocal[i])
 	}
 	f.code.Br(uint32(f.blocks + 1))
+	f.code.Op(wasm.Else)
+	f.tailCall(fn, args, n)
+	f.code.Op(wasm.End)
+}
+
+// tailCall calls fn, in tail position, with the arguments in locals args.
+// A lambda's closure is left pending for invoke, which calls it once this
+// frame is gone, so tail calls between functions use no stack. Builtins,
+// and values that aren't functions, are called (or reported) as usual.
+func (f *wasmFunc) tailCall(fn uint32, args []uint32, n Apply) {
+	f.code.LocalGet(fn)
+	f.code.Call(f.c.rt.tagOf)
+	f.code.I32Const(tagClosure)
+	f.code.Op(wasm.I32Eq)
+	f.code.If(wasm.BlockI32)
+	f.code.LocalGet(fn)
+	f.code.Op(wasm.I32WrapI64)
+	f.code.I32Load(4)
+	f.code.I32Const(int32(len(builtinNames)))
+	f.code.Op(wasm.I32GeU)
+	f.code.Op(wasm.Else)
+	f.code.I32Const(0)
+	f.code.Op(wasm.End)
+	f.code.If(wasm.BlockI64)
+	for i, arg := range args {
+		f.code.GlobalGet(gSP)
+		f.code.LocalGet(arg)
+		f.code.I64Store(uint32(8 * i))
+	}
+	f.code.GlobalGet(gSP)
+	f.code.GlobalSet(gPendingArgs)
+	f.code.I32Const(int32(len(args)))
+	f.code.GlobalSet(gPendingArgc)
+	f.code.LocalGet(fn)
+	f.code.GlobalSet(gPendingFn)
+	f.code.I64Const(pending)
+	f.code.Op(wasm.Return)
 	f.code.Op(wasm.Else)
 	for _, arg := range args {
 		f.code.GlobalGet(gSP)
