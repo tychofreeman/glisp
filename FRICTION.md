@@ -32,7 +32,7 @@ MCP servers attach when a session starts.
 `refactor list` has every edit and `inspect`, but not `check`, so there was no
 way to type-check or run the tests through the CLI.
 
-- **Workaround:** wrote a small stdio MCP client (`gr.py`) that starts
+- **Workaround:** wrote a small stdio MCP client ([`tools/gr.py`](tools/gr.py)) that starts
   `refactor-mcp -C <module>`, sends `initialize`, calls one tool and prints the
   result; used it for `check {"run_tests": true}` and then for every edit.
 - **Would help:** `refactor check [run_tests=true]` in the CLI, or a
