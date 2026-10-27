@@ -1,6 +1,7 @@
 package glisp
 
 import (
+    "fmt"
     "unicode"
     "bytes"
     "io/ioutil"
@@ -51,6 +52,9 @@ func Tokenize(bs *bytes.Buffer) List {
             acc = ""
         }
 
+    }
+    if inQuote {
+        panic(fmt.Sprintf("unterminated string: %s", acc))
     }
     if acc != "" {
         r = append(r, token(acc))

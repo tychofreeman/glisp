@@ -35,7 +35,7 @@ loaded before every program; it defines `mult`.
   - [x] `(` or `)` inside a string splits the string.
   - [x] Characters other than letters, digits, `- _ ?` and `"` are dropped as
     separators, so `(+ 1 2)` reads as `(1 2)`.
-  - [ ] A lone `"` panics.
+  - [x] A lone `"` panics.
   - [ ] Input is read byte by byte, so non-ASCII text is mangled
     (`héllo` becomes `hÃ©llo`).
   - [ ] An unmatched `)` ends parsing: `(plus 1 2)) (plus 10 10)` returns 3.
