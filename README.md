@@ -108,7 +108,7 @@ Builtins other than the special forms (`car`, `plus`, `<`, `p`, …) stay
 ordinary functions, called through `Ref` and `Apply`.
 
 - [x] Add the `Node` types.
-- [ ] Write the `Expander`: special forms become nodes; `defmacro` registers a
+- [x] Write the `Expander`: special forms become nodes; `defmacro` registers a
   macro; macro calls are expanded, recursively, until only core forms remain.
 - [ ] Make the interpreter evaluate `Node`s, so every existing test runs
   through the expander. Macros then expand once, not on every call.

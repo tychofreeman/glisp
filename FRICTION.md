@@ -405,3 +405,10 @@ One entry per PR, written before committing it.
   refusal's advice (grep for the line as it is) was right; replacing the two
   statements by line range was simpler. Worth knowing: text you hand to
   `create_file` or `add_declaration` may not be the text that lands.
+
+### PR: the `Expander`
+
+- No refusals. Two `create_file` steps added `expand.go` and its tests, and the
+  batch added a third step on its own, `fix_imports`, for the `fmt` the test
+  file used but I'd left out — reported as a step with a note, which is the
+  right amount of visibility.
