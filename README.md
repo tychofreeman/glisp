@@ -235,14 +235,19 @@ by hand. In the order to do them; each makes the next cheaper.
   and `c.failIf`; the helpers are its methods. The compiled modules are
   byte for byte what they were. Left for the builtin spec: each `fail`
   still prints its parts its own way.
-- [ ] **A builtin, defined once.** One builtin is written in up to five
-  places: the interpreter's `builtins`, `builtinNames` (or
-  `stringBuiltinNames`), a case in `builtinBody` (which repeats the string
-  names), and `inlineBuiltins`. Its error messages are written twice, in Go
-  and in wasm, kept in step only by the parity tests (`eq`'s wasm message
-  has already drifted). Wanted: a spec per builtin (name, arity, argument
-  kinds) from which both backends make the checks and messages, leaving
-  each implementation only the operation.
+- [x] **A builtin, defined once.** One builtin was written in up to five
+  places, and its error messages twice, in Go and in wasm (`eq`'s had
+  drifted). Now `builtinSpecs` (builtins.go) gives each builtin's name,
+  how many arguments it takes and of what kind (the last kind stands for
+  the rest), and its interpreter operation. Both backends check the
+  arguments from the spec, with one wording, before the operation runs;
+  the operations no longer check, and the wasm runtime's checking
+  converters (`num`, `strArg`, `listArg`) are gone. The spec made the odd
+  ones regular: `car`, `cdr` and `atom` take exactly one argument (they
+  used to give nil or false for none and ignore extras), and `eq` and
+  `apply` report a wrong count as the others do
+  (`eq: expects 2 arguments, got 1`). The inline fast paths stay a wasm
+  table by name, since they are an optimization of one backend.
 - [ ] **A value kind.** What each kind of value is lives in `typeName`,
   the predicates' tag map, `objSize`, the collector's field scan and
   `putValue`. Wanted: a row per kind (tag, name, size, which fields hold

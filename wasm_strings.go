@@ -5,19 +5,16 @@ import "github.com/tychofreeman/glisp/wasm"
 // The string builtins, compiled by stringBuiltin. Strings are byte arrays
 // of UTF-8; indexes and lengths count characters, the bytes that don't
 // continue one (b&0xC0 != 0x80).
-var stringBuiltinNames = []string{"str", "string_length", "substring", "chars", "string<", "symbol", "parse_number"}
 
 // declareStrings declares the string helpers; defineStrings defines them.
 func (c *wasmCompiler) declareStrings() {
 	rt := &c.rt
-	rt.strArg = c.declare(sig(vals(i64, i32), i32))
 	rt.runeCount = c.declare(sig(vals(i32), i32))
 	rt.runeOffset = c.declare(sig(vals(i32, i32), i32))
 	rt.newString = c.declare(sig(vals(i32, i32), i32))
 }
 
 func (c *wasmCompiler) defineStrings() {
-	c.define(c.rt.strArg, c.strArgBody)
 	c.define(c.rt.runeCount, c.runeCountBody)
 	c.define(c.rt.runeOffset, c.runeOffsetBody)
 	c.define(c.rt.newString, c.newStringBody)
@@ -52,23 +49,6 @@ func (b *wasmBody) copyBytes(to, from, src, n uint32) {
 	b.Op(wasm.I32Add)
 	b.LocalGet(n)
 	b.MemoryCopy()
-}
-
-// strArg(v, fn) is the address of the string v, or an error naming fn.
-func (c *wasmCompiler) strArgBody(b *wasmBody) {
-	v, fn := b.param(0), b.param(1)
-	c.tagIs(b, v, tagString)
-	b.returnIf(func() {
-		b.LocalGet(v)
-		b.Op(wasm.I32WrapI64)
-	})
-	b.Call(c.rt.failBegin)
-	b.LocalGet(fn)
-	b.Call(c.rt.putStr)
-	c.text(b, ": expected a string, got ")
-	c.typeAndValue(b, v)
-	b.Call(c.rt.failEnd)
-	b.Op(wasm.Unreachable)
 }
 
 // runeCount(s) is how many characters the string at s has.
@@ -139,27 +119,9 @@ func (c *wasmCompiler) newStringBody(b *wasmBody) {
 // (self, args, argc) -> value.
 func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 	argc := b.param(paramArgc)
-	fn := int32(c.str(name))
-	expectArgc := func(n int32) {
-		b.LocalGet(argc)
-		b.I32Const(n)
-		b.Op(wasm.I32Ne)
-		b.when(func() {
-			arguments := " arguments, got "
-			if n == 1 {
-				arguments = " argument, got "
-			}
-			c.fail(b, name+": expects "+string(rune('0'+n))+arguments, func() {
-				b.LocalGet(argc)
-				b.Op(wasm.I64ExtendI32U)
-				b.Call(c.rt.putInt)
-			})
-		})
-	}
 	stringArg := func(i, into uint32) {
 		b.arg(i)
-		b.I32Const(fn)
-		b.Call(c.rt.strArg)
+		b.Op(wasm.I32WrapI64)
 		b.LocalSet(into)
 	}
 	switch name {
@@ -205,7 +167,6 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 		b.Op(wasm.I64ExtendI32U)
 	case "string_length":
 		s := b.local(i32)
-		expectArgc(1)
 		stringArg(0, s)
 		b.LocalGet(s)
 		b.Call(c.rt.runeCount)
@@ -213,12 +174,10 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 		b.encode()
 	case "substring":
 		s, start, end, length, from, n, r := b.local(i32), b.local(i64), b.local(i64), b.local(i64), b.local(i32), b.local(i32), b.local(i32)
-		expectArgc(3)
 		stringArg(0, s)
 		for i, local := range []uint32{start, end} {
 			b.arg(uint32(i + 1))
-			b.I32Const(fn)
-			b.Call(c.rt.num)
+			b.decode()
 			b.LocalSet(local)
 		}
 		b.LocalGet(s)
@@ -265,7 +224,6 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 	case "chars":
 		// From the last character to the first, consing each onto the list.
 		s, i, end, piece, n, list := b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i64)
-		expectArgc(1)
 		stringArg(0, s)
 		b.LocalGet(s)
 		b.I32Load(4)
@@ -304,7 +262,6 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 		b.LocalGet(list)
 	case "string<":
 		a, z, la, lz, i, ca, cz := b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32)
-		expectArgc(2)
 		stringArg(0, a)
 		stringArg(1, z)
 		b.LocalGet(a)
@@ -342,7 +299,6 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 		b.boolean()
 	case "symbol":
 		s, n, r, zero := b.local(i32), b.local(i32), b.local(i32), b.local(i32)
-		expectArgc(1)
 		stringArg(0, s)
 		b.LocalGet(s)
 		b.I32Load(4)
@@ -355,7 +311,6 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 		b.Op(wasm.I64ExtendI32U)
 	case "parse_number":
 		s, n, i, ch, acc, negative := b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i64), b.local(i32)
-		expectArgc(1)
 		stringArg(0, s)
 		b.LocalGet(s)
 		b.I32Load(4)
@@ -408,6 +363,6 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 		b.LocalGet(acc)
 		b.encode()
 	default:
-		panic("wasm: no string builtin " + name)
+		panic("wasm: no builtin " + name)
 	}
 }

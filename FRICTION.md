@@ -711,3 +711,24 @@ One entry per PR, written before committing it.
   `when(fail)` blocks); `all_occurrences` fixed it, as the refusal said.
 - Appending this entry and the roadmap section in the previous PR was by
   hand (heredoc): nothing appends to a file.
+
+### PR: a builtin, defined once (`builtinSpecs`)
+
+- Tests first in the same batch as the code (`check: "end"`): the new
+  messages in `glisp_test.go` and ten parity programs; the interpreter
+  side passed at once and the parity failures then listed exactly the
+  wasm work left.
+- `create_file` for builtins.go; `replace_declaration` for 18 interpreter
+  operations and both wasm builtin functions; `remove_dead_code` took the
+  old checkers (`listParam`, `number`, `expectArgs`, `stringArg`, the
+  wasm `numBody`/`listArgBody`/`strArgBody` and `builtinNames`) with their
+  comments, once `replace_text` had dropped their declare/define lines
+  and struct fields.
+- One bug the type check couldn't see: the wasm kind check walked
+  `spec.kinds` rather than the arguments, so the second argument of `<`
+  and `string<` (whose spec gives one kind for both) went unchecked. The
+  parity tests caught it.
+- A name I nearly used for a package-level variable, `strings`, would
+  have clashed with the import in other files; caught while drafting.
+  The "is this name free?" check from the last PR's notes again.
+- By hand: this entry (heredoc append).

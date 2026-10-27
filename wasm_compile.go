@@ -97,11 +97,6 @@ const (
 // and objects are at addresses from 8.
 const pending = 2
 
-// builtinNames are the builtin functions, compiled as runtime functions.
-var builtinNames = []string{"car", "cdr", "atom", "cons", "plus", "-", "*", "/", "mod", "<", ">", "<=", ">=",
-	"number?", "string?", "symbol?", "list?", "function?", "boolean?", "nil?", "eq", "apply", "p",
-	"str", "string_length", "substring", "chars", "string<", "symbol", "parse_number"}
-
 type wasmCompiler struct {
 	m        *wasm.Module
 	scope    *Scope // the expander's: tells macros from values
@@ -718,7 +713,7 @@ func (f *wasmFunc) tailCall(base uint32, n Apply) {
 		fn()
 		f.Op(wasm.I32WrapI64)
 		f.I32Load(4)
-		f.I32Const(int32(len(builtinNames)))
+		f.I32Const(int32(len(builtinSpecs)))
 		f.Op(wasm.I32GeU)
 	}, func() {
 		f.I32Const(0)

@@ -434,8 +434,19 @@ func TestMacroExpansionsAreEvaluatedInTheCallersScope(t *testing.T) {
 
 func TestBuiltinsReportTheWrongNumberOfArguments(t *testing.T) {
 	assertPanicsWith(t, "(if true 1)", "IF requires 3 parts")
-	assertPanicsWith(t, "(eq 1)", "EQ requires exactly 2 parameters")
+	assertPanicsWith(t, "(eq 1)", "eq: expects 2 arguments, got 1")
 	assertPanicsWith(t, "(quote)", "QUOTE takes exactly 1 argument")
+}
+
+func TestBuiltinsCheckTheirArgumentsFromTheirSpec(t *testing.T) {
+	assertPanicsWith(t, "(car)", "car: expects 1 argument, got 0")
+	assertPanicsWith(t, "(car 1 2)", "car: expects 1 argument, got 2")
+	assertPanicsWith(t, "(atom)", "atom: expects 1 argument, got 0")
+	assertPanicsWith(t, "(apply)", "apply: expects at least 1 argument, got 0")
+	assertPanicsWith(t, "(apply 1)", "apply: expected a function, got number 1")
+	assertPanicsWith(t, "(car 1)", "car: expected a list, got number 1")
+	assertPanicsWith(t, `(substring "abc" 1)`, "substring: expects 3 arguments, got 2")
+	assertPanicsWith(t, `(substring "abc" "x" 2)`, `substring: expected a number, got string "x"`)
 }
 
 func TestCallingSomethingThatIsNotAFunctionFails(t *testing.T) {

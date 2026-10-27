@@ -10,99 +10,64 @@ import (
 
 type Function func(_ *Scope, params List) interface{}
 
-// listParam returns fn's first parameter as a List, treating nil (what car and
-// cdr give for an empty list) as an empty list. Anything else is an error.
-func listParam(fn string, params List) List {
-	if len(params) == 0 || params[0] == nil {
-		return nil
-	}
-	if x, isList := params[0].(List); isList {
-		return x
-	}
-	panic(fmt.Sprintf("%s: expected a list, got %s", fn, described(params[0])))
-}
-
-func car(_ *Scope, params List) interface{} {
-	x := listParam("car", params)
-	if len(x) > 0 {
+func car(_ *Scope, args List) interface{} {
+	if x, _ := args[0].(List); len(x) > 0 {
 		return x[0]
 	}
 	return nil
 }
 
-func cdr(_ *Scope, params List) interface{} {
-	x := listParam("cdr", params)
-	if len(x) > 0 {
+func cdr(_ *Scope, args List) interface{} {
+	if x, _ := args[0].(List); len(x) > 0 {
 		return x.Rest()
 	}
 	return nil
 }
 
-func atom(_ *Scope, params List) interface{} {
-	if len(params) > 0 {
-		switch params[0].(type) {
-		case List:
-			return false
-		default:
-			return true
-		}
-	}
-	return false
+func atom(_ *Scope, args List) interface{} {
+	_, isList := args[0].(List)
+	return !isList
 }
 
-func cons(_ *Scope, params List) interface{} {
-	switch len(params) {
-	case 1:
-		return List{params[0]}
-	case 2:
-		switch rest := params[1].(type) {
-		case nil:
-			return List{params[0]}
-		case List:
-			return append(List{params[0]}, rest...)
-		default:
-			return List{params[0], rest}
-		}
+func cons(_ *Scope, args List) interface{} {
+	if len(args) == 1 {
+		return List{args[0]}
 	}
-	panic(fmt.Sprintf("cons: expects 1 or 2 arguments, got %d", len(params)))
+	switch rest := args[1].(type) {
+	case nil:
+		return List{args[0]}
+	case List:
+		return append(List{args[0]}, rest...)
+	default:
+		return List{args[0], rest}
+	}
 }
 
-func plus(_ *Scope, params List) interface{} {
+func plus(_ *Scope, args List) interface{} {
 	var sum int64 = 0
-	for _, p := range params {
-		sum += number("plus", p)
+	for _, n := range args {
+		sum += n.(int64)
 	}
 	return sum
 }
 
-// number returns p as an int64, or panics naming the builtin fn.
-func number(fn string, p interface{}) int64 {
-	if n, isNumber := p.(int64); isNumber {
-		return n
-	}
-	panic(fmt.Sprintf("%s: expected a number, got %s", fn, described(p)))
-}
-
 // minus is (- a b c ...), a-b-c..., and (- a), -a.
-func minus(_ *Scope, params List) interface{} {
-	if len(params) == 0 {
-		panic("-: expects at least 1 argument, got 0")
+func minus(_ *Scope, args List) interface{} {
+	if len(args) == 1 {
+		return -args[0].(int64)
 	}
-	if len(params) == 1 {
-		return -number("-", params[0])
-	}
-	result := number("-", params[0])
-	for _, p := range params[1:] {
-		result -= number("-", p)
+	result := args[0].(int64)
+	for _, n := range args[1:] {
+		result -= n.(int64)
 	}
 	return result
 }
 
 // times is (* a b c ...), the product; (*) is 1.
-func times(_ *Scope, params List) interface{} {
+func times(_ *Scope, args List) interface{} {
 	var product int64 = 1
-	for _, p := range params {
-		product *= number("*", p)
+	for _, n := range args {
+		product *= n.(int64)
 	}
 	return product
 }
@@ -110,11 +75,8 @@ func times(_ *Scope, params List) interface{} {
 // divide returns a builtin (op a b) that divides two numbers with div, as
 // Go does: / truncates toward zero, and mod's result has a's sign.
 func divide(op string, div func(a, b int64) int64) Function {
-	return func(_ *Scope, params List) interface{} {
-		if len(params) != 2 {
-			panic(fmt.Sprintf("%s: expects 2 arguments, got %d", op, len(params)))
-		}
-		a, b := number(op, params[0]), number(op, params[1])
+	return func(_ *Scope, args List) interface{} {
+		a, b := args[0].(int64), args[1].(int64)
 		if b == 0 {
 			panic(op + ": division by zero")
 		}
@@ -124,30 +86,21 @@ func divide(op string, div func(a, b int64) int64) Function {
 
 // isType returns the builtin name, (name x), which reports whether x's
 // type is typ, as typeName names it.
-func isType(name, typ string) Function {
-	return func(_ *Scope, params List) interface{} {
-		if len(params) != 1 {
-			panic(fmt.Sprintf("%s: expects 1 argument, got %d", name, len(params)))
-		}
-		return typeName(params[0]) == typ
+func isType(typ string) Function {
+	return func(_ *Scope, args List) interface{} {
+		return typeName(args[0]) == typ
 	}
 }
 
 // compare returns a builtin (op a b) that compares two numbers with less.
-func compare(op string, less func(a, b int64) bool) Function {
-	return func(_ *Scope, params List) interface{} {
-		if len(params) != 2 {
-			panic(fmt.Sprintf("%s: expects 2 arguments, got %d", op, len(params)))
-		}
-		return less(number(op, params[0]), number(op, params[1]))
+func compare(less func(a, b int64) bool) Function {
+	return func(_ *Scope, args List) interface{} {
+		return less(args[0].(int64), args[1].(int64))
 	}
 }
 
-func eq(_ *Scope, params List) interface{} {
-	if len(params) != 2 {
-		panic(fmt.Sprintf("EQ requires exactly 2 parameters; you have %d - %s", len(params), Write(params)))
-	}
-	return equal(params[0], params[1])
+func eq(_ *Scope, args List) interface{} {
+	return equal(args[0], args[1])
 }
 
 // equal reports whether two glisp values are equal: lists element by element,
@@ -179,15 +132,9 @@ func equal(a, b interface{}) bool {
 	return a == b
 }
 
-func apply(scope *Scope, params List) interface{} {
-	if len(params) == 0 {
-		panic("apply: expects a function")
-	}
-	fn, isFunction := asFunction(params[0])
-	if !isFunction {
-		panic(fmt.Sprintf("apply: expected a function, got %s", described(params[0])))
-	}
-	return fn(scope, params.Rest())
+func apply(scope *Scope, args List) interface{} {
+	fn, _ := asFunction(args[0])
+	return fn(scope, args.Rest())
 }
 
 // definedName returns the symbol a (def name value) or (defmacro name value)
@@ -218,43 +165,7 @@ func printValues(scope *Scope, params List) interface{} {
 	return List{}
 }
 
-var builtins = map[string]interface{}{
-	"car":  Function(car),
-	"cdr":  Function(cdr),
-	"atom": Function(atom),
-	"cons": Function(cons),
-	"plus": Function(plus),
-	"-":    Function(minus),
-	"<":    compare("<", func(a, b int64) bool { return a < b }),
-	">":    compare(">", func(a, b int64) bool { return a > b }),
-	"<=":   compare("<=", func(a, b int64) bool { return a <= b }),
-	">=":   compare(">=", func(a, b int64) bool { return a >= b }),
-	"*":    Function(times),
-	"/":    divide("/", func(a, b int64) int64 { return a / b }),
-	"mod":  divide("mod", func(a, b int64) int64 { return a % b }),
-
-	"number?":   isType("number?", "number"),
-	"string?":   isType("string?", "string"),
-	"symbol?":   isType("symbol?", "symbol"),
-	"list?":     isType("list?", "list"),
-	"function?": isType("function?", "function"),
-	"boolean?":  isType("boolean?", "bool"),
-	"nil?":      isType("nil?", "nil"),
-
-	"str":           Function(showJoined),
-	"string_length": Function(stringLength),
-	"substring":     Function(substring),
-	"chars":         Function(chars),
-	"string<":       Function(stringLess),
-	"symbol":        Function(toSymbol),
-	"parse_number":  Function(parseNumber),
-	"eq":            Function(eq),
-	"apply":         Function(apply),
-	"p":             Function(printValues),
-	"true":          true,
-	"false":         false,
-	"nil":           nil,
-}
+var builtins = builtinTable()
 
 //go:embed stdlib.glisp
 var stdlib string
