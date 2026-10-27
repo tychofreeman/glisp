@@ -587,3 +587,16 @@ One entry per PR, written before committing it.
 - `replace_text` reports the line it changed, which here was a line of
   the edit's surroundings rather than the removed one; the edit itself
   was right.
+
+### PR: a trampoline for tail calls in compiled code
+
+- **One refusal:** `replace_declaration` takes exactly one declaration, and
+  I'd put the new `tailCall` method in the same content as the replaced
+  `tailApply`. The message said so ("it has 2") and the batch rolled back
+  the four steps before it. Splitting it into `replace_declaration` plus
+  `add_declaration` with `after: "wasmFunc.tailApply"` went through.
+  Letting `replace_declaration` take extra declarations to add after the
+  replaced one would have saved the retry.
+- The 9-step batch otherwise applied as planned: constants and globals by
+  `replace_text`, the body of `invoke` by line range, its locals and
+  `define` call by `replace_text`.
