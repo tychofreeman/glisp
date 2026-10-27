@@ -114,7 +114,7 @@ func plus(_ *Scope, params List) interface{} {
 	return sum
 }
 
-func if_(scope *Scope, params List) interface{} {
+func ifThenElse(scope *Scope, params List) interface{} {
 	if len(params) != 3 {
 		panic(fmt.Sprintf("IF requires 3 parts - conditional, true expression and false expression. You have %v parts - %v.", len(params), params))
 	}
@@ -161,7 +161,7 @@ func apply(scope *Scope, params List) interface{} {
 	return GetValue(scope, params)
 }
 
-func define_(scope *Scope, params List) interface{} {
+func define(scope *Scope, params List) interface{} {
 	name := params.First().(Token).Str()
 	scope.add(name, GetValue(scope, params.Second()))
 	return List{}
@@ -184,7 +184,7 @@ func macro(scope *Scope, params List) interface{} {
 	return List{}
 }
 
-func print(scope *Scope, params List) interface{} {
+func printValues(scope *Scope, params List) interface{} {
 	fmt.Printf("%v\n", params)
 	os.Stdout.Sync()
 	return List{}
@@ -197,24 +197,24 @@ var builtins = map[string]interface{}{
 	"atom":     Function(atom),
 	"cons":     Function(cons),
 	"plus":     Function(plus),
-	"if":       NonEvaluatingFunction(if_),
+	"if":       NonEvaluatingFunction(ifThenElse),
 	"eq":       Function(eq),
 	"apply":    Function(apply),
-	"def":      NonEvaluatingFunction(define_),
+	"def":      NonEvaluatingFunction(define),
 	"defmacro": NonEvaluatingFunction(macro),
-	"p":        Function(print),
+	"p":        Function(printValues),
 }
 
-func make_param_binding_fn(param_decls interface{}) func(interface{}) map[string]interface{} {
-	param_names := []string{}
-	switch x := param_decls.(type) {
+func paramBinder(decls interface{}) func(interface{}) map[string]interface{} {
+	names := []string{}
+	switch x := decls.(type) {
 	case List:
 		for _, y := range x {
 			switch z := y.(type) {
 			case Token:
-				param_names = append(param_names, z.Str())
+				names = append(names, z.Str())
 			default:
-				param_names = append(param_names, "")
+				names = append(names, "")
 			}
 		}
 	default:
@@ -224,15 +224,15 @@ func make_param_binding_fn(param_decls interface{}) func(interface{}) map[string
 		scope := map[string]interface{}{}
 		switch params := theParams.(type) {
 		case List:
-			if len(params) != len(param_names) {
+			if len(params) != len(names) {
 				arguments := "arguments"
-				if len(param_names) == 1 {
+				if len(names) == 1 {
 					arguments = "argument"
 				}
-				panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %v", strings.Join(param_names, " "), len(param_names), arguments, len(params), params))
+				panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %v", strings.Join(names, " "), len(names), arguments, len(params), params))
 			}
-			for i := 0; i < len(param_names); i++ {
-				scope[param_names[i]] = params[i]
+			for i := 0; i < len(names); i++ {
+				scope[names[i]] = params[i]
 			}
 		default:
 			panic(fmt.Sprintf("Cannot associate param names with values if values aren't in a List - found type %T\n", params))
@@ -269,7 +269,7 @@ func Parse(source interface{}) interface{} {
 		return node
 	case List:
 		if node.IsLambda() {
-			return Lambda{make_param_binding_fn(node.Second()), ParseMany(node.Rest().Rest())}
+			return Lambda{paramBinder(node.Second()), ParseMany(node.Rest().Rest())}
 		}
 		x := ParseMany(node)
 		return x

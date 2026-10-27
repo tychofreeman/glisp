@@ -236,3 +236,15 @@ One entry per PR, written before committing it.
   `remove_dead_code` removed `ParamsList` and noted the exported-API change.
   Line numbers stayed valid across steps, and since the files are gofmt'd now,
   `gofmt -l` stayed clean after the edits.
+
+### PR: Go-style names
+
+- No tool issues. Having been refused once for addressing a line an earlier
+  `rename` rewrote, I planned around it: the two locals were named by
+  `function` (which the description says stays valid), and the function
+  itself was renamed from its call site rather than its declaration line,
+  which the local renames had rewritten. All eight steps (six renames, two
+  `remove_dead_code`) went through in one `batch`.
+- Small wish: `remove_dead_code` takes extra names to remove "with it", but
+  the argument for them isn't named in `refactor list`; two separate steps
+  were simpler than guessing.
