@@ -101,6 +101,11 @@ every program; it defines `mult`, `defn` and `let`.
   arguments through unchanged, so `(apply plus (quote (1 2)))` was an
   error and `apply` added nothing over a plain call. The last argument
   must be a list (or nil); there must be at least two.
+- [x] Rest parameters: `(lambda (a b . rest) ...)` binds `rest` to the list
+  of the arguments after `a` and `b`, and `(lambda args ...)` to the list of
+  all of them; `defn` takes either form. A lambda reports a wrong count as
+  builtins do (`lambda (a b . rest) expects at least 2 arguments, got 1`),
+  since both now share one `arity`.
 
 ### Design
 

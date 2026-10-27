@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/tychofreeman/glisp/wasm"
 )
@@ -700,13 +699,14 @@ func (f *wasmFunc) tailExpr(node Node) {
 }
 
 // tailApply compiles a call in tail position. If the function called is
-// this closure itself, its arguments become the parameters and it jumps
+// this closure itself (and takes no rest parameter), its arguments become
+// the parameters and it jumps
 // back to the top of the loop; otherwise tailCall makes it.
 func (f *wasmFunc) tailApply(n Apply) {
 	f.at(n.Line)
 	call := f.pushCall(n)
 	f.at(n.Line)
-	if len(n.Args) != len(f.lambda.Params) {
+	if f.lambda.Rest || len(n.Args) != len(f.lambda.Params) {
 		f.tailCall(call, n)
 		return
 	}
@@ -803,20 +803,11 @@ func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 	f.scratch = f.local(wasm.I64)
 	f.tmp32 = f.local(wasm.I32)
 
-	f.LocalGet(paramArgc)
-	f.I32Const(int32(len(n.Params)))
-	f.Op(wasm.I32Ne)
-	f.when(func() {
-		msg := fmt.Sprintf("lambda (%s) expects %s, got ", strings.Join(n.Params, " "), arguments(len(n.Params)))
-		c.fail(f.wasmBody, msg, func() {
-			f.LocalGet(paramArgc)
-			f.Op(wasm.I64ExtendI32U)
-			f.Call(c.rt.putInt)
-			c.text(f.wasmBody, ": ")
-			f.LocalGet(paramArgs)
-			f.LocalGet(paramArgc)
-			f.Call(c.rt.putArgs)
-		})
+	c.checkArity(f.wasmBody, "lambda "+n.paramList(), n.arity(), func() {
+		c.text(f.wasmBody, ": ")
+		f.LocalGet(paramArgs)
+		f.LocalGet(paramArgc)
+		f.Call(c.rt.putArgs)
 	})
 
 	// The frame, at the top of the argument stack: the closure, then the
@@ -830,7 +821,11 @@ func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 	f.GlobalSet(gSP)
 	f.selfSet(func() { f.LocalGet(paramSelf) })
 	for i := range n.Params {
-		f.slotSet(i, func() { f.arg(uint32(i)) })
+		if n.Rest && i == len(n.Params)-1 {
+			f.slotSet(i, func() { f.restList(i) })
+		} else {
+			f.slotSet(i, func() { f.arg(uint32(i)) })
+		}
 	}
 	f.Loop(wasm.BlockI64)
 	for i := range f.slots {
@@ -854,6 +849,31 @@ func (c *wasmCompiler) compileLambda(n Lambda) uint32 {
 	f.GlobalSet(gSP)
 	c.setBody(index, f.wasmBody)
 	return table
+}
+
+// restList leaves the list of the lambda's arguments from the from-th on,
+// for its rest parameter.
+func (f *wasmFunc) restList(from int) {
+	k, list := f.tmp32, f.scratch
+	f.LocalGet(paramArgc)
+	f.LocalSet(k)
+	f.I64Const(addrEmpty)
+	f.LocalSet(list)
+	f.until(func() {
+		f.LocalGet(k)
+		f.I32Const(int32(from))
+		f.Op(wasm.I32LeU)
+	}, func() {
+		f.LocalGet(k)
+		f.I32Const(1)
+		f.Op(wasm.I32Sub)
+		f.LocalSet(k)
+		f.argAt(k)
+		f.LocalGet(list)
+		f.Call(f.c.rt.pair)
+		f.LocalSet(list)
+	})
+	f.LocalGet(list)
 }
 
 // innerLambdas returns the lambdas in nodes, not counting lambdas inside
@@ -896,7 +916,7 @@ func unresolved(node Node) Node {
 		for i, form := range n.Body {
 			body[i] = unresolved(form)
 		}
-		return Lambda{Params: n.Params, Body: body}
+		return Lambda{Params: n.Params, Rest: n.Rest, Body: body}
 	}
 	return node
 }

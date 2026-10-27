@@ -468,7 +468,17 @@ func TestDefNeedsASymbolToDefine(t *testing.T) {
 }
 
 func TestLambdaNeedsAParameterList(t *testing.T) {
-	assertPanicsWith(t, "((lambda x x) 1)", "Cannot build param bindings")
+	assertPanicsWith(t, "((lambda 5 x) 1)", "Cannot build param bindings")
+	assertPanicsWith(t, "(lambda (a .) a)", "lambda: a . in the parameters must come just before the last one")
+	assertPanicsWith(t, "(lambda (a . b c) a)", "lambda: a . in the parameters must come just before the last one")
+}
+
+func TestLambdasTakeTheRestOfTheArgumentsAsAList(t *testing.T) {
+	AssertThat(t, Show(Process("((lambda args args) 1 2)")), Equals("(1 2)"))
+	AssertThat(t, Show(Process("((lambda args args))")), Equals("()"))
+	AssertThat(t, Show(Process("((lambda (a . rest) (cons a rest)) 1 2 3)")), Equals("(1 2 3)"))
+	AssertThat(t, Show(Process("((lambda (a b . rest) rest) 1 2)")), Equals("()"))
+	assertPanicsWith(t, "((lambda (a b . rest) a) 1)", "lambda (a b . rest) expects at least 2 arguments, got 1: (1)")
 }
 
 func TestFunctionsCanBeStoredInLists(t *testing.T) {
