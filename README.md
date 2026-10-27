@@ -180,7 +180,14 @@ prints exactly what the interpreter does, error messages included.
   macro can't use a value computed at run time.
 - [x] Memory doubles when the heap runs out, so a program that allocates a
   lot grows it a few times rather than once per allocation.
-- [ ] Garbage collection: the heap is a bump allocator that never frees.
+- [x] Garbage collection: a copying collector that slides what survives
+  back to the start of the heap. It runs at safe points, just before a
+  call, once the heap has grown 8MB (or as much as survived last time)
+  since the last collection. To make that safe, a lambda keeps its closure
+  and slots in a frame on the argument stack instead of wasm locals, and a
+  call pushes the function it calls there too: at a safe point every value
+  the program holds is on that stack or in a global, the collector's roots.
+  Tests run every parity program with a collection at nearly every call.
 - [ ] Node 22 (`node:wasi`) segfaults at random on long runs such as
   `examples/tour.glisp`, even with memory preallocated; turning off V8's
   wasm tier-up (`--no-wasm-tier-up`) mostly avoids it, and wazero runs it
@@ -194,7 +201,7 @@ prints exactly what the interpreter does, error messages included.
   its arguments, at the top of the argument stack) and returns a reserved
   value; `invoke` moves the arguments down to its own base and makes the
   call, repeating while calls come back pending. Calls to builtins stay
-  direct. Only calls that aren't tail calls use the stack, about 500,000
+  direct. Only calls that aren't tail calls use the stack, about 300,000
   deep. (wasm's `return_call` would do this natively, but wazero v1.10
   doesn't run it.)
 - [x] The interpreter replaces frames on tail calls: `Eval` is a loop, and

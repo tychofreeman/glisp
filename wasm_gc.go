@@ -1,0 +1,346 @@
+package glisp
+
+import (
+	"sort"
+
+	"github.com/tychofreeman/glisp/wasm"
+)
+
+// The garbage collector for compiled programs: a copying (Cheney)
+// collector that then slides what survived back to the start of the heap,
+// so the heap stays at one place in memory.
+//
+// It runs only at safe points: just before a call, once the heap has grown
+// gcThreshold bytes past what survived the last collection. At a safe point
+// every value the program holds is in memory, where the collector can find
+// and update it: the argument stack (lambdas' frames, and the functions and
+// arguments of calls being made) and the globals of top-level names.
+// Nothing else holds a heap value across a call: the runtime's functions
+// don't call back into the program, and allocating never collects.
+
+// gcThreshold is how far the heap may grow past what survived the last
+// collection before the next one. Tests lower it to collect often.
+var gcThreshold = 8 << 20
+
+// tagForward marks an object the collector has copied; its new address is
+// at +4.
+const tagForward = 10
+
+// declareGC declares the collector's functions; gc itself is defined by
+// defineGC, once the program's globals are known.
+func (c *wasmCompiler) declareGC() {
+	rt := &c.rt
+	rt.objSize = c.declare(sig(vals(i32), i32))
+	rt.gcCopy = c.declare(sig(vals(i64), i64))
+	rt.gcReloc = c.declare(sig(vals(i64), i64))
+	rt.gc = c.declare(sig(nil))
+	c.define(rt.objSize, vals(i32), c.objSizeBody())
+	c.define(rt.gcCopy, vals(i32, i32, i32), c.gcCopyBody())
+	c.define(rt.gcReloc, vals(i32), c.gcRelocBody())
+}
+
+// safePoint collects if the heap has grown enough.
+func (c *wasmCompiler) safePoint(b *wasm.Code) {
+	b.GlobalGet(gHP)
+	b.GlobalGet(gGCNext)
+	b.Op(wasm.I32GtU)
+	b.If(wasm.BlockVoid)
+	b.Call(c.rt.gc)
+	b.Op(wasm.End)
+}
+
+// objSize(p) is the size in bytes of the object at p.
+func (c *wasmCompiler) objSizeBody() wasm.Code {
+	const p, tag = 0, 1
+	var b wasm.Code
+	b.LocalGet(p)
+	b.I32Load(0)
+	b.LocalSet(tag)
+	for _, size := range []struct{ tag, size int32 }{{tagPair, 24}, {tagCell, 16}} {
+		b.LocalGet(tag)
+		b.I32Const(size.tag)
+		b.Op(wasm.I32Eq)
+		returnIf(&b, func() { b.I32Const(size.size) })
+	}
+	b.LocalGet(tag)
+	b.I32Const(tagClosure)
+	b.Op(wasm.I32Eq)
+	returnIf(&b, func() {
+		b.LocalGet(p)
+		b.I32Load(8)
+		b.I32Const(3)
+		b.Op(wasm.I32Shl)
+		b.I32Const(16)
+		b.Op(wasm.I32Add)
+	})
+	// A string or symbol.
+	b.LocalGet(p)
+	b.I32Load(4)
+	b.I32Const(15)
+	b.Op(wasm.I32Add)
+	b.I32Const(-8)
+	b.Op(wasm.I32And)
+	return b
+}
+
+// gcCopy(v) is v, copied to to-space if it is an object in from-space: the
+// copy's address, which a forward left in the old object gives to any
+// later reference.
+func (c *wasmCompiler) gcCopyBody() wasm.Code {
+	const v, p, n, dst = 0, 1, 2, 3
+	var b wasm.Code
+	b.LocalGet(v)
+	b.I64Const(1)
+	b.Op(wasm.I64And, wasm.I32WrapI64)
+	returnIf(&b, func() { b.LocalGet(v) })
+	b.LocalGet(v)
+	b.Op(wasm.I32WrapI64)
+	b.LocalTee(p)
+	b.GlobalGet(gHeapStart)
+	b.Op(wasm.I32LtU)
+	b.LocalGet(p)
+	b.GlobalGet(gFromEnd)
+	b.Op(wasm.I32GeU, wasm.I32Or)
+	returnIf(&b, func() { b.LocalGet(v) })
+	b.LocalGet(p)
+	b.I32Load(0)
+	b.I32Const(tagForward)
+	b.Op(wasm.I32Eq)
+	returnIf(&b, func() {
+		b.LocalGet(p)
+		b.I32Load(4)
+		b.Op(wasm.I64ExtendI32U)
+	})
+	b.LocalGet(p)
+	b.Call(c.rt.objSize)
+	b.LocalSet(n)
+	b.GlobalGet(gToNext)
+	b.LocalTee(dst)
+	b.LocalGet(p)
+	b.LocalGet(n)
+	b.MemoryCopy()
+	b.LocalGet(dst)
+	b.LocalGet(n)
+	b.Op(wasm.I32Add)
+	b.GlobalSet(gToNext)
+	b.LocalGet(p)
+	b.I32Const(tagForward)
+	b.I32Store(0)
+	b.LocalGet(p)
+	b.LocalGet(dst)
+	b.I32Store(4)
+	b.LocalGet(dst)
+	b.Op(wasm.I64ExtendI32U)
+	return b
+}
+
+// gcReloc(v) is v, moved down by gDelta if it points into to-space: where
+// it will be once to-space slides to the start of the heap.
+func (c *wasmCompiler) gcRelocBody() wasm.Code {
+	const v, p = 0, 1
+	var b wasm.Code
+	b.LocalGet(v)
+	b.I64Const(1)
+	b.Op(wasm.I64And, wasm.I32WrapI64)
+	returnIf(&b, func() { b.LocalGet(v) })
+	b.LocalGet(v)
+	b.Op(wasm.I32WrapI64)
+	b.LocalTee(p)
+	b.GlobalGet(gToStart)
+	b.Op(wasm.I32GeU)
+	b.LocalGet(p)
+	b.GlobalGet(gToNext)
+	b.Op(wasm.I32LtU, wasm.I32And)
+	returnIf(&b, func() {
+		b.LocalGet(p)
+		b.GlobalGet(gDelta)
+		b.Op(wasm.I32Sub, wasm.I64ExtendI32U)
+	})
+	b.LocalGet(v)
+	return b
+}
+
+// defineGC defines gc, which updates the program's globals.
+func (c *wasmCompiler) defineGC() {
+	const p, scan, k, end = 0, 1, 2, 3
+	var b wasm.Code
+	var globals []uint32
+	for _, g := range c.globals {
+		globals = append(globals, g)
+	}
+	sort.Slice(globals, func(i, j int) bool { return globals[i] < globals[j] })
+	// Each root, and each value field of each object in to-space from
+	// gToStart up to gToNext (which grows while copying), goes through fn.
+	roots := func(fn uint32) {
+		b.GlobalGet(gStackBase)
+		b.LocalSet(p)
+		b.Block(wasm.BlockVoid)
+		b.Loop(wasm.BlockVoid)
+		b.LocalGet(p)
+		b.GlobalGet(gSP)
+		b.Op(wasm.I32GeU)
+		b.BrIf(1)
+		b.LocalGet(p)
+		b.LocalGet(p)
+		b.I64Load(0)
+		b.Call(fn)
+		b.I64Store(0)
+		b.LocalGet(p)
+		b.I32Const(8)
+		b.Op(wasm.I32Add)
+		b.LocalSet(p)
+		b.Br(0)
+		b.Op(wasm.End, wasm.End)
+		for _, g := range globals {
+			b.GlobalGet(g)
+			b.Call(fn)
+			b.GlobalSet(g)
+		}
+	}
+	field := func(fn uint32, offset uint32) {
+		b.LocalGet(scan)
+		b.LocalGet(scan)
+		b.I64Load(offset)
+		b.Call(fn)
+		b.I64Store(offset)
+	}
+	tagIs := func(tag int32) {
+		b.LocalGet(scan)
+		b.I32Load(0)
+		b.I32Const(tag)
+		b.Op(wasm.I32Eq)
+	}
+	objects := func(fn uint32) {
+		b.GlobalGet(gToStart)
+		b.LocalSet(scan)
+		b.Block(wasm.BlockVoid)
+		b.Loop(wasm.BlockVoid)
+		b.LocalGet(scan)
+		b.GlobalGet(gToNext)
+		b.Op(wasm.I32GeU)
+		b.BrIf(1)
+		tagIs(tagPair)
+		b.If(wasm.BlockVoid)
+		field(fn, 8)
+		field(fn, 16)
+		b.Op(wasm.End)
+		tagIs(tagCell)
+		b.If(wasm.BlockVoid)
+		field(fn, 8)
+		b.Op(wasm.End)
+		tagIs(tagClosure)
+		b.If(wasm.BlockVoid)
+		b.I32Const(0)
+		b.LocalSet(k)
+		b.Block(wasm.BlockVoid)
+		b.Loop(wasm.BlockVoid)
+		b.LocalGet(k)
+		b.LocalGet(scan)
+		b.I32Load(8)
+		b.Op(wasm.I32GeU)
+		b.BrIf(1)
+		b.LocalGet(scan)
+		b.LocalGet(k)
+		b.I32Const(3)
+		b.Op(wasm.I32Shl, wasm.I32Add)
+		b.LocalTee(p)
+		b.LocalGet(p)
+		b.I64Load(16)
+		b.Call(fn)
+		b.I64Store(16)
+		incr(&b, k)
+		b.Br(0)
+		b.Op(wasm.End, wasm.End)
+		b.Op(wasm.End)
+		b.LocalGet(scan)
+		b.LocalGet(scan)
+		b.Call(c.rt.objSize)
+		b.Op(wasm.I32Add)
+		b.LocalSet(scan)
+		b.Br(0)
+		b.Op(wasm.End, wasm.End)
+	}
+
+	// To-space starts after the heap, with room for all of it to survive.
+	b.GlobalGet(gHP)
+	b.GlobalSet(gFromEnd)
+	b.GlobalGet(gHP)
+	b.I32Const(7)
+	b.Op(wasm.I32Add)
+	b.I32Const(-8)
+	b.Op(wasm.I32And)
+	b.GlobalSet(gToStart)
+	b.GlobalGet(gToStart)
+	b.GlobalSet(gToNext)
+	b.GlobalGet(gToStart)
+	b.GlobalGet(gFromEnd)
+	b.GlobalGet(gHeapStart)
+	b.Op(wasm.I32Sub, wasm.I32Add)
+	b.LocalSet(end)
+	b.LocalGet(end)
+	b.MemorySize()
+	b.I32Const(16)
+	b.Op(wasm.I32Shl, wasm.I32GtU)
+	b.If(wasm.BlockVoid)
+	b.LocalGet(end)
+	b.MemorySize()
+	b.I32Const(16)
+	b.Op(wasm.I32Shl, wasm.I32Sub)
+	b.I32Const(65535)
+	b.Op(wasm.I32Add)
+	b.I32Const(16)
+	b.Op(wasm.I32ShrU)
+	b.LocalSet(p)
+	// Grow as alloc does: by the larger of what's needed and the memory's
+	// size, or by what's needed if that much isn't available.
+	b.MemorySize()
+	b.LocalGet(p)
+	b.MemorySize()
+	b.LocalGet(p)
+	b.Op(wasm.I32GtU, wasm.Select)
+	b.MemoryGrow()
+	b.I32Const(-1)
+	b.Op(wasm.I32Eq)
+	b.If(wasm.BlockVoid)
+	b.LocalGet(p)
+	b.MemoryGrow()
+	b.I32Const(-1)
+	b.Op(wasm.I32Eq)
+	b.If(wasm.BlockVoid)
+	c.fail(&b, "out of memory", nil)
+	b.Op(wasm.End, wasm.End, wasm.End)
+
+	// Copy what the roots reach, then what the copies reach.
+	roots(c.rt.gcCopy)
+	objects(c.rt.gcCopy)
+
+	// Point everything at where to-space is about to be, and slide it there.
+	b.GlobalGet(gToStart)
+	b.GlobalGet(gHeapStart)
+	b.Op(wasm.I32Sub)
+	b.GlobalSet(gDelta)
+	roots(c.rt.gcReloc)
+	objects(c.rt.gcReloc)
+	b.GlobalGet(gHeapStart)
+	b.GlobalGet(gToStart)
+	b.GlobalGet(gToNext)
+	b.GlobalGet(gToStart)
+	b.Op(wasm.I32Sub)
+	b.LocalTee(end)
+	b.MemoryCopy()
+	b.GlobalGet(gHeapStart)
+	b.LocalGet(end)
+	b.Op(wasm.I32Add)
+	b.GlobalSet(gHP)
+
+	// Collect again once the heap grows by the larger of what survived and
+	// the threshold.
+	b.GlobalGet(gHP)
+	b.LocalGet(end)
+	b.I32Const(int32(gcThreshold))
+	b.LocalGet(end)
+	b.I32Const(int32(gcThreshold))
+	b.Op(wasm.I32GtU, wasm.Select, wasm.I32Add)
+	b.GlobalSet(gGCNext)
+	c.define(c.rt.gc, vals(i32, i32, i32, i32), b)
+}
