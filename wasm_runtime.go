@@ -964,6 +964,30 @@ func (c *wasmCompiler) builtinBody(name string) ([]wasm.ValType, wasm.Code) {
 		b.Op(map[string]byte{"<": wasm.I64LtS, ">": wasm.I64GtS, "<=": wasm.I64LeS, ">=": wasm.I64GeS}[name])
 		boolean(&b)
 		return nil, b
+	case "number?", "string?", "symbol?", "list?", "function?", "boolean?", "nil?":
+		const t = 3
+		argcIs(1, wasm.I32Ne)
+		b.If(wasm.BlockVoid)
+		c.fail(&b, name+": expects 1 argument, got ", putArgc)
+		b.Op(wasm.End)
+		arg(&b, 0)
+		b.Call(c.rt.tagOf)
+		b.LocalSet(t)
+		tags := map[string][]int32{
+			"number?": {tagInt}, "string?": {tagString}, "symbol?": {tagSymbol},
+			"list?": {tagEmpty, tagPair}, "function?": {tagClosure},
+			"boolean?": {tagTrue, tagFalse}, "nil?": {tagNil},
+		}[name]
+		for k, tag := range tags {
+			b.LocalGet(t)
+			b.I32Const(tag)
+			b.Op(wasm.I32Eq)
+			if k > 0 {
+				b.Op(wasm.I32Or)
+			}
+		}
+		boolean(&b)
+		return vals(i32), b
 	case "eq":
 		argcIs(2, wasm.I32Ne)
 		b.If(wasm.BlockVoid)

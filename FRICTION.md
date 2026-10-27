@@ -541,3 +541,14 @@ One entry per PR, written before committing it.
 - A local branch `language/arithmetic` already existed (from the earlier
   `-`/`<`/`>` PR, merged and kept); `git checkout -b` refused, so this one
   is `language/more-arithmetic`. Not a gorefactor issue.
+
+### PR: type predicates
+
+- `add_case` with `line` (the `case "eq":` clause) and `where: "before"`
+  put the new 24-line clause exactly there, indented to match, and named
+  both the clause and the switch it found in its message. Clauses written
+  without the switch's indentation came out right.
+- `add_declaration` with `before` placed the test ahead of an existing one;
+  `after` put the new builtin helper after `divide`. No refusals.
+- gofmt realigned the `builtins` map after the predicates went in as their
+  own block (a blank line before them keeps the old block's alignment).

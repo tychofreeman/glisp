@@ -352,6 +352,32 @@ func TestLessOrEqualAndGreaterOrEqual(t *testing.T) {
 	assertPanicsWith(t, "(>= 1 2 3)", ">=: expects 2 arguments, got 3")
 }
 
+func TestTypePredicates(t *testing.T) {
+	for src, want := range map[string]bool{
+		"(number? 5)":                true,
+		"(number? (quote a))":        false,
+		"(string? \"s\")":            true,
+		"(string? (quote s))":        false,
+		"(symbol? (quote s))":        true,
+		"(symbol? \"s\")":            false,
+		"(list? (quote (1 2)))":      true,
+		"(list? (quote ()))":         true,
+		"(list? nil)":                false,
+		"(function? car)":            true,
+		"(function? (lambda (x) x))": true,
+		"(function? (quote car))":    false,
+		"(boolean? false)":           true,
+		"(boolean? nil)":             false,
+		"(nil? nil)":                 true,
+		"(nil? (quote ()))":          false,
+	} {
+		if got := Process(src); got != want {
+			t.Errorf("%s = %v, want %v", src, got, want)
+		}
+	}
+	assertPanicsWith(t, "(number? 1 2)", "number?: expects 1 argument, got 2")
+}
+
 func TestTrueFalseAndNilAreDefined(t *testing.T) {
 	AssertThat(t, Process("true"), IsTrue)
 	AssertThat(t, Process("false"), IsFalse)
