@@ -295,3 +295,13 @@ One entry per PR, written before committing it.
   `return node` lines did exactly that, and noted each type change
   (`NumberToken` → `int64`, `StringToken` → `string`) — a useful
   confirmation that the change meant what I thought.
+
+### PR: comments
+
+- No tool issues. `insert_statements` placed a whole `if` (with its own
+  comment lines) before the tokenizer's `if` chain, which was simpler than
+  restating the chain to add a branch. `replace_text` worked on the
+  `.glisp` example as well as Go files.
+- Writing Go rune literals (`';'`, `'\n'`) in JSON passed as a single-quoted
+  shell argument needed `'"'"'` around each quote; `batch @file` from a
+  heredoc or script is the better habit for anything with quotes.

@@ -44,7 +44,7 @@ loaded before every program; it defines `mult`.
 
 ### Language
 
-- [ ] Comments.
+- [x] Comments: `;` to the end of the line.
 - [ ] Subtraction and comparison builtins (`-`, `<`, `>`). Programs build them
   by counting up from 0, which is very slow for large numbers (Collatz steps
   for 27 takes about a minute).

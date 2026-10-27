@@ -1,3 +1,7 @@
+; A tour of glisp: list functions, sorting and a little number theory,
+; built from the handful of builtins.  Run it with
+;   go run ./cmd/glisp examples/numbers.glisp
+
 (def true (eq 1 1))
 (def false (eq 1 2))
 (def nil (car (quote ())))
