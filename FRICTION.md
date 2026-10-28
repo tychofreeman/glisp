@@ -1127,3 +1127,11 @@ One entry per PR, written before committing it.
   second definition silently replaces the first. An operation that
   refuses a glisp definition of a name already defined (or a warning
   from the expander) would have caught it. Nothing by hand.
+
+### PR: An error's line, restored after a call
+
+- `extract_function` took `Eval`'s loop out as `evaluate` (it saw that
+  every path returns and made the call a `return`), so `Eval` could
+  wrap it; then `replace_statements` with `function` for `Eval`'s new
+  body, and `replace_text` for wasm's `apply` and the test case.
+  Nothing by hand.

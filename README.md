@@ -557,13 +557,16 @@ In order, one PR each:
   first. The compiler's `usedDefs` kept only the last definition of a
   name, so it missed what earlier instances refer to; it now follows
   every definition.
-- [ ] **An error's line, restored after a call.** Both backends set the
+- [x] **An error's line, restored after a call.** Both backends set the
   line at each call with one and never put it back when the call
-  returns, so code without lines (the stdlib's) that fails after a call
-  reports the line of whatever ran last: `(fmap inc "abc")` after a
-  program's own `show` instance reports that instance's line, not the
-  `fmap` call's. Saving the line around a call (in `Eval`, and in
-  `invoke` and the tail-call protocol in wasm) would fix it.
+  returned, so code without lines (the stdlib's) that failed after a
+  call reported the line of whatever ran last: `(fmap inc "abc")` after
+  a program's own `show` instance reported that instance's line, not the
+  `fmap` call's. Now a call that returns puts the line back: `Eval`
+  saves it around `evaluate` (its old loop, extracted), and compiled
+  code around each call not in tail position (`apply`), where the
+  caller's call does it for a tail call. An error keeps the line it
+  stopped at. Modules grow about 2% (the tour: 265KB to 272KB).
 
 Not now, recorded for later: explicit laziness; purity (side effects stay
 allowed anywhere, kept apart by convention); automatic currying, which conflicts with functions of any number

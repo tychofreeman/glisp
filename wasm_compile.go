@@ -709,10 +709,17 @@ func (f *wasmFunc) def(n Def) {
 }
 
 // apply pushes the function and arguments on the argument stack and calls
-// invoke.
+// invoke. Once the call returns it is no longer the call being made, so the
+// line goes back to what it was: in tail position nothing comes after the
+// call, and the caller's call puts the line back.
 func (f *wasmFunc) apply(n Apply) {
+	line := f.local(wasm.I32)
+	f.GlobalGet(gLine)
+	f.LocalSet(line)
 	f.at(n.Line)
 	f.invoke(f.pushCall(n), n)
+	f.LocalGet(line)
+	f.GlobalSet(gLine)
 }
 
 // pushCall pushes the function n calls, then its arguments, onto the
