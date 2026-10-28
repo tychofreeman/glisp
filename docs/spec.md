@@ -610,6 +610,9 @@ can't use a value the program computes when it runs.
 
 These are written in glisp, in [`stdlib.glisp`](../stdlib.glisp), and loaded
 before every program. A compiled program includes only the ones it uses.
+The stdlib defines each name once, and none of a builtin's (checked as
+it loads; `definstance` adds to a generic instead), but a program may
+redefine any of them.
 
 | Form | Meaning |
 |------|---------|

@@ -631,3 +631,32 @@ func TestMacrosAreNotValues(t *testing.T) {
 func TestMacrosMustBeDefinedBeforeTheyAreUsed(t *testing.T) {
 	assertPanicsWith(t, "(defn f () (later 1)) (defmacro later (lambda (xs) 2)) (f)", "later is a macro, not a value")
 }
+
+// The stdlib defines each name once: a second definition of a name, or a
+// definition of a builtin's, is an error as it loads, since it would
+// replace what the code before it uses. definstance adds to a generic, so
+// it may.
+func TestTheStdlibDefinesEachNameOnce(t *testing.T) {
+	load := func(src string) (err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("%v", r)
+			}
+		}()
+		expandLibrary(append(append(List{}, stdlibForms...), Read(TokenizeString(src)).(List)...))
+		return nil
+	}
+	if err := load(`(defn twice (x) (* 2 x)) (definstance show ((x vector?)) "v")`); err != nil {
+		t.Errorf("a new name and an instance: %v", err)
+	}
+	for src, want := range map[string]string{
+		`(defn math_pow2 (n) n)`:  "stdlib: math_pow2 is defined twice; name it something else, or add to a generic with definstance",
+		`(def car 1)`:             "stdlib: car is a builtin; name it something else",
+		`(defmacro let identity)`: "stdlib: let is defined twice; name it something else, or add to a generic with definstance",
+		`(deftype pair (just x))`: "stdlib: just is defined twice; name it something else, or add to a generic with definstance",
+	} {
+		if err := load(src); err == nil || err.Error() != want {
+			t.Errorf("%s: got %v, want %q", src, err, want)
+		}
+	}
+}

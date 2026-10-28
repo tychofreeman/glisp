@@ -522,6 +522,14 @@ In order, one PR each:
   nodes: 26µs a run, and the tests 31s to 24s. The macros are closures
   over the stdlib's scope, so a program that defines `let_expand` or
   `fold` no longer changes what `let` or `match` do.
+- [x] **The stdlib defines each name once.** A stdlib helper named
+  `math_pow2` replaced the one of that name `exp` uses, and `exp` broke
+  without an error until a test compared it with Go's. Now loading the
+  stdlib (`expandLibrary`) fails on a top-level form that defines a name
+  an earlier one did, or a builtin's: `stdlib: math_pow2 is defined
+  twice; name it something else, or add to a generic with definstance`.
+  `definstance` forms are exempt, since adding to a generic is what they
+  are for. Programs may still redefine stdlib names, as the spec says.
 - [x] **No float runtime without floats.** The float runtime (boxing,
   printing and reading with bignums, about 4.3KB) was in every module.
   A float can only come from a float literal or quoted float, or from
