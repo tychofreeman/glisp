@@ -202,6 +202,7 @@ with `'`. Write `(quote x)`.
 | function | `(lambda (x) x)`, `car`   | `<function>`       | `function?` |
 | vector   | `(vector 1 2)`            | `[1 2]`            | `vector?`   |
 | map      | `(hash_map "a" 1)`        | `{"a" 1}`          | `map?`      |
+| data     | `(circle 1)`, after `deftype` | `#(circle 1)` | `data?`     |
 
 All values are immutable: operations that "change" a vector or map return a
 new one.
@@ -413,7 +414,7 @@ deep.
 
 ## 5. Special forms
 
-There are five. They are recognised by name, before macros and calls.
+There are six. They are recognised by name, before macros and calls.
 
 ### `quote`
 
@@ -518,6 +519,29 @@ call only. Defining a name again replaces it. `def` gives `()`.
 
 `(defmacro name function)` defines a macro: see [the next section](#6-macros).
 It gives `()`.
+
+### `begin`
+
+`(begin form...)` evaluates its forms in order and gives the value of the
+last; `(begin)` gives `nil`. At the top level, or among the forms of a
+lambda's body, its forms take its place, so a `def` in it defines in that
+scope: that is how one macro can define several names (`deftype` does).
+Anywhere else it is a sequence with a scope of its own.
+
+```glisp
+(begin (def a 1) (def b 2))
+(p (plus a b))
+(defn twice_plus_one (x) (begin (def y (* x 2))) (plus y 1))
+(p (twice_plus_one 5))
+(if true (begin (p "one") "two") "three")
+```
+
+```output
+3
+11
+one
+=> two
+```
 
 ## 6. Macros
 
@@ -635,6 +659,46 @@ does changes the others that use it (`map` uses `fold` and `reverse`).
 12 6 7
 => 55
 ```
+
+### Data types
+
+`(deftype type (constructor field ...) ...)` defines an algebraic data
+type: a type whose values are each made by one of its constructors. For
+`(deftype shape (circle r) (rect w h))` it defines
+
+| Name | What it is |
+|------|------------|
+| `circle`, `rect` | the constructors: `(circle 2)` is a shape with `r` 2 |
+| `circle?`, `rect?` | whether a value was made by that constructor |
+| `shape?` | whether a value was made by any of the type's constructors |
+| `circle_r`, `rect_w`, `rect_h` | the fields, by name; an error for a value made otherwise |
+
+A constructor may have no fields: `(deftype maybe (just x) (nothing))`
+makes `(nothing)` a value. The values are [data](#data) values: they print
+as `#(circle 2)`, and are equal when their constructors and fields are.
+`deftype` is a macro whose expansion is a [`begin`](#begin) of `def`s, so
+it defines in the scope where it is.
+
+```glisp
+(deftype shape (circle r) (rect w h))
+(def shapes (list (circle 2) (rect 3 4)))
+(p shapes)
+(defn area (s)
+  (if (circle? s) (* 3 (* (circle_r s) (circle_r s))) (* (rect_w s) (rect_h s))))
+(p (map area shapes) (map shape? (list (circle 1) 5)))
+(p (eq (circle 2) (circle 2)) (eq (circle 2) (rect 2 2)) (data? (circle 1)))
+(circle_r (rect 1 2))
+```
+
+```output
+(#(circle 2) #(rect 3 4))
+(12 12) (true false)
+true false true
+glisp: line 1: circle_r: expected a circle, got #(rect 1 2)
+```
+
+The error names line 1: code a macro made has the line of the macro call,
+here `deftype`.
 
 ## 8. Builtin functions
 
@@ -822,6 +886,45 @@ structure with the old one.
 glisp: line 4: map_put: can't hash function <function>
 ```
 
+### Data
+
+Values of the types `deftype` defines (see [data types](#data-types)) are
+made by these builtins, which a program can also call itself.
+
+| Builtin | Result |
+|---------|--------|
+| `(data name x ...)` | a data value made by the constructor named by the symbol `name`, with the fields `x ...` |
+| `(data_name d)` | the name of `d`'s constructor, a symbol |
+| `(data_ref d i)` | field `i` of `d`, counting from 0 |
+| `(data_length d)` | how many fields `d` has |
+
+A data value prints as `#(` its constructor's name and fields `)`. Two are
+equal if they have the same constructor name and equal fields; they hash
+alike too, so they can be map keys.
+
+```glisp
+(def d (data (quote point) 1 "two"))
+(p d (data_name d) (data_ref d 1) (data_length d))
+(p (data (quote unit)) (eq d (data (quote point) 1 "two")) (eq d (vector (quote point) 1 "two")))
+(p (map_get (hash_map d "found") (data (quote point) 1 "two")))
+(data_ref d 2)
+```
+
+```output
+#(point 1 "two") point two 2
+#(unit) true false
+found
+glisp: line 5: data_ref: index 2 out of range for #(point 1 "two")
+```
+
+```glisp
+(data "point" 1)
+```
+
+```output
+glisp: line 1: data: expected a symbol, got string "point"
+```
+
 ### Hashing
 
 `(hash x)` is a number from 0 to 2^32-1 computed from `x`'s value, the same
@@ -838,17 +941,19 @@ in both backends: equal values have equal hashes. Functions can't be hashed.
 ### Type predicates
 
 `number?`, `string?`, `symbol?`, `list?`, `nil?`, `boolean?`, `function?`,
-`vector?` and `map?` each take one value and say whether it is of that type
+`vector?`, `map?` and `data?` each take one value and say whether it is of that type
 (see [values and types](#3-values-and-types)).
 
 ```glisp
 (p (number? 1) (string? "s") (symbol? (quote s)) (boolean? false))
 (p (list? (quote ())) (list? nil) (vector? (vector)) (map? (hash_map)))
+(p (data? (data (quote unit))) (data? (vector)))
 ```
 
 ```output
 true true true true
 true false true true
+true false
 => ()
 ```
 

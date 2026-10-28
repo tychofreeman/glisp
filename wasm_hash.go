@@ -100,30 +100,41 @@ func (c *wasmCompiler) hashIntoBody(b *wasmBody) {
 	})
 	is(tagVector, func() {
 		putByte('[')
-		b.LocalGet(v)
-		b.Op(wasm.I32WrapI64)
-		b.LocalTee(p)
-		b.I32Load(4)
-		b.LocalSet(n)
-		b.until(func() {
-			b.LocalGet(i)
-			b.LocalGet(n)
-			b.Op(wasm.I32GeU)
-		}, func() {
-			element(b, p, func() { b.LocalGet(i) })
-			b.I64Load(8)
-			b.LocalGet(h)
-			b.LocalGet(name)
-			b.Call(c.rt.hashInto)
-			b.LocalSet(h)
-			b.incr(i)
-		})
+		c.hashElements(b, v, p, n, i, h, name)
 		putByte(']')
+	})
+	is(tagData, func() {
+		putByte('#')
+		c.hashElements(b, v, p, n, i, h, name)
+		putByte(')')
 	})
 	c.fail(b, "", func() {
 		b.LocalGet(name)
 		b.Call(c.rt.putStr)
 		c.text(b, ": can't hash ")
 		c.typeAndValue(b, v)
+	})
+}
+
+// hashElements feeds each value of the vector-like object v into the hash
+// in h.
+func (c *wasmCompiler) hashElements(b *wasmBody, v uint32, p uint32, n uint32, i uint32, h uint32, name uint32) {
+	b.LocalGet(v)
+	b.Op(wasm.I32WrapI64)
+	b.LocalTee(p)
+	b.I32Load(4)
+	b.LocalSet(n)
+	b.until(func() {
+		b.LocalGet(i)
+		b.LocalGet(n)
+		b.Op(wasm.I32GeU)
+	}, func() {
+		element(b, p, func() { b.LocalGet(i) })
+		b.I64Load(8)
+		b.LocalGet(h)
+		b.LocalGet(name)
+		b.Call(c.rt.hashInto)
+		b.LocalSet(h)
+		b.incr(i)
 	})
 }

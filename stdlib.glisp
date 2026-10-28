@@ -88,3 +88,58 @@
 
 ; ((partial f a) b) is (f a b).
 (defn partial (f . args) (lambda more (apply f (append args more))))
+
+; (deftype type (constructor field ...) ...) defines an algebraic data type:
+; for each constructor, a function that makes a data value of it, a
+; predicate constructor?, and constructor_field for each field; and a
+; predicate type?. Its expansion is a begin of defs.
+(defn deftype_name (parts) (symbol (apply str parts)))
+(defn deftype_article (name)
+  (if (deftype_member (car (chars (str name))) (chars "aeiou")) "an " "a "))
+(defn deftype_member (x l)
+  (if (empty? l) false (if (eq x (car l)) true (deftype_member x (cdr l)))))
+(defn deftype_quote (x) (list (quote quote) x))
+(defn deftype_constructor (c)
+  (if (and (list? c) (not (empty? c)) (symbol? (car c)))
+    c
+    (error "deftype: expected (constructor field ...), got " c)))
+(defn deftype_make (c)
+  (list (quote def) (car c)
+    (list (quote lambda) (cdr c)
+      (cons (quote data) (cons (deftype_quote (car c)) (cdr c))))))
+(defn deftype_is (c)
+  (list (quote def) (deftype_name (list (car c) "?"))
+    (list (quote lambda) (quote (x))
+      (list (quote and) (quote (data? x))
+        (list (quote eq) (quote (data_name x)) (deftype_quote (car c)))))))
+(defn deftype_fields (name fields i)
+  (if (empty? fields) (quote ())
+    (let (getter (deftype_name (list name "_" (car fields))))
+      (cons
+        (list (quote def) getter
+          (list (quote lambda) (quote (x))
+            (list (quote if) (list (deftype_name (list name "?")) (quote x))
+              (list (quote data_ref) (quote x) i)
+              (list (quote error)
+                (str getter ": expected " (deftype_article name) name ", got ")
+                (quote x)))))
+        (deftype_fields name (cdr fields) (plus i 1))))))
+(defn deftype_type (type constructors)
+  (list (quote def) (deftype_name (list type "?"))
+    (list (quote lambda) (quote (x))
+      (cons (quote or)
+        (map (lambda (c) (list (deftype_name (list (car c) "?")) (quote x)))
+             constructors)))))
+(defn deftype_expand (xs)
+  (if (not (symbol? (car xs)))
+    (error "deftype: expected a type name, got " (car xs))
+    (let (constructors (map deftype_constructor (cdr xs)))
+      (cons (quote begin)
+        (append
+          (fold (lambda (defs c)
+                  (append defs
+                    (cons (deftype_make c)
+                      (cons (deftype_is c) (deftype_fields (car c) (cdr c) 0)))))
+                (quote ()) constructors)
+          (list (deftype_type (car xs) constructors)))))))
+(defmacro deftype (lambda (xs) (deftype_expand xs)))

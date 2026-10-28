@@ -35,17 +35,19 @@ const (
 	functionKind
 	vectorKind
 	mapKind
+	symbolKind
+	dataKind
 )
 
 // noun names k in a message: "expected a number".
 func (k kind) noun() string {
-	return [...]string{"anything", "a number", "a string", "a list", "a function", "a vector", "a map"}[k]
+	return [...]string{"anything", "a number", "a string", "a list", "a function", "a vector", "a map", "a symbol", "a data value"}[k]
 }
 
 // types are the types of k's values, as typeName names them; none for
 // anyKind, which takes any value.
 func (k kind) types() []string {
-	return [][]string{nil, {"number"}, {"string"}, {"list", "nil"}, {"function"}, {"vector"}, {"map"}}[k]
+	return [][]string{nil, {"number"}, {"string"}, {"list", "nil"}, {"function"}, {"vector"}, {"map"}, {"symbol"}, {"data"}}[k]
 }
 
 // has reports whether v is of kind k.
@@ -161,13 +163,17 @@ var builtinSpecs = append([]builtin{
 	{"map_count", arity{1, 1}, []kind{mapKind}, mapCount},
 	{"map_keys", arity{1, 1}, []kind{mapKind}, mapKeys},
 	{"map_to_list", arity{1, 1}, []kind{mapKind}, mapToList},
+	{"data", arity{1, -1}, []kind{symbolKind, anyKind}, makeData},
+	{"data_name", arity{1, 1}, []kind{dataKind}, dataName},
+	{"data_ref", arity{2, 2}, []kind{dataKind, numberKind}, dataRef},
+	{"data_length", arity{1, 1}, []kind{dataKind}, dataLength},
 }, typePredicateSpecs()...)
 
 // typePredicates are the builtins that test a value's type, each with the
 // type it tests, as typeName names it.
 var typePredicates = [][2]string{
 	{"number?", "number"}, {"string?", "string"}, {"symbol?", "symbol"}, {"list?", "list"},
-	{"function?", "function"}, {"boolean?", "bool"}, {"nil?", "nil"}, {"vector?", "vector"}, {"map?", "map"},
+	{"function?", "function"}, {"boolean?", "bool"}, {"nil?", "nil"}, {"vector?", "vector"}, {"map?", "map"}, {"data?", "data"},
 }
 
 func typePredicateSpecs() []builtin {

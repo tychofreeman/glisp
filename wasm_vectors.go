@@ -17,7 +17,7 @@ var vectorOps = map[string]func(c *wasmCompiler, b *wasmBody){
 
 // newVector leaves the address of a new vector whose length is in local n,
 // its values not yet set.
-func (c *wasmCompiler) newVector(b *wasmBody, n uint32) {
+func (c *wasmCompiler) newVector(b *wasmBody, tag int32, n uint32) {
 	p := b.local(i32)
 	b.LocalGet(n)
 	b.I32Const(3)
@@ -26,7 +26,7 @@ func (c *wasmCompiler) newVector(b *wasmBody, n uint32) {
 	b.Op(wasm.I32Add)
 	b.Call(c.rt.alloc)
 	b.LocalTee(p)
-	b.I32Const(tagVector)
+	b.I32Const(tag)
 	b.I32Store(0)
 	b.LocalGet(p)
 	b.LocalGet(n)
@@ -81,9 +81,15 @@ func (c *wasmCompiler) vectorIndex(b *wasmBody, name string, v uint32) uint32 {
 
 // (vector x ...): its arguments, copied from the argument stack.
 func (c *wasmCompiler) compileVector(b *wasmBody) {
+	c.objectOfArgs(b, tagVector)
+}
+
+// objectOfArgs leaves a new vector-like object holding the call's arguments,
+// copied from the argument stack.
+func (c *wasmCompiler) objectOfArgs(b *wasmBody, tag int32) {
 	argc := b.param(paramArgc)
 	p := b.local(i32)
-	c.newVector(b, argc)
+	c.newVector(b, tag, argc)
 	b.LocalTee(p)
 	b.I32Const(8)
 	b.Op(wasm.I32Add)
@@ -122,7 +128,7 @@ func (c *wasmCompiler) compileVectorSet(b *wasmBody) {
 	b.LocalGet(v)
 	b.I32Load(4)
 	b.LocalSet(n)
-	c.newVector(b, n)
+	c.newVector(b, tagVector, n)
 	b.LocalTee(w)
 	b.I32Const(8)
 	b.Op(wasm.I32Add)

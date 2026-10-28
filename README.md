@@ -22,18 +22,19 @@ wasmtime numbers.wasm        # or: wazero run numbers.wasm
 compiles the program to a WebAssembly module instead, which runs in any
 WASI runtime (including Node's `node:wasi`) and prints the same output.
 
-Special forms: `quote if lambda def defmacro`. Builtins: `car cdr atom cons
+Special forms: `quote if lambda def defmacro begin`. Builtins: `car cdr atom cons
 eq apply p error`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
 predicates `number? string? symbol? list? function? boolean? nil? vector?
-map?`,
+map? data?`,
 strings `str string_length substring chars string< symbol parse_number`, and
 vectors `vector vector_ref vector_length vector_set vector_to_list`, maps
 `hash_map map_get map_put map_remove map_has map_count map_keys map_to_list`,
-and `hash`.
+data `data data_name data_ref data_length`, and `hash`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`, and a list library: `list`, `empty?`, `length`, `map`, `filter`,
-`fold`, `foldr`, `reverse`, `append`, `identity`, `compose` and `partial`.
+`fold`, `foldr`, `reverse`, `append`, `identity`, `compose` and `partial`;
+and `deftype`, which defines data types.
 
 ## Roadmap
 
@@ -387,11 +388,23 @@ In order, one PR each:
   then reverse, rather than recursing. Specified, with examples, in
   docs/spec.md. A program can still redefine any of them, which changes
   the others that use it (`map` uses `fold` and `reverse`).
-- [ ] **Algebraic data types.** `(deftype shape (circle r) (rect w h))`
-  defines constructors, a predicate per constructor and one for the
-  type, and accessors. A value made by a constructor is a new kind of
-  value in both backends, printed `#(circle 1)`, compared and hashed by
-  its constructor and fields.
+- [x] **Algebraic data types.** `(deftype shape (circle r) (rect w h))`
+  defines constructors, a predicate per constructor (`circle?`) and one
+  for the type (`shape?`), and accessors (`rect_w`). A value made by a
+  constructor is a new kind of value, data: `(data name x ...)` makes
+  one, `data_name`, `data_ref` and `data_length` read it, `data?` tests
+  for it; it prints `#(circle 1)` and compares and hashes by its
+  constructor's name and fields. In compiled code it is a vector-like
+  object (`tagData`) whose first value is the name, so the collector,
+  printer, `eq` and hash share the vector code: three refactorings
+  first (`newVector` and `objectOfArgs` take the tag; the element loops
+  of the printer and hash became methods). `deftype` is a stdlib macro,
+  which needed a way for one macro to define several names: the special
+  form `begin`, whose forms take its place at the top level or in a
+  lambda's body (so its `def`s define there) and which is a sequence
+  with its own scope elsewhere. The expander splices it, so no backend
+  sees a new node. The parity check now compares what the command
+  prints, so an error found while compiling counts as the same.
 - [ ] **Pattern matching.** `(match x ((circle r) ...) ((cons h t) ...)
   (_ ...))` over constructors, lists, vectors and literals, binding the
   names in a pattern; a stdlib macro, so both backends get it from the

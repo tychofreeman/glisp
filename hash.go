@@ -67,6 +67,13 @@ func hashInto(fn string, h *uint32, v interface{}) {
 			hashInto(fn, h, x)
 		}
 		put(']')
+	case Data:
+		put('#')
+		hashInto(fn, h, v.name)
+		for _, x := range v.fields {
+			hashInto(fn, h, x)
+		}
+		put(')')
 	default:
 		panic(fmt.Sprintf("%s: can't hash %s", fn, described(v)))
 	}
