@@ -3,6 +3,7 @@ package glisp
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -13,6 +14,7 @@ const (
 	STRING TokenType = iota
 	NUM
 	SYMBOL
+	FLOAT
 )
 
 type Token interface {
@@ -25,8 +27,28 @@ func token(s string) Token {
 		return StringToken{s[1 : len(s)-1]}
 	} else if _, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64); err == nil {
 		return NumberToken{s}
+	} else if floatLiteral.MatchString(s) {
+		return FloatToken{s}
 	}
 	return Symbol{s}
+}
+
+// floatLiteral is a float as a program writes one: digits with a fraction,
+// an exponent or both.
+var floatLiteral = regexp.MustCompile(`^[+-]?[0-9]+(\.[0-9]+([eE][+-]?[0-9]+)?|[eE][+-]?[0-9]+)$`)
+
+// A FloatToken is a float literal.
+type FloatToken struct {
+	value string
+}
+
+func (f FloatToken) Str() string     { return f.value }
+func (f FloatToken) Type() TokenType { return FLOAT }
+
+// Value is the float nearest the literal: out of range, an infinity or 0.
+func (f FloatToken) Value() float64 {
+	v, _ := strconv.ParseFloat(f.value, 64)
+	return v
 }
 
 type StringToken struct {

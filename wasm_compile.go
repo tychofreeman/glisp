@@ -3,6 +3,7 @@ package glisp
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"os"
 
 	"github.com/tychofreeman/glisp/wasm"
@@ -51,6 +52,7 @@ const (
 	tagMap     // count at +4, root node at +8
 	tagMapNode // bitmaps at +4 and +8, slot count at +12, slots from +16
 	tagData    // like a vector: the constructor's name, then the fields
+	tagFloat   // the float's bits at +8
 )
 
 // The memory layout. Static objects (the four constants, strings, quoted
@@ -93,6 +95,7 @@ const (
 	gFromEnd            // and where from-space ends
 	gDelta              // and how far to-space moves when it slides down
 	gMapChanged         // whether the last map update added or removed a key
+	gScratch            // where printing a float keeps its bignums
 	gNames
 )
 
@@ -279,12 +282,14 @@ func newWasmCompiler(scope *Scope) *wasmCompiler {
 // finish lays out memory after the static data and encodes the module.
 func (c *wasmCompiler) finish() []byte {
 	outBuf := align8(len(c.data))
-	stack := outBuf + outCap
+	scratch := outBuf + outCap
+	stack := scratch + scratchSize
 	heap := stack + stackSize
 	c.m.Globals[gSP].Init = int64(stack)
 	c.m.Globals[gHP].Init = int64(heap)
 	c.m.Globals[gFD].Init = 1
 	c.m.Globals[gOutBuf].Init = int64(outBuf)
+	c.m.Globals[gScratch].Init = int64(scratch)
 	c.m.Globals[gStackEnd].Init = int64(stack + stackSize - stackGuard)
 	c.m.Globals[gStackBase].Init = int64(stack)
 	c.m.Globals[gHeapStart].Init = int64(heap)
@@ -419,6 +424,11 @@ func (c *wasmCompiler) constant(v interface{}) int64 {
 		return addrFalse
 	case nil:
 		return addrNil
+	case float64:
+		addr := c.static(16)
+		c.put32(addr, tagFloat)
+		c.put64(addr+8, int64(math.Float64bits(v)))
+		return int64(addr)
 	}
 	panic(fmt.Sprintf("wasm: can't compile the constant %T %v", v, v))
 }

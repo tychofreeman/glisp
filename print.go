@@ -45,6 +45,8 @@ func Write(v interface{}) string {
 		return quote(v)
 	case int64:
 		return strconv.FormatInt(v, 10)
+	case float64:
+		return formatFloat(v)
 	case bool:
 		return strconv.FormatBool(v)
 	case Function, *Closure:
@@ -81,6 +83,8 @@ func typeName(v interface{}) string {
 	switch v.(type) {
 	case int64:
 		return "number"
+	case float64:
+		return "float"
 	case string:
 		return "string"
 	case Symbol:

@@ -16,6 +16,8 @@ type wasmRuntime struct {
 	nodeRemove, mapPrint, mapPush, mapAllIn                  uint32
 	newMap, mapPut, mapGet, mapRemove                        uint32
 	objSize, gcCopy, gcReloc, gc                             uint32 // the garbage collector
+	boxFloat, floatBits, putFloat                            uint32 // floats
+	bnSet, bnMul, bnShl, bnAdd, bnSub, bnCmp                 uint32 // bignums, for printing them
 }
 
 var (
@@ -62,6 +64,7 @@ func (c *wasmCompiler) runtime() {
 	c.declareStrings()
 	c.declareGC()
 	c.declareMaps()
+	c.declareFloats()
 	builtinFuncs := map[string]uint32{}
 	rt.builtins = map[string]uint32{}
 	for _, spec := range builtinSpecs {
@@ -91,6 +94,7 @@ func (c *wasmCompiler) runtime() {
 	c.define(rt.hashInto, c.hashIntoBody)
 	c.defineStrings()
 	c.defineMaps()
+	c.defineFloats()
 	for _, spec := range builtinSpecs {
 		c.define(builtinFuncs[spec.name], func(b *wasmBody) { c.builtinBody(b, spec) })
 	}
@@ -442,6 +446,10 @@ func (c *wasmCompiler) putValueBody(b *wasmBody) {
 		b.I32Const(']')
 		b.Call(c.rt.putByte)
 	})
+	when(tagFloat, func() {
+		b.field(v, 8)
+		b.Call(c.rt.putFloat)
+	})
 	when(tagData, func() {
 		// #(name a b)
 		c.text(b, "#(")
@@ -743,6 +751,17 @@ func (c *wasmCompiler) equalBody(b *wasmBody) {
 	b.I32Const(tagClosure)
 	b.Op(wasm.I32Eq)
 	b.returnIf(no)
+	// Floats: equal as floats, so 0.0 is -0.0 and NaN is nothing.
+	b.LocalGet(ta)
+	b.I32Const(tagFloat)
+	b.Op(wasm.I32Eq)
+	b.returnIf(func() {
+		b.field(a, 8)
+		b.asF64()
+		b.field(bv, 8)
+		b.asF64()
+		b.Op(wasm.F64Eq)
+	})
 	// Maps: the same count, and each entry of one in the other.
 	b.LocalGet(ta)
 	b.I32Const(tagMap)
@@ -1096,6 +1115,7 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.Call(c.rt.pair)
 		b.Call(c.rt.pair)
 	case "plus", "-", "*":
+		c.floatArithmetic(b, name)
 		sum, i := b.local(i64), b.local(i32)
 		number := func() {
 			b.argAt(i)
@@ -1137,6 +1157,13 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.LocalGet(sum)
 		b.encode()
 	case "/", "mod":
+		if name == "/" {
+			c.floatBinary(b, func() {
+				b.Op(wasm.F64Div)
+				b.asBits()
+				b.Call(c.rt.boxFloat)
+			})
+		}
 		a, d := b.local(i64), b.local(i64)
 		for i, local := range []uint32{a, d} {
 			b.arg(uint32(i))
@@ -1155,6 +1182,10 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		}
 		b.encode()
 	case "<", ">", "<=", ">=":
+		c.floatBinary(b, func() {
+			b.Op(map[string]byte{"<": wasm.F64Lt, ">": wasm.F64Gt, "<=": wasm.F64Le, ">=": wasm.F64Ge}[name])
+			b.boolean()
+		})
 		// Encoding keeps integers' order.
 		b.arg(0)
 		b.arg(1)
@@ -1252,12 +1283,12 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.Call(c.rt.flush)
 		b.I64Const(addrEmpty)
 	default:
-		if typ, isPredicate := predicateType(name); isPredicate {
+		if typs, isPredicate := predicateTypes(name); isPredicate {
 			t := b.local(i32)
 			b.arg(0)
 			b.Call(c.rt.tagOf)
 			b.LocalSet(t)
-			b.tagIn(t, tagsOf(typ))
+			b.tagIn(t, tagsOf(typs...))
 			b.boolean()
 			return
 		}
@@ -1270,6 +1301,10 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 			return
 		}
 		if op, isData := dataOps[name]; isData {
+			op(c, b)
+			return
+		}
+		if op, isFloat := floatOps[name]; isFloat {
 			op(c, b)
 			return
 		}

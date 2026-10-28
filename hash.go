@@ -43,6 +43,9 @@ func hashInto(fn string, h *uint32, v interface{}) {
 	case int64:
 		put('i')
 		put(binary.LittleEndian.AppendUint64(nil, uint64(v))...)
+	case float64:
+		put('d')
+		put(binary.LittleEndian.AppendUint64(nil, floatBits(v))...)
 	case nil:
 		put('n')
 	case bool:

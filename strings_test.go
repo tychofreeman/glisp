@@ -40,7 +40,7 @@ func TestStringFunctionErrors(t *testing.T) {
 		`(substring "abc" 2 1)`:   `substring: indexes 2..1 out of range for a string of length 3`,
 		`(substring "abc" 0 4)`:   `substring: indexes 0..4 out of range for a string of length 3`,
 		`(substring "abc" -1 2)`:  `substring: indexes -1..2 out of range for a string of length 3`,
-		`(substring "abc" "a" 2)`: `substring: expected a number, got string "a"`,
+		`(substring "abc" "a" 2)`: `substring: expected an integer, got string "a"`,
 		`(chars (quote a))`:       `chars: expected a string, got symbol a`,
 		`(string< "a" 1)`:         `string<: expected a string, got number 1`,
 		`(symbol 1)`:              `symbol: expected a string, got number 1`,

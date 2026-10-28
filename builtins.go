@@ -2,6 +2,7 @@ package glisp
 
 import (
 	"fmt"
+	"math"
 	"slices"
 )
 
@@ -37,17 +38,18 @@ const (
 	mapKind
 	symbolKind
 	dataKind
+	integerKind
 )
 
 // noun names k in a message: "expected a number".
 func (k kind) noun() string {
-	return [...]string{"anything", "a number", "a string", "a list", "a function", "a vector", "a map", "a symbol", "a data value"}[k]
+	return [...]string{"anything", "a number", "a string", "a list", "a function", "a vector", "a map", "a symbol", "a data value", "an integer"}[k]
 }
 
 // types are the types of k's values, as typeName names them; none for
 // anyKind, which takes any value.
 func (k kind) types() []string {
-	return [][]string{nil, {"number"}, {"string"}, {"list", "nil"}, {"function"}, {"vector"}, {"map"}, {"symbol"}, {"data"}}[k]
+	return [][]string{nil, {"number", "float"}, {"string"}, {"list", "nil"}, {"function"}, {"vector"}, {"map"}, {"symbol"}, {"data"}, {"number"}}[k]
 }
 
 // has reports whether v is of kind k.
@@ -119,6 +121,7 @@ func (b builtin) function() Function {
 var (
 	anyOne    = []kind{anyKind}
 	numbers   = []kind{numberKind}
+	integers  = []kind{integerKind}
 	oneString = []kind{stringKind}
 )
 
@@ -133,26 +136,26 @@ var builtinSpecs = append([]builtin{
 	{"-", arity{1, -1}, numbers, minus},
 	{"*", arity{0, -1}, numbers, times},
 	{"/", arity{2, 2}, numbers, divide("/", func(a, b int64) int64 { return a / b })},
-	{"mod", arity{2, 2}, numbers, divide("mod", func(a, b int64) int64 { return a % b })},
-	{"<", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a < b })},
-	{">", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a > b })},
-	{"<=", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a <= b })},
-	{">=", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a >= b })},
+	{"mod", arity{2, 2}, integers, divide("mod", func(a, b int64) int64 { return a % b })},
+	{"<", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a < b }, func(a, b float64) bool { return a < b })},
+	{">", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a > b }, func(a, b float64) bool { return a > b })},
+	{"<=", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a <= b }, func(a, b float64) bool { return a <= b })},
+	{">=", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a >= b }, func(a, b float64) bool { return a >= b })},
 	{"eq", arity{2, 2}, nil, eq},
 	{"apply", arity{2, -1}, []kind{functionKind, anyKind}, apply},
 	{"p", arity{0, -1}, nil, printValues},
 	{"error", arity{1, -1}, nil, raise},
 	{"str", arity{0, -1}, nil, showJoined},
 	{"string_length", arity{1, 1}, oneString, stringLength},
-	{"substring", arity{3, 3}, []kind{stringKind, numberKind, numberKind}, substring},
+	{"substring", arity{3, 3}, []kind{stringKind, integerKind, integerKind}, substring},
 	{"chars", arity{1, 1}, oneString, chars},
 	{"string<", arity{2, 2}, oneString, stringLess},
 	{"symbol", arity{1, 1}, oneString, toSymbol},
 	{"parse_number", arity{1, 1}, oneString, parseNumber},
 	{"vector", arity{0, -1}, nil, makeVector},
-	{"vector_ref", arity{2, 2}, []kind{vectorKind, numberKind}, vectorRef},
+	{"vector_ref", arity{2, 2}, []kind{vectorKind, integerKind}, vectorRef},
 	{"vector_length", arity{1, 1}, []kind{vectorKind}, vectorLength},
-	{"vector_set", arity{3, 3}, []kind{vectorKind, numberKind, anyKind}, vectorSet},
+	{"vector_set", arity{3, 3}, []kind{vectorKind, integerKind, anyKind}, vectorSet},
 	{"vector_to_list", arity{1, 1}, []kind{vectorKind}, vectorToList},
 	{"hash", arity{1, 1}, anyOne, hashBuiltin},
 	{"hash_map", arity{0, -1}, nil, makeMap},
@@ -165,34 +168,48 @@ var builtinSpecs = append([]builtin{
 	{"map_to_list", arity{1, 1}, []kind{mapKind}, mapToList},
 	{"data", arity{1, -1}, []kind{symbolKind, anyKind}, makeData},
 	{"data_name", arity{1, 1}, []kind{dataKind}, dataName},
-	{"data_ref", arity{2, 2}, []kind{dataKind, numberKind}, dataRef},
+	{"data_ref", arity{2, 2}, []kind{dataKind, integerKind}, dataRef},
 	{"data_length", arity{1, 1}, []kind{dataKind}, dataLength},
+	{"float", arity{1, 1}, numbers, toFloat},
+	{"floor", arity{1, 1}, numbers, rounding("floor", math.Floor)},
+	{"ceiling", arity{1, 1}, numbers, rounding("ceiling", math.Ceil)},
+	{"truncate", arity{1, 1}, numbers, rounding("truncate", math.Trunc)},
+	{"round", arity{1, 1}, numbers, rounding("round", math.RoundToEven)},
+	{"sqrt", arity{1, 1}, numbers, squareRoot},
 }, typePredicateSpecs()...)
 
-// typePredicates are the builtins that test a value's type, each with the
-// type it tests, as typeName names it.
-var typePredicates = [][2]string{
-	{"number?", "number"}, {"string?", "string"}, {"symbol?", "symbol"}, {"list?", "list"},
-	{"function?", "function"}, {"boolean?", "bool"}, {"nil?", "nil"}, {"vector?", "vector"}, {"map?", "map"}, {"data?", "data"},
+// A typePredicate is a builtin that tests a value's type: whether it is one
+// of types, as typeName names them.
+type typePredicate struct {
+	name  string
+	types []string
+}
+
+// typePredicates are the builtins that test a value's type.
+var typePredicates = []typePredicate{
+	{"number?", []string{"number", "float"}}, {"integer?", []string{"number"}}, {"float?", []string{"float"}},
+	{"string?", []string{"string"}}, {"symbol?", []string{"symbol"}}, {"list?", []string{"list"}},
+	{"function?", []string{"function"}}, {"boolean?", []string{"bool"}}, {"nil?", []string{"nil"}},
+	{"vector?", []string{"vector"}}, {"map?", []string{"map"}}, {"data?", []string{"data"}},
 }
 
 func typePredicateSpecs() []builtin {
 	var specs []builtin
 	for _, p := range typePredicates {
-		specs = append(specs, builtin{p[0], arity{1, 1}, anyOne, isType(p[1])})
+		specs = append(specs, builtin{p.name, arity{1, 1}, anyOne, isType(p.types)})
 	}
 	return specs
 }
 
-// predicateType is the type the builtin name tests, if it is a type
+// predicateTypes are the types the builtin name tests, if it is a type
 // predicate.
-func predicateType(name string) (string, bool) {
+func predicateTypes(name string) ([]string, bool) {
 	for _, p := range typePredicates {
-		if p[0] == name {
-			return p[1], true
+		if p.name == name {
+			return p.types, true
 		}
 	}
-	return "", false
+	return nil, false
 }
 
 // builtinTable is the builtins as the interpreter's top scope holds them,

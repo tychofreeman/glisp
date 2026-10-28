@@ -55,6 +55,24 @@ const (
 	I32ShrS byte = 0x75
 	I32ShrU byte = 0x76
 
+	F64Eq byte = 0x61
+	F64Ne byte = 0x62
+	F64Lt byte = 0x63
+	F64Gt byte = 0x64
+	F64Le byte = 0x65
+	F64Ge byte = 0x66
+
+	F64Neg     byte = 0x9a
+	F64Ceil    byte = 0x9b
+	F64Floor   byte = 0x9c
+	F64Trunc   byte = 0x9d
+	F64Nearest byte = 0x9e
+	F64Sqrt    byte = 0x9f
+	F64Add     byte = 0xa0
+	F64Sub     byte = 0xa1
+	F64Mul     byte = 0xa2
+	F64Div     byte = 0xa3
+
 	I64Add  byte = 0x7c
 	I64Sub  byte = 0x7d
 	I64Mul  byte = 0x7e
@@ -72,6 +90,11 @@ const (
 	I32WrapI64    byte = 0xa7
 	I64ExtendI32S byte = 0xac
 	I64ExtendI32U byte = 0xad
+
+	I64TruncF64S      byte = 0xb0
+	F64ConvertI64S    byte = 0xb9
+	I64ReinterpretF64 byte = 0xbd
+	F64ReinterpretI64 byte = 0xbf
 )
 
 // Op appends instructions that take no immediates.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -44,6 +45,13 @@ func cons(_ *Scope, args List) interface{} {
 }
 
 func plus(_ *Scope, args List) interface{} {
+	if fs, isFloat := asFloats(args); isFloat {
+		sum := 0.0
+		for _, f := range fs {
+			sum += f
+		}
+		return sum
+	}
 	var sum int64 = 0
 	for _, n := range args {
 		sum += n.(int64)
@@ -53,6 +61,16 @@ func plus(_ *Scope, args List) interface{} {
 
 // minus is (- a b c ...), a-b-c..., and (- a), -a.
 func minus(_ *Scope, args List) interface{} {
+	if fs, isFloat := asFloats(args); isFloat {
+		if len(fs) == 1 {
+			return -fs[0]
+		}
+		result := fs[0]
+		for _, f := range fs[1:] {
+			result -= f
+		}
+		return result
+	}
 	if len(args) == 1 {
 		return int63(-args[0].(int64))
 	}
@@ -65,6 +83,13 @@ func minus(_ *Scope, args List) interface{} {
 
 // times is (* a b c ...), the product; (*) is 1.
 func times(_ *Scope, args List) interface{} {
+	if fs, isFloat := asFloats(args); isFloat {
+		product := 1.0
+		for _, f := range fs {
+			product *= f
+		}
+		return product
+	}
 	var product int64 = 1
 	for _, n := range args {
 		product *= n.(int64)
@@ -72,10 +97,14 @@ func times(_ *Scope, args List) interface{} {
 	return int63(product)
 }
 
-// divide returns a builtin (op a b) that divides two numbers with div, as
-// Go does: / truncates toward zero, and mod's result has a's sign.
+// divide returns a builtin (op a b) that divides two integers with div, as
+// Go does: / truncates toward zero, and mod's result has a's sign. Floats,
+// which only / takes, divide as floats.
 func divide(op string, div func(a, b int64) int64) Function {
 	return func(_ *Scope, args List) interface{} {
+		if fs, isFloat := asFloats(args); isFloat {
+			return fs[0] / fs[1]
+		}
 		a, b := args[0].(int64), args[1].(int64)
 		if b == 0 {
 			panic(op + ": division by zero")
@@ -85,17 +114,21 @@ func divide(op string, div func(a, b int64) int64) Function {
 }
 
 // isType returns the builtin name, (name x), which reports whether x's
-// type is typ, as typeName names it.
-func isType(typ string) Function {
+// type is one of typs, as typeName names them.
+func isType(typs []string) Function {
 	return func(_ *Scope, args List) interface{} {
-		return typeName(args[0]) == typ
+		return slices.Contains(typs, typeName(args[0]))
 	}
 }
 
-// compare returns a builtin (op a b) that compares two numbers with less.
-func compare(less func(a, b int64) bool) Function {
+// compare returns a builtin (op a b) that compares two integers with ints,
+// or, if either is a float, two floats with floats.
+func compare(ints func(a, b int64) bool, floats func(a, b float64) bool) Function {
 	return func(_ *Scope, args List) interface{} {
-		return less(args[0].(int64), args[1].(int64))
+		if fs, isFloat := asFloats(args); isFloat {
+			return floats(fs[0], fs[1])
+		}
+		return ints(args[0].(int64), args[1].(int64))
 	}
 }
 

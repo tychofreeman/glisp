@@ -160,6 +160,12 @@ line.
 
 **Integers** are an optional sign and decimal digits: `42`, `-7`, `+5`.
 
+**Floats** are an optional sign and digits, then a fraction (`.` and
+digits), an exponent (`e` or `E`, an optional sign and digits), or both:
+`1.5`, `-0.25`, `2e3`, `6.02e23`. The point needs digits on both sides, so
+`.5` and `1.` are symbols. A float literal is the float nearest to the
+decimal it spells.
+
 **Strings** are any text between double quotes, and may span lines. There are
 no escapes: `\n` in a string is a backslash and an `n`, and a string can't
 contain `"`.
@@ -173,6 +179,7 @@ digits too long for 64 bits is a symbol too.
 ```glisp
 ; A comment.
 (p 42 -7 +5)     ; three numbers
+(p 1.5 -0.25 2e3 1e-3)
 (p "a string
 over two lines")
 (p "no \n escapes")
@@ -180,6 +187,7 @@ over two lines")
 
 ```output
 42 -7 5
+1.5 -0.25 2000.0 1.0e-3
 a string
 over two lines
 no \n escapes
@@ -193,7 +201,7 @@ with `'`. Write `(quote x)`.
 
 | Type     | Written as                | Printed as         | Predicate   |
 |----------|---------------------------|--------------------|-------------|
-| number   | `42`                      | `42`               | `number?`   |
+| number   | `42`, `1.5`               | `42`, `1.5`        | `number?`   |
 | string   | `"text"`                  | `text`, or `"text"` inside a structure | `string?` |
 | symbol   | `(quote name)`            | `name`             | `symbol?`   |
 | list     | `(quote (1 2))`           | `(1 2)`            | `list?`     |
@@ -207,17 +215,27 @@ with `'`. Write `(quote x)`.
 All values are immutable: operations that "change" a vector or map return a
 new one.
 
-**Numbers** are integers of 63 bits, from -2^62 to 2^62-1. Arithmetic wraps
-around at the ends, the same in both backends. There are no floating-point
-numbers.
+**Numbers** are integers or floats. Integers have 63 bits, from -2^62 to
+2^62-1, and arithmetic on them wraps around at the ends, the same in both
+backends. Floats are IEEE 754 64-bit floating-point numbers. `number?` is
+true for both, and `integer?` and `float?` tell them apart; an integer and
+a float are never `eq`, even when they are the same number. In errors an
+integer's type is `number` and a float's `float`.
+
+A float prints as the shortest decimal that reads back as the same float,
+as Haskell shows one: with a point from 0.1 up to 10^7 (`0.1`, `2.0`,
+`1234567.0`), in scientific notation otherwise (`1.0e-2`, `1.0e7`), and
+`Infinity`, `-Infinity` and `NaN` for the values that aren't numbers.
 
 ```glisp
 (p 4611686018427387903)
+(p 1.5 0.1 100.0 1e7 0.001 (float? 1.5) (integer? 1.5) (eq 1 1.0))
 (plus 4611686018427387903 1)
 ```
 
 ```output
 4611686018427387903
+1.5 0.1 100.0 1.0e7 1.0e-3 true false false
 => -4611686018427387904
 ```
 
@@ -813,7 +831,7 @@ glisp: line 15: bind: expected a maybe, an either or a list, got 5
 
 Builtins check their arguments before they run: the number, and the type of
 each, with the same messages in both backends. In the tables, `n` is a
-number, `s` a string, `l` a list (or `nil`), `v` a vector, `m` a map, `f` a
+number, `i` and `j` integers, `s` a string, `l` a list (or `nil`), `v` a vector, `m` a map, `f` a
 function and `x` any value; `...` means any number more.
 
 ### Lists
@@ -844,11 +862,14 @@ function and `x` any value; `...` means any number more.
 | `(plus n ...)` | the sum; `(plus)` is 0 |
 | `(- n ...)` | `n` minus the others; `(- n)` is `-n` |
 | `(* n ...)` | the product; `(*)` is 1 |
-| `(/ a b)` | `a` divided by `b`, truncated toward zero |
-| `(mod a b)` | the remainder of `(/ a b)`, with `a`'s sign |
+| `(/ a b)` | `a` divided by `b`: for two integers, truncated toward zero |
+| `(mod i j)` | the remainder of `(/ i j)`, with `i`'s sign: integers only |
 | `(< a b)` `(> a b)` `(<= a b)` `(>= a b)` | comparisons of two numbers |
 
-Dividing by zero is an error.
+If any argument is a float, every argument is taken as a float and the
+result is a float (a comparison compares them as floats). Dividing an
+integer by the integer 0 is an error; with a float, division by zero
+gives `Infinity`, `-Infinity` or `NaN`, as IEEE 754 does.
 
 ```glisp
 (p (plus 1 2 3) (- 10 3 2) (- 5) (* 2 3 4))
@@ -862,6 +883,44 @@ Dividing by zero is an error.
 3 -3 1 -1
 true false true
 glisp: line 4: /: division by zero
+```
+
+```glisp
+(p (plus 1 2.5) (* 2 0.5) (- 1.5) (/ 7 2.0) (/ 1 0.0) (/ 0.0 0))
+(p (plus 0.1 0.2) (< 1 1.5) (> 2.0 2))
+```
+
+```output
+3.5 1.0 -1.5 3.5 Infinity NaN
+0.30000000000000004 true false
+=> ()
+```
+
+### Floats
+
+| Builtin | Result |
+|---------|--------|
+| `(float n)` | `n` as a float |
+| `(floor n)` | the largest integer not above `n` |
+| `(ceiling n)` | the smallest integer not below `n` |
+| `(truncate n)` | `n` without its fraction: the integer toward zero |
+| `(round n)` | the nearest integer; halfway between two, the even one |
+| `(sqrt n)` | the square root of `n`, a float (`NaN` for a negative `n`) |
+
+`floor`, `ceiling`, `truncate` and `round` give an integer, so a float
+whose integer part is outside the integers' range, or `NaN`, is an error.
+An integer gives itself.
+
+```glisp
+(p (float 3) (floor 2.5) (ceiling 2.5) (truncate -2.5) (floor 7))
+(p (round 2.5) (round 3.5) (round -0.5) (sqrt 2) (sqrt 16))
+(floor 1e300)
+```
+
+```output
+3.0 2 3 -2 7
+2 4 0 1.4142135623730951 4.0
+glisp: line 3: floor: 1.0e300 is out of range for an integer
 ```
 
 ### Equality
@@ -1049,20 +1108,22 @@ in both backends: equal values have equal hashes. Functions can't be hashed.
 
 ### Type predicates
 
-`number?`, `string?`, `symbol?`, `list?`, `nil?`, `boolean?`, `function?`,
-`vector?`, `map?` and `data?` each take one value and say whether it is of that type
+`number?`, `integer?`, `float?`, `string?`, `symbol?`, `list?`, `nil?`,
+`boolean?`, `function?`, `vector?`, `map?` and `data?` each take one value and say whether it is of that type
 (see [values and types](#3-values-and-types)).
 
 ```glisp
 (p (number? 1) (string? "s") (symbol? (quote s)) (boolean? false))
 (p (list? (quote ())) (list? nil) (vector? (vector)) (map? (hash_map)))
 (p (data? (data (quote unit))) (data? (vector)))
+(p (number? 1.5) (integer? 1.5) (float? 1.5) (integer? 1))
 ```
 
 ```output
 true true true true
 true false true true
 true false
+true false true true
 => ()
 ```
 

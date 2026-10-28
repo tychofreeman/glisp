@@ -2,8 +2,8 @@ package glisp
 
 import "fmt"
 
-// Read turns tokenized source into data: number and string tokens become
-// int64 and string, symbols stay Symbols, and lists stay Lists.
+// Read turns tokenized source into data: number, float and string tokens
+// become int64, float64 and string, symbols stay Symbols, and lists stay Lists.
 func Read(token interface{}) interface{} {
 	return readLines(token, nil, nil)
 }
@@ -13,6 +13,8 @@ func Read(token interface{}) interface{} {
 func readLines(token interface{}, from, to Lines) interface{} {
 	switch t := token.(type) {
 	case NumberToken:
+		return t.Value()
+	case FloatToken:
 		return t.Value()
 	case StringToken:
 		return t.Value()

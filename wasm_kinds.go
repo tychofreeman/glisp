@@ -41,6 +41,7 @@ var tagKinds = []tagKind{
 	{tagMap, "map", &layout{size: 16, values: []uint32{8}}},
 	{tagMapNode, "", &layout{size: 16, count: 12, elem: 8, elemValues: true}},
 	{tagData, "data", &layout{size: 8, count: 4, elem: 8, elemValues: true}},
+	{tagFloat, "float", &layout{size: 16}},
 }
 
 // tagsOf are the tags of the types typs.
