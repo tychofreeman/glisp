@@ -499,6 +499,54 @@ dispatch on a value's type, like typeclasses without types (`fmap`,
 `show`); automatic currying, which conflicts with functions of any number
 of arguments (`partial` instead); integers of any size; static types.
 
+### Interop with Go
+
+Decisions (2026-10-28, the user): glisp calls Go first (calling other wasm
+libraries and being called from outside come later), through **typed
+declarations**. Not built yet: the user asked for the plan first.
+
+**Runtime: stay on wazero, defer the Component Model.** Calling Go needs
+no Component Model: a Go function is a plain wasm import that the Go host,
+running the module under wazero, supplies. The Component Model (WIT, the
+canonical ABI for strings, lists and records between modules) matters
+only for calling other wasm libraries. It isn't at 1.0 (June 2026), and
+using it from Go means Wasmtime. Wasmtime is its reference
+implementation, fast, and where new WASI features land, but wasmtime-go
+needs cgo (no pure-Go cross-compiling or single static binary) and its C
+API, which wasmtime-go wraps, didn't support components; it would also
+replace the wazero the parity tests run on, and compiled glisp would no
+longer run in any WASI runtime. On wazero there is only an experimental
+component runtime (wacogo, August 2026). So: Go interop as typed core
+wasm imports now, and the Component Model when it reaches 1.0 or wazero
+supports it; nothing below would change for it. Wasm libraries could
+meanwhile come in the same way, as typed core imports, with glisp's own
+convention for passing strings and lists.
+
+- [ ] **`extern`.** `(extern word_count "text" "count_words" (string)
+  int)` declares a function a host supplies, by module and name, with
+  its argument and result types: `int`, `float`, `bool`, `string`, and
+  `nil` for no result, to start; `list`, `bytes`, `vector` and `any`
+  later. A call checks its arguments in both backends with the builtins'
+  messages (`word_count: expected a string, got number 5`).
+- [ ] **A Go host.** `host := glisp.NewHost()`, `host.Register("text",
+  "count_words", fn)`: the host checks each Go function's signature
+  against its declaration by reflection, when the program loads, not
+  when it calls; a Go function that returns an `error` raises a glisp
+  error. `host.Run(program)` runs it in the interpreter, which calls the
+  Go functions directly.
+- [ ] **Compiled externs.** Each `extern` is a wasm import of the
+  declared types: integers and floats as i64 and f64, booleans as i32,
+  strings as a pointer and length in glisp's memory; a string result is
+  copied into glisp's heap through an exported `alloc`, so the
+  collector keeps working. `host.RunWasm(module, out)` runs a compiled
+  module under wazero with the same Go functions, so a program behaves
+  alike in both backends. `glisp run` runs a compiled module with a
+  host; under other runtimes, the host supplies the imports itself.
+- [ ] **Later:** calling glisp from Go (`host.Call(name, args...)`, and
+  `(export name)` for compiled modules); wasm libraries as typed imports;
+  the Component Model; share-nothing parallelism's `spawn`, `send` and
+  `receive`, which are host functions of the same kind.
+
 ### Missing abstractions
 
 What a review of the code found: concepts each restated in several places,
