@@ -221,3 +221,40 @@
     (error "match: expected a value and clauses")
     (list (list (quote lambda) (quote (__match)) (match_clauses (cdr xs))) (car xs))))
 (defmacro match (lambda (xs) (match_expand xs)))
+
+; Errors as values: a function that can fail returns a maybe, a value or
+; none, or an either, a failure (left) or a value (right).
+(deftype maybe (just value) (nothing))
+(deftype either (left value) (right value))
+
+; (bind m f) chains f after m: for (just x) or (right x), (f x); for
+; (nothing) or a left, m; for a list, the lists f gives for its elements,
+; appended.
+(defn bind (m f)
+  (match m
+    ((just x) (f x))
+    ((right x) (f x))
+    ((nothing) m)
+    ((left _) m)
+    (() (quote ()))
+    ((cons _ _) (foldr (lambda (x rest) (append (f x) rest)) (quote ()) m))
+    (_ (error "bind: expected a maybe, an either or a list, got " m))))
+
+; (do step ... result) chains its steps through bind: (x <- m) binds x to
+; what m gives for the steps after it; any other step goes on whatever it
+; gives; result is the chain's value.
+(defn do_binding? (step)
+  (and (cons? step) (cons? (cdr step)) (eq (car (cdr step)) (quote <-))))
+(defn do_expand (steps)
+  (cond ((empty? steps) (error "do: expected at least one step"))
+        ((do_binding? (car steps))
+         (let (step (car steps))
+           (cond ((empty? (cdr steps)) (error "do: the last step can't bind a name: " step))
+                 ((not (and (symbol? (car step)) (eq (length step) 3)))
+                  (error "do: expected (name <- value), got " step))
+                 (else (list (quote bind) (car (cdr (cdr step)))
+                         (list (quote lambda) (list (car step)) (do_expand (cdr steps))))))))
+        ((empty? (cdr steps)) (car steps))
+        (else (list (quote bind) (car steps)
+                (list (quote lambda) (quote (_)) (do_expand (cdr steps)))))))
+(defmacro do (lambda (steps) (do_expand steps)))
