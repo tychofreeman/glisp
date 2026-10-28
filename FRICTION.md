@@ -895,3 +895,7 @@ One entry per PR, written before committing it.
 - The new tag collided with the collector's forwarding marker (10); the
   marker moved to 255. Nothing tied the two together but the numbers: an
   enum for the tags with the marker outside it would make that visible.
+
+### PR: the maps roadmap
+
+- Docs only, one `replace_text` per file through `refactor batch`.
