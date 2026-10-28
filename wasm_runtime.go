@@ -813,35 +813,43 @@ func (c *wasmCompiler) checkStack(b *wasmBody) {
 	c.failIf(b, "stack overflow", nil)
 }
 
-// checkArgs fails, as the interpreter does, unless the builtin's arguments
-// are what spec takes: how many, then the kind of each.
-func (c *wasmCompiler) checkArgs(b *wasmBody, spec builtin) {
+// checkArity fails unless the function's argument count is one a allows,
+// saying what+" "+a.expects()+", got " and the count, then what more
+// prints.
+func (c *wasmCompiler) checkArity(b *wasmBody, what string, a arity, more func()) {
 	argc := b.param(paramArgc)
 	argcIs := func(n int, op byte) {
 		b.LocalGet(argc)
 		b.I32Const(int32(n))
 		b.Op(op)
 	}
-	wrongCount := true
 	switch {
-	case spec.max < 0 && spec.min == 0:
-		wrongCount = false
-	case spec.max < 0:
-		argcIs(spec.min, wasm.I32LtU)
-	case spec.min == spec.max:
-		argcIs(spec.min, wasm.I32Ne)
+	case a.max < 0 && a.min == 0:
+		return
+	case a.max < 0:
+		argcIs(a.min, wasm.I32LtU)
+	case a.min == a.max:
+		argcIs(a.min, wasm.I32Ne)
 	default:
-		argcIs(spec.min, wasm.I32LtU)
-		argcIs(spec.max, wasm.I32GtU)
+		argcIs(a.min, wasm.I32LtU)
+		argcIs(a.max, wasm.I32GtU)
 		b.Op(wasm.I32Or)
 	}
-	if wrongCount {
-		c.failIf(b, spec.name+": "+spec.expects()+", got ", func() {
-			b.LocalGet(argc)
-			b.Op(wasm.I64ExtendI32U)
-			b.Call(c.rt.putInt)
-		})
-	}
+	c.failIf(b, what+" "+a.expects()+", got ", func() {
+		b.LocalGet(argc)
+		b.Op(wasm.I64ExtendI32U)
+		b.Call(c.rt.putInt)
+		if more != nil {
+			more()
+		}
+	})
+}
+
+// checkArgs fails, as the interpreter does, unless the builtin's arguments
+// are what spec takes: how many, then the kind of each.
+func (c *wasmCompiler) checkArgs(b *wasmBody, spec builtin) {
+	argc := b.param(paramArgc)
+	c.checkArity(b, spec.name+":", spec.arity, nil)
 	check := func(k kind, load func()) { c.checkKind(b, spec.name, k, load) }
 	// Each argument up to the last kind given, then, for a builtin taking
 	// any number, the rest in a loop: the last kind stands for them.

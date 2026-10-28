@@ -811,3 +811,23 @@ One entry per PR, written before committing it.
 - This entry was appended with `replace_text` anchored on the last entry's
   final lines, not a heredoc: the tools can append after all, given an
   anchor.
+
+### PR: rest parameters
+
+- Two batches. First a refactoring: `arity` (min, max) out of `builtin`,
+  embedded so `b.min` and `b.expects()` kept working; 29 steps, most of
+  them one `replace_text` per spec literal (`1, 1,` to `arity{1, 1},`),
+  generated from `inspect`'s listing of `builtinSpecs`. The first try
+  generated 6 steps, not 29: my script misread `inspect`'s line-number
+  prefix, and the batch was refused with the type errors of the literals
+  it hadn't changed. Nothing applied, as a refusal promises.
+- Then the feature, tests first, 21 steps. Refused once more for a
+  `replace_declaration` holding three declarations (`Lambda.String` with
+  the new `paramList` and `arity`); the splitting script now lives in the
+  scratchpad and runs on every batch. The third time this has come up:
+  `replace_declaration` taking extra declarations, or a `split` option,
+  is the tool change it asks for.
+- Reading was all `inspect` (names, and start/end lines in tests) and Read
+  for the file tails these docs are anchored on.
+- Replacing `bind` removed eval.go's `strings` import, and `fix_imports`
+  removed wasm_compile.go's at the end, without being asked.

@@ -39,7 +39,7 @@ func (r *resolver) resolve(node Node) Node {
 		r.frames = append(r.frames, f)
 		body := r.resolveAll(n.Body)
 		r.frames = r.frames[:len(r.frames)-1]
-		return Lambda{Params: n.Params, Body: body, Captured: f.captured}
+		return Lambda{Params: n.Params, Rest: n.Rest, Body: body, Captured: f.captured}
 	default:
 		return node
 	}

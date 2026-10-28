@@ -109,7 +109,8 @@ func (e *Expander) expandList(f List) Node {
 			if len(f) < 2 {
 				panic("lambda: expects a parameter list")
 			}
-			return Lambda{Params: paramNames(f[1]), Body: e.ExpandAll(f[2:])}
+			params, rest := paramNames(f[1])
+			return Lambda{Params: params, Rest: rest, Body: e.ExpandAll(f[2:])}
 		case "def":
 			name := definedName("def", f.Rest())
 			return Def{name, e.Expand(f[2])}
@@ -145,19 +146,31 @@ func (e *Expander) evalMacroBody(form interface{}) interface{} {
 	return Eval(e.Expand(form), e.scope)
 }
 
-// paramNames returns the names in a lambda's parameter list.
-func paramNames(decls interface{}) []string {
+// paramNames returns the names in a lambda's parameter list, and whether
+// the last takes the rest of the arguments: (a b . rest), or one symbol.
+func paramNames(decls interface{}) ([]string, bool) {
+	if sym, isSymbol := decls.(Symbol); isSymbol {
+		return []string{sym.Str()}, true
+	}
 	list, isList := decls.(List)
 	if !isList {
-		panic(fmt.Sprintf("Cannot build param bindings with unknown declaration type %s (expected a list of symbols)\n", typeName(decls)))
+		panic(fmt.Sprintf("Cannot build param bindings with unknown declaration type %s (expected a list of symbols, or one symbol)\n", typeName(decls)))
 	}
-	names := make([]string, len(list))
+	names := []string{}
+	rest := false
 	for i, decl := range list {
 		sym, isSymbol := decl.(Symbol)
 		if !isSymbol {
 			panic(fmt.Sprintf("lambda: parameters must be symbols, got %s", described(decl)))
 		}
-		names[i] = sym.Str()
+		if sym.Str() == "." {
+			if i != len(list)-2 {
+				panic("lambda: a . in the parameters must come just before the last one")
+			}
+			rest = true
+			continue
+		}
+		names = append(names, sym.Str())
 	}
-	return names
+	return names, rest
 }

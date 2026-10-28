@@ -9,10 +9,19 @@ import (
 // arguments it takes; each backend checks them from the spec, with the same
 // messages, before the builtin's operation runs.
 type builtin struct {
-	name     string
-	min, max int    // how many arguments it takes; max is -1 for no limit
-	kinds    []kind // the kind of each argument; the last stands for the rest
-	run      Function
+	name  string
+	arity        // how many arguments it takes
+	kinds []kind // the kind of each argument; the last stands for the rest
+	run   Function
+}
+
+// An arity is how many arguments a function takes: from min to max, or any
+// number from min if max is -1.
+type arity struct{ min, max int }
+
+// allows reports whether a call may pass n arguments.
+func (a arity) allows(n int) bool {
+	return n >= a.min && (a.max < 0 || n <= a.max)
 }
 
 // A kind is a kind of value an argument must be.
@@ -50,17 +59,17 @@ func (b builtin) kind(i int) kind {
 	return b.kinds[min(i, len(b.kinds)-1)]
 }
 
-// expects says how many arguments b takes: "expects 2 arguments".
-func (b builtin) expects() string {
+// expects says how many arguments a allows: "expects 2 arguments".
+func (a arity) expects() string {
 	switch {
-	case b.max < 0:
-		return "expects at least " + arguments(b.min)
-	case b.min == b.max:
-		return "expects " + arguments(b.min)
-	case b.max == b.min+1:
-		return fmt.Sprintf("expects %d or %s", b.min, arguments(b.max))
+	case a.max < 0:
+		return "expects at least " + arguments(a.min)
+	case a.min == a.max:
+		return "expects " + arguments(a.min)
+	case a.max == a.min+1:
+		return fmt.Sprintf("expects %d or %s", a.min, arguments(a.max))
 	}
-	return fmt.Sprintf("expects %d to %s", b.min, arguments(b.max))
+	return fmt.Sprintf("expects %d to %s", a.min, arguments(a.max))
 }
 
 // arguments is "1 argument" or "n arguments".
@@ -73,7 +82,7 @@ func arguments(n int) string {
 
 // check panics unless args are what b takes.
 func (b builtin) check(args List) {
-	if len(args) < b.min || b.max >= 0 && len(args) > b.max {
+	if !b.allows(len(args)) {
 		panic(fmt.Sprintf("%s: %s, got %d", b.name, b.expects(), len(args)))
 	}
 	for i, arg := range args {
@@ -107,29 +116,29 @@ var (
 // builtinSpecs are the builtin functions, in the order the wasm backend
 // numbers them.
 var builtinSpecs = append([]builtin{
-	{"car", 1, 1, []kind{listKind}, car},
-	{"cdr", 1, 1, []kind{listKind}, cdr},
-	{"atom", 1, 1, anyOne, atom},
-	{"cons", 1, 2, nil, cons},
-	{"plus", 0, -1, numbers, plus},
-	{"-", 1, -1, numbers, minus},
-	{"*", 0, -1, numbers, times},
-	{"/", 2, 2, numbers, divide("/", func(a, b int64) int64 { return a / b })},
-	{"mod", 2, 2, numbers, divide("mod", func(a, b int64) int64 { return a % b })},
-	{"<", 2, 2, numbers, compare(func(a, b int64) bool { return a < b })},
-	{">", 2, 2, numbers, compare(func(a, b int64) bool { return a > b })},
-	{"<=", 2, 2, numbers, compare(func(a, b int64) bool { return a <= b })},
-	{">=", 2, 2, numbers, compare(func(a, b int64) bool { return a >= b })},
-	{"eq", 2, 2, nil, eq},
-	{"apply", 2, -1, []kind{functionKind, anyKind}, apply},
-	{"p", 0, -1, nil, printValues},
-	{"str", 0, -1, nil, showJoined},
-	{"string_length", 1, 1, oneString, stringLength},
-	{"substring", 3, 3, []kind{stringKind, numberKind, numberKind}, substring},
-	{"chars", 1, 1, oneString, chars},
-	{"string<", 2, 2, oneString, stringLess},
-	{"symbol", 1, 1, oneString, toSymbol},
-	{"parse_number", 1, 1, oneString, parseNumber},
+	{"car", arity{1, 1}, []kind{listKind}, car},
+	{"cdr", arity{1, 1}, []kind{listKind}, cdr},
+	{"atom", arity{1, 1}, anyOne, atom},
+	{"cons", arity{1, 2}, nil, cons},
+	{"plus", arity{0, -1}, numbers, plus},
+	{"-", arity{1, -1}, numbers, minus},
+	{"*", arity{0, -1}, numbers, times},
+	{"/", arity{2, 2}, numbers, divide("/", func(a, b int64) int64 { return a / b })},
+	{"mod", arity{2, 2}, numbers, divide("mod", func(a, b int64) int64 { return a % b })},
+	{"<", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a < b })},
+	{">", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a > b })},
+	{"<=", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a <= b })},
+	{">=", arity{2, 2}, numbers, compare(func(a, b int64) bool { return a >= b })},
+	{"eq", arity{2, 2}, nil, eq},
+	{"apply", arity{2, -1}, []kind{functionKind, anyKind}, apply},
+	{"p", arity{0, -1}, nil, printValues},
+	{"str", arity{0, -1}, nil, showJoined},
+	{"string_length", arity{1, 1}, oneString, stringLength},
+	{"substring", arity{3, 3}, []kind{stringKind, numberKind, numberKind}, substring},
+	{"chars", arity{1, 1}, oneString, chars},
+	{"string<", arity{2, 2}, oneString, stringLess},
+	{"symbol", arity{1, 1}, oneString, toSymbol},
+	{"parse_number", arity{1, 1}, oneString, parseNumber},
 }, typePredicateSpecs()...)
 
 // typePredicates are the builtins that test a value's type, each with the
@@ -142,7 +151,7 @@ var typePredicates = [][2]string{
 func typePredicateSpecs() []builtin {
 	var specs []builtin
 	for _, p := range typePredicates {
-		specs = append(specs, builtin{p[0], 1, 1, anyOne, isType(p[1])})
+		specs = append(specs, builtin{p[0], arity{1, 1}, anyOne, isType(p[1])})
 	}
 	return specs
 }

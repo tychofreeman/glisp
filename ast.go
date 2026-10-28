@@ -29,10 +29,12 @@ type Ref struct {
 // If is (if cond then else).
 type If struct{ Cond, Then, Else Node }
 
-// Lambda is (lambda (params...) body...); the value of its last body form is
-// its result.
+// Lambda is (lambda (params...) body...), (lambda (params... . rest)
+// body...) or (lambda rest body...); the value of its last body form is its
+// result.
 type Lambda struct {
 	Params   []string
+	Rest     bool // the last parameter takes the arguments after the others, as a list
 	Body     []Node
 	Captured []string // filled in by Resolve: variables from enclosing lambdas
 }
@@ -84,7 +86,28 @@ func (n Lambda) String() string {
 	if len(n.Captured) > 0 {
 		captured = " [" + strings.Join(n.Captured, " ") + "]"
 	}
-	return "(lambda (" + strings.Join(n.Params, " ") + ")" + captured + nodesString(n.Body) + ")"
+	return "(lambda " + n.paramList() + captured + nodesString(n.Body) + ")"
+}
+
+// paramList is n's parameters as written: (a b), (a . rest) or rest.
+func (n Lambda) paramList() string {
+	if n.Rest && len(n.Params) == 1 {
+		return n.Params[0]
+	}
+	params := n.Params
+	if n.Rest {
+		last := len(params) - 1
+		params = append(append([]string{}, params[:last]...), ".", params[last])
+	}
+	return "(" + strings.Join(params, " ") + ")"
+}
+
+// arity is how many arguments n takes.
+func (n Lambda) arity() arity {
+	if n.Rest {
+		return arity{len(n.Params) - 1, -1}
+	}
+	return arity{len(n.Params), len(n.Params)}
 }
 
 func (n Def) String() string { return "(def " + n.Name + " " + n.Value.String() + ")" }

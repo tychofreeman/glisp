@@ -2,7 +2,6 @@ package glisp
 
 import (
 	"fmt"
-	"strings"
 )
 
 // Eval evaluates node in scope: the interpreter, a backend for core glisp.
@@ -75,19 +74,19 @@ type Closure struct {
 }
 
 // bind returns a new scope, chained to the closure's, that binds its
-// parameters to args.
+// parameters to args: a rest parameter to the list of those left.
 func (c *Closure) bind(args List) *Scope {
-	params := c.lambda.Params
-	if len(args) != len(params) {
-		arguments := "arguments"
-		if len(params) == 1 {
-			arguments = "argument"
-		}
-		panic(fmt.Sprintf("lambda (%s) expects %d %s, got %d: %s", strings.Join(params, " "), len(params), arguments, len(args), Write(args)))
+	n := c.lambda
+	if a := n.arity(); !a.allows(len(args)) {
+		panic(fmt.Sprintf("lambda %s %s, got %d: %s", n.paramList(), a.expects(), len(args), Write(args)))
 	}
-	local := &Scope{prev: c.scope, table: make(map[string]interface{}, len(args)), run: c.scope.run}
-	for i, name := range params {
-		local.table[name] = args[i]
+	local := &Scope{prev: c.scope, table: make(map[string]interface{}, len(n.Params)), run: c.scope.run}
+	for i, name := range n.Params {
+		if n.Rest && i == len(n.Params)-1 {
+			local.table[name] = append(List{}, args[i:]...)
+		} else {
+			local.table[name] = args[i]
+		}
 	}
 	return local
 }
