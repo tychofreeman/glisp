@@ -137,7 +137,7 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 	main := &wasmFunc{c: c, wasmBody: &wasmBody{}}
 	main.scratch = main.local(wasm.I64)
 	main.tmp32 = main.local(wasm.I32)
-	for _, node := range stdlibNodes {
+	for _, node := range usedDefs(stdlibNodes, programNodes) {
 		main.expr(node)
 		main.Op(wasm.Drop)
 	}
@@ -173,6 +173,74 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 		{Name: "memory", Kind: wasm.ExportMemory},
 	}
 	return c.finish()
+}
+
+// usedDefs returns the stdlib forms a program needs: all but the definitions
+// of names that nothing it runs refers to, directly or through another
+// definition. Macro helpers, needed only while expanding, stay out of the
+// module.
+func usedDefs(stdlib, program []Node) []Node {
+	defs := map[string]Node{}
+	for _, node := range stdlib {
+		if def, isDef := node.(Def); isDef {
+			defs[def.Name] = def.Value
+		}
+	}
+	used := map[string]bool{}
+	var use func(names []string)
+	use = func(names []string) {
+		for _, name := range names {
+			if !used[name] {
+				used[name] = true
+				if value, found := defs[name]; found {
+					use(globalRefs(value))
+				}
+			}
+		}
+	}
+	for _, node := range program {
+		use(globalRefs(node))
+	}
+	var kept []Node
+	for _, node := range stdlib {
+		if def, isDef := node.(Def); isDef && !used[def.Name] {
+			continue
+		}
+		kept = append(kept, node)
+	}
+	return kept
+}
+
+// globalRefs returns the names node refers to that Resolve left to look up
+// by name: top-level definitions and builtins.
+func globalRefs(node Node) []string {
+	var names []string
+	var walk func(Node)
+	walk = func(node Node) {
+		switch n := node.(type) {
+		case Ref:
+			if n.Loc == nil {
+				names = append(names, n.Name)
+			}
+		case If:
+			walk(n.Cond)
+			walk(n.Then)
+			walk(n.Else)
+		case Lambda:
+			for _, form := range n.Body {
+				walk(form)
+			}
+		case Def:
+			walk(n.Value)
+		case Apply:
+			walk(n.Fn)
+			for _, arg := range n.Args {
+				walk(arg)
+			}
+		}
+	}
+	walk(node)
+	return names
 }
 
 func newWasmCompiler(scope *Scope) *wasmCompiler {

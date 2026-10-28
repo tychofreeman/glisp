@@ -239,6 +239,14 @@ prints exactly what the interpreter does, error messages included.
   redefining it works), falling back to the ordinary call for anything the
   inline path doesn't handle, so results and errors are the same. A loop of
   tail calls through `plus` got 1.7x faster; arithmetic-heavy code 1.25x.
+- [x] Only the stdlib a program uses is compiled: a stdlib definition goes
+  into the module only if the program refers to it, directly or through
+  another one. Macro helpers (`let_expand`, `cond_expand`, ...) run only
+  while expanding, so they never do. The module for `1` went from 24.9KB
+  to 9.0KB, and wazero compiles it in 5ms instead of 17.6ms; the tests,
+  which compile hundreds of modules, take half as long (`go test -race`
+  97s to 50s). The interpreter's stdlib load was never the cost: 41us a
+  run.
 
 ### Missing abstractions
 

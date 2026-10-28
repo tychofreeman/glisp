@@ -393,3 +393,26 @@ func TestCompilingReportsMalformedForms(t *testing.T) {
 		t.Errorf("got %v", err)
 	}
 }
+
+func TestOnlyTheStdlibAProgramUsesIsCompiled(t *testing.T) {
+	lambda := func(refs ...string) Lambda {
+		var body []Node
+		for _, name := range refs {
+			body = append(body, Ref{Name: name})
+		}
+		return Lambda{Body: body}
+	}
+	stdlib := []Node{
+		Def{"a", lambda("b", "car")},
+		Def{"b", lambda()},
+		Def{"helper", lambda("a")},
+	}
+	program := []Node{Apply{Fn: Ref{Name: "a"}}}
+	var kept []string
+	for _, node := range usedDefs(stdlib, program) {
+		kept = append(kept, node.(Def).Name)
+	}
+	if strings.Join(kept, " ") != "a b" {
+		t.Errorf("kept %v, want a and b", kept)
+	}
+}
