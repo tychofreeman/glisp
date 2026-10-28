@@ -1164,3 +1164,13 @@ One entry per PR, written before committing it.
   reported the macro's error and nothing else, where the interpreter
   printed the earlier forms first. It is a program of its own now.
   Nothing by hand.
+
+### PR: The stdlib defines each name once
+
+- `extract_function` took the stdlib's expansion out of its
+  `sync.OnceValues` closure as `expandLibrary`, and
+  `introduce_parameter` made `stdlibForms` its `forms`; then
+  `replace_statements` for its new body and `add_declaration` for the
+  helpers. The test, sent first, was stubbed as `expandLibrary`, so the
+  extraction refused the name: the test goes after the refactorings that
+  make what it calls. Nothing by hand.

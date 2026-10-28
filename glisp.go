@@ -243,11 +243,30 @@ var stdlibForms = Read(TokenizeString(stdlib)).(List)
 // scope; the macros, closures over the stdlib's scope, expand the run's
 // forms, so a program's definitions don't change what a stdlib macro does.
 var stdlibExpanded = sync.OnceValues(func() ([]Node, map[string]Macro) {
+	return expandLibrary(stdlibForms)
+})
+
+// expandLibrary expands and evaluates the forms of a library, the stdlib, and
+// returns its nodes and macros.
+func expandLibrary(forms List) ([]Node, map[string]Macro) {
 	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}}
 	expander := NewExpander(scope)
 	var nodes []Node
-	for _, form := range stdlibForms {
-		for _, node := range expander.ExpandTop(form) {
+	defined := map[string]bool{}
+	for _, form := range forms {
+		expanded := expander.ExpandTop(form)
+		if head, _ := listHead(form); head != "definstance" {
+			for _, name := range definedNames(form, expanded) {
+				if _, isBuiltin := builtinScope.lookup(symbol(name)); isBuiltin {
+					panic(fmt.Sprintf("stdlib: %s is a builtin; name it something else", name))
+				}
+				if defined[name] {
+					panic(fmt.Sprintf("stdlib: %s is defined twice; name it something else, or add to a generic with definstance", name))
+				}
+				defined[name] = true
+			}
+		}
+		for _, node := range expanded {
 			Eval(node, scope)
 			nodes = append(nodes, node)
 		}
@@ -259,7 +278,34 @@ var stdlibExpanded = sync.OnceValues(func() ([]Node, map[string]Macro) {
 		}
 	}
 	return nodes, macros
-})
+}
+
+// listHead is the name a list form starts with, if it starts with a symbol.
+func listHead(form interface{}) (string, bool) {
+	if l, isList := form.(List); isList && len(l) > 0 {
+		if head, isSymbol := l[0].(Symbol); isSymbol {
+			return head.Str(), true
+		}
+	}
+	return "", false
+}
+
+// definedNames are the names a top-level form defines: the defs it expanded
+// to, or the macro it defines.
+func definedNames(form interface{}, expanded []Node) []string {
+	if head, _ := listHead(form); head == "defmacro" {
+		if name, isSymbol := form.(List)[1].(Symbol); isSymbol {
+			return []string{name.Str()}
+		}
+	}
+	var names []string
+	for _, node := range expanded {
+		if def, isDef := node.(Def); isDef {
+			names = append(names, def.Name)
+		}
+	}
+	return names
+}
 
 // newScope makes the top-level scope for one run: its own definitions over
 // the builtins, which it never changes, with the stdlib loaded: its macros,
