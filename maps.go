@@ -235,14 +235,14 @@ func equalMaps(a, b Map) bool {
 	return same
 }
 
-// makeMap is (map k v ...).
+// makeMap is (hash_map k v ...).
 func makeMap(_ *Scope, args List) interface{} {
 	if len(args)%2 != 0 {
-		panic(fmt.Sprintf("map: expects keys and values in pairs, got %s", arguments(len(args))))
+		panic(fmt.Sprintf("hash_map: expects keys and values in pairs, got %s", arguments(len(args))))
 	}
 	m := Map{}
 	for i := 0; i < len(args); i += 2 {
-		m = m.put("map", args[i], args[i+1])
+		m = m.put("hash_map", args[i], args[i+1])
 	}
 	return m
 }

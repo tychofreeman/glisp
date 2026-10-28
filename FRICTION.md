@@ -969,3 +969,15 @@ One entry per PR, written before committing it.
 
 - README only, one `replace_text` anchored on the next section's
   heading. Nothing by hand.
+
+### PR: `hash_map`, and a list library
+
+- Test first: the spec's new list examples, by `replace_text`, failed
+  on `list`. Then one 22-step batch of `replace_text`: the stdlib, the
+  builtin's name in the spec table, its error messages and the wasm
+  dispatch, the tests (`all_occurrences` on `(map `), the spec and
+  README. A second batch for `(map)` with no arguments, which the
+  first pattern missed; a rename of a builtin that is named in strings
+  of glisp source has no tool, so each spelling is a text replacement.
+- The examples' own list functions removed with `replace_text` of each
+  block; their output compared with master's by hand, in both backends.

@@ -15,7 +15,7 @@ import "github.com/tychofreeman/glisp/wasm"
 // mapOps compile the map builtins. Their arguments have been checked against
 // the spec already.
 var mapOps = map[string]func(c *wasmCompiler, b *wasmBody){
-	"map":         (*wasmCompiler).compileMap,
+	"hash_map":    (*wasmCompiler).compileMap,
 	"map_get":     (*wasmCompiler).compileMapGet,
 	"map_put":     (*wasmCompiler).compileMapPut,
 	"map_remove":  (*wasmCompiler).compileMapRemove,
@@ -825,14 +825,14 @@ func (c *wasmCompiler) nameOf(b *wasmBody, name string) {
 	b.I32Const(int32(c.str(name)))
 }
 
-// (map k v ...): the empty map, with each pair put in turn.
+// (hash_map k v ...): the empty map, with each pair put in turn.
 func (c *wasmCompiler) compileMap(b *wasmBody) {
 	argc := b.param(paramArgc)
 	m, i := b.local(i64), b.local(i32)
 	b.LocalGet(argc)
 	b.I32Const(1)
 	b.Op(wasm.I32And)
-	c.failIf(b, "map: expects keys and values in pairs, got ", func() {
+	c.failIf(b, "hash_map: expects keys and values in pairs, got ", func() {
 		b.LocalGet(argc)
 		b.I32Const(1)
 		b.Op(wasm.I32Eq)
@@ -862,7 +862,7 @@ func (c *wasmCompiler) compileMap(b *wasmBody) {
 		b.I32Const(1)
 		b.Op(wasm.I32Sub)
 		b.LocalSet(i)
-		c.nameOf(b, "map")
+		c.nameOf(b, "hash_map")
 		b.Call(c.rt.mapPut)
 		b.LocalSet(m)
 	})

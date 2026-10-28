@@ -18,32 +18,8 @@
   (if (eq a (inc b)) nil
     (cons a (range (inc a) b))))
 
-(defn length (l)
-  (if (null l) 0 (inc (length (cdr l)))))
-
-(defn map (f l)
-  (if (null l) nil
-    (cons (f (car l)) (map f (cdr l)))))
-
-(defn filter (pred l)
-  (if (null l) nil
-    (if (pred (car l))
-      (cons (car l) (filter pred (cdr l)))
-      (filter pred (cdr l)))))
-
-(defn fold (f acc l)
-  (if (null l) acc
-    (fold f (f acc (car l)) (cdr l))))
-
 (defn add (a b) (plus a b))
 (defn sum (l) (fold add 0 l))
-
-(defn push (acc x) (cons x acc))
-(defn reverse (l) (fold push nil l))
-
-(defn append (a b)
-  (if (null a) b
-    (cons (car a) (append (cdr a) b))))
 
 (defn insert (x sorted)
   (if (null sorted) (cons x nil)

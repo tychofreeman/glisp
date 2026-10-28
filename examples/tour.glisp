@@ -2,8 +2,9 @@
 ;
 ; Everything here is built from a handful of builtins (car cdr cons atom eq
 ; apply error, arithmetic, type predicates, p), lambda, def, defmacro and the
-; stdlib's defn, let, not, and, or and cond: a macro, a list library, number
-; theory, primes, three sorting algorithms, symbolic differentiation, an RPN
+; stdlib's defn, let, not, and, or, cond and its list library (list, map,
+; filter, fold, foldr, reverse, append, length, compose): a macro, more list
+; functions, number theory, primes, three sorting algorithms, symbolic differentiation, an RPN
 ; calculator, binary trees, N-queens, Church numerals and lazy streams.
 ;
 ; Run it in the interpreter, or compile it to WebAssembly and run that:
@@ -20,9 +21,6 @@
 
 (defn second (l) (car (cdr l)))
 (defn third (l) (car (cdr (cdr l))))
-
-; (list a b c) is (a b c): a rest parameter takes all the arguments.
-(defn list items items)
 
 ; ======================================================================
 ; A macro. It expands into an if before the program runs, so it costs
@@ -44,43 +42,23 @@
 (defn min (a . rest) (fold (lambda (m x) (if (< x m) x m)) a rest))
 
 ; ======================================================================
-; A list library
+; More list functions (map, filter, fold and the rest are in the stdlib)
 ; ======================================================================
 
 (def empty (quote ()))
 
-(defn fold (f acc l)
-  (if (null l) acc
-    (fold f (f acc (car l)) (cdr l))))
-
-(defn foldr (f init l)
-  (if (null l) init
-    (f (car l) (foldr f init (cdr l)))))
-
-(defn map (f l)
-  (if (null l) empty
-    (cons (f (car l)) (map f (cdr l)))))
-
 (defn map2 (f a b)
   (if (or (null a) (null b)) empty
     (cons (f (car a) (car b)) (map2 f (cdr a) (cdr b)))))
-
-(defn filter (pred l)
-  (cond ((null l) empty)
-        ((pred (car l)) (cons (car l) (filter pred (cdr l))))
-        (else (filter pred (cdr l)))))
 
 (defn for_each (f l)
   (when (not (null l))
     (f (car l))
     (for_each f (cdr l))))
 
-(defn length (l) (fold (lambda (n x) (plus n 1)) 0 l))
 ; apply spreads a list into a call's arguments.
 (defn sum (l) (apply plus l))
 (defn maximum (l) (apply max l))
-(defn reverse (l) (fold (lambda (acc x) (cons x acc)) empty l))
-(defn append (a b) (foldr cons b a))
 
 (defn range (a b)
   (if (> a b) empty
@@ -384,8 +362,6 @@
 ; Functions as values
 ; ======================================================================
 
-(defn identity (x) x)
-(defn compose (f g) (lambda (x) (f (g x))))
 (defn curry (f) (lambda (a) (lambda (b) (f a b))))
 (defn repeat (f n) (if (eq n 0) identity (compose f (repeat f (- n 1)))))
 
