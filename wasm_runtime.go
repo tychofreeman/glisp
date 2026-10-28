@@ -438,28 +438,15 @@ func (c *wasmCompiler) putValueBody(b *wasmBody) {
 		// [a b c]
 		b.I32Const('[')
 		b.Call(c.rt.putByte)
-		b.until(func() {
-			b.LocalGet(k)
-			b.LocalGet(v)
-			b.Op(wasm.I32WrapI64)
-			b.I32Load(4)
-			b.Op(wasm.I32GeU)
-		}, func() {
-			b.LocalGet(k)
-			b.when(func() {
-				b.I32Const(' ')
-				b.Call(c.rt.putByte)
-			})
-			b.LocalGet(v)
-			b.Op(wasm.I32WrapI64)
-			b.LocalGet(k)
-			b.I32Const(3)
-			b.Op(wasm.I32Shl, wasm.I32Add)
-			b.I64Load(8)
-			b.Call(c.rt.putValue)
-			b.incr(k)
-		})
+		c.putElements(b, k, v)
 		b.I32Const(']')
+		b.Call(c.rt.putByte)
+	})
+	when(tagData, func() {
+		// #(name a b)
+		c.text(b, "#(")
+		c.putElements(b, k, v)
+		b.I32Const(')')
 		b.Call(c.rt.putByte)
 	})
 	// A list: (a b c).
@@ -487,6 +474,32 @@ func (c *wasmCompiler) putValueBody(b *wasmBody) {
 	})
 	b.I32Const(')')
 	b.Call(c.rt.putByte)
+}
+
+// putElements prints the values of the vector-like object v, separated by
+// spaces, counting them in the local k.
+func (c *wasmCompiler) putElements(b *wasmBody, k uint32, v uint32) {
+	b.until(func() {
+		b.LocalGet(k)
+		b.LocalGet(v)
+		b.Op(wasm.I32WrapI64)
+		b.I32Load(4)
+		b.Op(wasm.I32GeU)
+	}, func() {
+		b.LocalGet(k)
+		b.when(func() {
+			b.I32Const(' ')
+			b.Call(c.rt.putByte)
+		})
+		b.LocalGet(v)
+		b.Op(wasm.I32WrapI64)
+		b.LocalGet(k)
+		b.I32Const(3)
+		b.Op(wasm.I32Shl, wasm.I32Add)
+		b.I64Load(8)
+		b.Call(c.rt.putValue)
+		b.incr(k)
+	})
 }
 
 // putArgs(args, argc) prints the arguments as a list: (a b c).
@@ -744,10 +757,9 @@ func (c *wasmCompiler) equalBody(b *wasmBody) {
 		b.Call(c.rt.mapAllIn)
 		b.Op(wasm.Return)
 	})
-	// Vectors: the same length and equal values.
-	b.LocalGet(ta)
-	b.I32Const(tagVector)
-	b.Op(wasm.I32Eq)
+	// Vectors, and data (the name, then the fields): the same length and
+	// equal values.
+	b.tagIn(ta, []int32{tagVector, tagData})
 	b.when(func() {
 		value := func(v uint32) {
 			b.LocalGet(v)
@@ -1254,6 +1266,10 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 			return
 		}
 		if op, isMap := mapOps[name]; isMap {
+			op(c, b)
+			return
+		}
+		if op, isData := dataOps[name]; isData {
 			op(c, b)
 			return
 		}

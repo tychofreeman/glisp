@@ -981,3 +981,19 @@ One entry per PR, written before committing it.
   of glisp source has no tool, so each spelling is a text replacement.
 - The examples' own list functions removed with `replace_text` of each
   block; their output compared with master's by hand, in both backends.
+
+### PR: Algebraic data types
+
+- Refactorings first, by the tools: `add_parameter` gave `newVector` a
+  tag and `replace_expression` used it; `extract_function` pulled the
+  vector element loops out of the printer and the hash, and
+  `function_to_method` made them methods (the hash's has eight
+  parameters, as the tool warned: the locals of the function it came
+  from); `extract_function` and `add_parameter` made `objectOfArgs`, the
+  body of `vector`, take a tag. `extract_function` also split
+  `Expander.Expand` into `expand` and the wrapper that turns a `begin`
+  into a call; `add_case` added `begin` to the special forms.
+- `replace_expression` was refused once for an argument named `old`
+  (it is `expression`); the refusal listed the arguments.
+- The rest by `replace_text`, `create_file` and `add_declaration`, test
+  first: the spec's examples and the parity programs. Nothing by hand.

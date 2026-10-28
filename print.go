@@ -35,6 +35,8 @@ func Write(v interface{}) string {
 		var parts []string
 		v.each(func(key, value interface{}) { parts = append(parts, Write(key)+" "+Write(value)) })
 		return "{" + strings.Join(parts, ", ") + "}"
+	case Data:
+		return v.write()
 	case Symbol:
 		return v.Str()
 	case nil:
@@ -89,6 +91,8 @@ func typeName(v interface{}) string {
 		return "vector"
 	case Map:
 		return "map"
+	case Data:
+		return "data"
 	case Function, *Closure:
 		return "function"
 	case Macro:

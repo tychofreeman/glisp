@@ -50,6 +50,7 @@ const (
 	tagVector  // length at +4, values from +8
 	tagMap     // count at +4, root node at +8
 	tagMapNode // bitmaps at +4 and +8, slot count at +12, slots from +16
+	tagData    // like a vector: the constructor's name, then the fields
 )
 
 // The memory layout. Static objects (the four constants, strings, quoted
@@ -117,24 +118,29 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}, run: run}
 	expander := NewExpander(scope)
 	expander.lines = Lines{}
-	expand := func(form interface{}) Node {
-		node := expander.Expand(form)
-		if def, isDef := node.(Def); isDef {
-			if _, isLambda := def.Value.(Lambda); isLambda {
-				Eval(node, scope) // so later macros can call it
+	expand := func(form interface{}) []Node {
+		var nodes []Node
+		for _, node := range expander.ExpandTop(form) {
+			if def, isDef := node.(Def); isDef {
+				if _, isLambda := def.Value.(Lambda); isLambda {
+					Eval(node, scope) // so later macros can call it
+				}
 			}
+			nodes = append(nodes, Resolve(node))
 		}
-		return Resolve(node)
+		return nodes
 	}
 	var stdlibNodes, programNodes []Node
 	for _, form := range stdlibForms {
-		stdlibNodes = append(stdlibNodes, expand(form))
+		stdlibNodes = append(stdlibNodes, expand(form)...)
 	}
 	var programLines []int
 	for _, token := range tokens {
 		form := readLines(token, lines, expander.lines)
-		programLines = append(programLines, expander.formLine(form))
-		programNodes = append(programNodes, expand(form))
+		for _, node := range expand(form) {
+			programLines = append(programLines, expander.formLine(form))
+			programNodes = append(programNodes, node)
+		}
 	}
 
 	c := newWasmCompiler(scope)

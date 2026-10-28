@@ -104,6 +104,7 @@ func eq(_ *Scope, args List) interface{} {
 }
 
 // equal reports whether two glisp values are equal: lists and vectors element by element, maps entry by entry,
+// data by constructor and fields,
 // other values with ==. Values whose type can't be compared with ==, such as
 // functions, are never equal.
 func equal(a, b interface{}) bool {
@@ -126,6 +127,10 @@ func equal(a, b interface{}) bool {
 	if va, isVector := a.(Vector); isVector {
 		vb, isVector := b.(Vector)
 		return isVector && equal(List(va), List(vb))
+	}
+	if da, isData := a.(Data); isData {
+		db, isData := b.(Data)
+		return isData && da.name == db.name && equal(List(da.fields), List(db.fields))
 	}
 	if a == nil || b == nil {
 		return a == nil && b == nil
@@ -198,7 +203,9 @@ func newScope() *Scope {
 	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}, run: &runState{}}
 	expander := NewExpander(scope)
 	for _, form := range stdlibForms {
-		Eval(expander.Expand(form), scope)
+		for _, node := range expander.ExpandTop(form) {
+			Eval(node, scope)
+		}
 	}
 	return scope
 }
@@ -215,11 +222,13 @@ func processLines(scope *Scope, tokens List, lines Lines) interface{} {
 	var value interface{}
 	for _, token := range tokens {
 		form := readLines(token, lines, expander.lines)
-		node := expander.Expand(form)
+		nodes := expander.ExpandTop(form)
 		if scope.run != nil {
 			scope.run.line = expander.formLine(form)
 		}
-		value = Eval(node, scope)
+		for _, node := range nodes {
+			value = Eval(node, scope)
+		}
 	}
 	return value
 }

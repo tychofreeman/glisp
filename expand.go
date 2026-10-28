@@ -51,8 +51,51 @@ func NewExpander(scope *Scope) *Expander {
 	return &Expander{scope: scope}
 }
 
-// Expand turns one form into a Node.
+// Expand turns one form into a Node. A begin here is a sequence with a scope
+// of its own: a call of a lambda without parameters.
 func (e *Expander) Expand(form interface{}) Node {
+	node := e.expand(form)
+	if forms, isBegin := node.(begin); isBegin {
+		return Apply{Fn: Lambda{Body: forms}, Line: e.line}
+	}
+	return node
+}
+
+// ExpandTop expands one form of a body, the top level's or a lambda's: a
+// begin gives its forms, so that the defs in it define in that scope.
+func (e *Expander) ExpandTop(form interface{}) []Node {
+	node := e.expand(form)
+	forms, isBegin := node.(begin)
+	if !isBegin {
+		return []Node{node}
+	}
+	if len(forms) == 0 {
+		return []Node{Const{nil}}
+	}
+	return forms
+}
+
+// ExpandBody expands the forms of a body, each with ExpandTop.
+func (e *Expander) ExpandBody(forms List) []Node {
+	var nodes []Node
+	for _, form := range forms {
+		nodes = append(nodes, e.ExpandTop(form)...)
+	}
+	return nodes
+}
+
+// begin is (begin form...) while it is expanded: the forms of a sequence,
+// which a body splices in and anywhere else is a call of a lambda without
+// parameters. No backend sees one.
+type begin []Node
+
+func (begin) node() {}
+
+func (n begin) String() string { return "(begin" + nodesString(n) + ")" }
+
+// expand turns one form into a Node, which is a begin for (begin ...) or a
+// macro that expands to one.
+func (e *Expander) expand(form interface{}) Node {
 	switch f := form.(type) {
 	case Symbol:
 		return Ref{Name: f.Str()}
@@ -110,7 +153,7 @@ func (e *Expander) expandList(f List) Node {
 				panic("lambda: expects a parameter list")
 			}
 			params, rest := paramNames(f[1])
-			return Lambda{Params: params, Rest: rest, Body: e.ExpandAll(f[2:])}
+			return Lambda{Params: params, Rest: rest, Body: e.ExpandBody(f[2:])}
 		case "def":
 			name := definedName("def", f.Rest())
 			return Def{name, e.Expand(f[2])}
@@ -123,9 +166,11 @@ func (e *Expander) expandList(f List) Node {
 			}
 			e.scope.add(name, Macro{fn})
 			return Quote{List{}}
+		case "begin":
+			return begin(e.ExpandBody(f[1:]))
 		}
 		if macro, isMacro := e.macro(head); isMacro {
-			return e.Expand(macro.fn(e.scope, List{f.Rest()}))
+			return e.expand(macro.fn(e.scope, List{f.Rest()}))
 		}
 	}
 	return Apply{Fn: e.Expand(f[0]), Args: e.ExpandAll(f[1:]), Line: e.line}

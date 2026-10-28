@@ -67,10 +67,11 @@ func (m compiledModule) start() error {
 }
 
 // assertSameOutput checks that program prints the same compiled as
-// interpreted, reporting the first line where they differ.
+// interpreted, as cmd/glisp shows it, reporting the first line where they
+// differ.
 func assertSameOutput(t *testing.T, program string) {
 	t.Helper()
-	got, want := runCompiled(t, program), runInterpreted(t, program)
+	got, want := compiledPrints(t, program), runInterpreted(t, program)
 	if got == want {
 		return
 	}
@@ -262,6 +263,23 @@ var wasmPrograms = []string{
 	`(foldr list 0 (list 1 2))`,
 	`(append nil (list 1))`,
 	`(length (quote ()))`,
+	`(begin)`,
+	`(begin (def a 1) (def b (plus a 1))) (p a b) (begin 7)`,
+	`((lambda () (begin (def x 1) (def y 2)) (plus x y)))`,
+	`(p (begin 1 2)) ((lambda () 1 (begin)))`,
+	`(data (quote a) 1 (quote (2 3)) "s" (vector 4) (hash_map 5 6))`,
+	`(p (data_length (data (quote a))) (data_name (data (quote b) 1)))`,
+	`(data_ref (data (quote a) 1) -1)`,
+	`(data_name 5)`,
+	`(data)`,
+	`(eq (data (quote a) 1) (data (quote b) 1))`,
+	`(eq (data (quote a) 1) (data (quote a) 1 2))`,
+	`(hash (data (quote a) 1 (data (quote b))))`,
+	`(eq (hash (data (quote a))) (hash (quote a)))`,
+	`(deftype t (k a b) (z)) (p (k 1 2) (z) (k? (z)) (z? (z)) (t? 3) (k_b (k 1 2)))`,
+	`(deftype t (apple a)) (apple_a 5)`,
+	`(deftype 5 (k))`,
+	`(deftype t k)`,
 	`(map_keys (hash_map "a" 1 (quote b) 2 (quote (c)) 3 (vector 4) 5 nil 6 true 7 -9 8))`,
 	`(p (hash_map "a" (hash_map 1 (vector 2)) (quote k) (quote (x y))))`,
 	`(defn step (m n x) (if (eq n 0) m (let (k (mod x 300) y (mod (plus (* x 25173) 13849) 65536)) (step (if (eq (mod y 3) 0) (map_remove m k) (map_put m k y)) (- n 1) y)))) (def m (step (hash_map) 3000 7)) (p (map_count m) (map_to_list m)) m`,
