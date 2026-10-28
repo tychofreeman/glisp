@@ -172,7 +172,7 @@ func (e *Expander) expandList(f List) Node {
 			return begin(e.ExpandBody(f[1:]))
 		}
 		if macro, isMacro := e.macro(head); isMacro {
-			return e.expand(macro.fn(e.scope, List{f.Rest()}))
+			return e.expand(withoutPairs(macro.fn(e.scope, List{f.Rest()})))
 		}
 	}
 	return Apply{Fn: e.Expand(f[0]), Args: e.ExpandAll(f[1:]), Line: e.line}

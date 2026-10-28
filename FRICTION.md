@@ -1135,3 +1135,17 @@ One entry per PR, written before committing it.
   wrap it; then `replace_statements` with `function` for `Eval`'s new
   body, and `replace_text` for wasm's `apply` and the test case.
   Nothing by hand.
+
+### PR: Lists that share, in the interpreter
+
+- The test by `add_declaration`, `Pair` and its helpers by one
+  `add_declaration` after `List.Rest`, and every site that took a list
+  apart by `replace_text`: `car`, `cdr`, `atom`, `cons`, `equal`,
+  `apply`, `typeName`, `Write`, `hashInto`, the expander's macro call
+  and `processLines`. Changing a representation by putting a getter in
+  front of every use (the recipe) did not fit: the uses were type
+  switches and assertions on `List`, and no operation adds a case for
+  a new type to every type switch on another (`case List:` to `case
+  List, *Pair:`), which is what most of these edits were. One edit was
+  refused at the end of the batch (ranging over an `interface{}`) and
+  the batch rolled back whole. Nothing by hand.

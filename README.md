@@ -333,10 +333,21 @@ be fast to build without giving that up.
   left is the path copying itself, which only an explicit transient
   removes. Interpreted programs that build long lists pay more than any
   map: see the next item.
-- [ ] **Lists that share, in the interpreter.** A `List` is a Go slice, so
-  `cons` copies the whole list: building a 50,000-word list with `cons`
-  took 26 s of a word count whose map updates take 41 ms. A pair type
-  (car, cdr), as wasm has, makes `cons` constant time.
+- [x] **Lists that share, in the interpreter.** A `List` is a Go slice, so
+  `cons` copied the whole list: building a 50,000-word list with `cons`
+  took 26 s of a word count whose map updates take 41 ms. Now `cons`
+  makes a `Pair` (its first element and the list after it, shared), as
+  wasm does, and a list is either: the reader, builtins' arguments and
+  the builtins that build a whole list still make `List`s. `car`, `cdr`
+  and equality step through either without copying (`uncons`); printing,
+  hashing and `apply` copy a pair into a `List` (`asList`), as they read
+  every element anyway. A macro's expansion and a program's value have
+  their pairs made `List`s (`withoutPairs`), so the expander and Go
+  callers see only `List`s, and the lines of lists read from source stay
+  found. The word count went from 30 s to 0.39 s, a 10,000-pair
+  `(apply hash_map ...)` program from 3.2 s to 0.31 s, and the tour from
+  0.95 s to 0.81 s; a test checks that consing onto 10,000 elements
+  allocates one pair.
 - [ ] **Explicit transients, later (the door left open).** If
   write-heavy programs need it, Clojure's model: a transient taken
   from a map, updated in place by its one owner, and frozen back into
