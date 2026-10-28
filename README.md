@@ -352,6 +352,60 @@ Not now, recorded for later:
   to collect, and atomics around shared state, on runtimes where thread
   spawning is still experimental.
 
+### Functional programming
+
+Toward a Haskell-flavoured glisp. Decisions (2026-10-28, the user):
+
+- **Dynamic first; static types punted.** glisp stays dynamically typed
+  for now and grows the features that make functional code pleasant
+  without types: algebraic data, pattern matching, errors as values.
+  Hindley-Milner inference (over the core AST, as an optional checker)
+  and typeclasses are not ruled out, just not planned.
+- **`map` is the list function.** `(map f l)`, as in every functional
+  language. The builtin that builds a hash map becomes `hash_map`, as in
+  Clojure; `map_get`, `map_put` and the rest, and `map?`, keep their
+  names, since they name the type.
+- **No implicit laziness.** Haskell evaluates nothing until it is needed;
+  glisp evaluates arguments before a call and keeps doing so. Laziness
+  everywhere would change the order of output and errors, the spec, and
+  the collector (an unevaluated value is a heap object), and isn't
+  needed yet. Explicit laziness (`delay`/`force`, lazy sequences) can
+  come later.
+- **Floating-point numbers and string escapes** are wanted, after the
+  four items below.
+
+In order, one PR each:
+
+- [ ] **`map` renamed, and a list library.** `hash_map` builds a hash
+  map; the stdlib gains `map`, `filter`, `fold`, `foldr`, `reverse`,
+  `append`, `length`, `list`, `compose` and `partial`, which programs
+  (the tour among them) defined for themselves.
+- [ ] **Algebraic data types.** `(deftype shape (circle r) (rect w h))`
+  defines constructors, a predicate per constructor and one for the
+  type, and accessors. A value made by a constructor is a new kind of
+  value in both backends, printed `#(circle 1)`, compared and hashed by
+  its constructor and fields.
+- [ ] **Pattern matching.** `(match x ((circle r) ...) ((cons h t) ...)
+  (_ ...))` over constructors, lists, vectors and literals, binding the
+  names in a pattern; a stdlib macro, so both backends get it from the
+  expander.
+- [ ] **Errors as values.** `maybe` (`just`, `nothing`) and `either`
+  (`left`, `right`) as data types in the stdlib, a `bind` that chains a
+  step after one that may fail, and a `do` macro to write a chain as a
+  sequence of steps. `error` still stops the program.
+- [ ] **Floating-point numbers.** 64-bit floats beside the integers,
+  literals such as `1.5` and `-2e-3`, arithmetic that gives a float when
+  an operand is one, conversions, and printing the shortest decimal that
+  reads back as the same float, alike in both backends.
+- [ ] **String escapes.** `\"`, `\\`, `\n` and `\t` in string literals,
+  so a string can hold a quote; the printer already writes them.
+
+Not now, recorded for later: explicit laziness; purity (side effects stay
+allowed anywhere, kept apart by convention); generic operations that
+dispatch on a value's type, like typeclasses without types (`fmap`,
+`show`); automatic currying, which conflicts with functions of any number
+of arguments (`partial` instead); integers of any size; static types.
+
 ### Missing abstractions
 
 What a review of the code found: concepts each restated in several places,

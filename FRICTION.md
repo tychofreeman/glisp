@@ -964,3 +964,8 @@ One entry per PR, written before committing it.
   replaces a file's content (create_file refuses an existing one), so
   `old` was the file as it stood. A `create_file` that may overwrite, or
   a `replace_file`, would be the step.
+
+### PR: Roadmap for functional programming
+
+- README only, one `replace_text` anchored on the next section's
+  heading. Nothing by hand.
