@@ -1003,3 +1003,8 @@ One entry per PR, written before committing it.
 - All in glisp: the spec's examples and parity programs first, then the
   macro in stdlib.glisp, each one `replace_text`. Nothing by hand, and
   no Go changed: the macro needed nothing the language lacked.
+
+### PR: Errors as values
+
+- All in glisp, test first: the spec's example and parity programs, then
+  the stdlib, each one `replace_text`. Nothing by hand.

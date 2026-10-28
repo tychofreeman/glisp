@@ -34,7 +34,9 @@ data `data data_name data_ref data_length`, and `hash`.
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`, and a list library: `list`, `empty?`, `length`, `map`, `filter`,
 `fold`, `foldr`, `reverse`, `append`, `identity`, `compose`, `partial` and
-`cons?`; `deftype`, which defines data types; and `match`.
+`cons?`; `deftype`, which defines data types; `match`; and errors as
+values, `maybe` (`just`, `nothing`), `either` (`left`, `right`), `bind`
+and `do`.
 
 ## Roadmap
 
@@ -414,10 +416,13 @@ In order, one PR each:
   its names, the value bound once to `__match`, and bodies stay in tail
   position (a loop of 100,000 through `match` runs in constant stack).
   The stdlib also gains `cons?`, a non-empty list, which the tests use.
-- [ ] **Errors as values.** `maybe` (`just`, `nothing`) and `either`
-  (`left`, `right`) as data types in the stdlib, a `bind` that chains a
-  step after one that may fail, and a `do` macro to write a chain as a
-  sequence of steps. `error` still stops the program.
+- [x] **Errors as values.** `maybe` (`just`, `nothing`) and `either`
+  (`left`, `right`) as data types in the stdlib, defined with
+  `deftype`; `bind`, which chains a step after one that may fail (and
+  over lists, as Haskell's list monad); and a `do` macro that writes a
+  chain as a sequence of steps, `(x <- m)` binding a name. `bind`
+  dispatches on the value it gets, so `do` needs no type to know which
+  chain it is in. `error` still stops the program. All glisp, no Go.
 - [ ] **Floating-point numbers.** 64-bit floats beside the integers,
   literals such as `1.5` and `-2e-3`, arithmetic that gives a float when
   an operand is one, conversions, and printing the shortest decimal that

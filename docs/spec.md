@@ -762,6 +762,53 @@ glisp: line 23: match: no clause matches 5
 `match` is a macro: a clause becomes an `if` that tests the value's shape
 from the outside in, then a `let` of the names.
 
+### Errors as values
+
+`error` stops the program, and nothing can catch it. A function that can
+fail can instead return its failure as a value, of one of two data types
+in the stdlib:
+
+```text
+(deftype maybe (just value) (nothing))      ; a value, or none
+(deftype either (left value) (right value)) ; a failure (left), or a value (right)
+```
+
+| Function | Result |
+|----------|--------|
+| `(bind m f)` | for `(just x)` or `(right x)`, `(f x)`; for `(nothing)` or a `left`, `m` itself; for a list, the lists `(f x)` gives for its elements, appended |
+| `(do step ... result)` | a chain of steps through `bind`: `(x <- m)` binds `x` to what `m` gives and goes on, any other step goes on whatever it gives, and `result` is the chain's value. A step that fails ends the chain with that failure |
+
+`do` is a macro: `(do (x <- m) rest...)` is `(bind m (lambda (x) (do rest...)))`.
+The steps and the result must be of the same type: maybes, eithers, or
+lists.
+
+```glisp
+(defn safe_div (a b) (if (eq b 0) (nothing) (just (/ a b))))
+(p (safe_div 10 2) (safe_div 1 0))
+(defn calc (a b c)
+  (do (x <- (safe_div a b))
+      (y <- (safe_div x c))
+      (just (plus x y))))
+(p (calc 100 5 2) (calc 1 0 2))
+(defn parse (s)
+  (let (n (parse_number s))
+    (if (nil? n) (left (str "not a number: " s)) (right n))))
+(defn add_strings (a b) (do (x <- (parse a)) (y <- (parse b)) (right (plus x y))))
+(p (add_strings "2" "40") (add_strings "2" "forty"))
+(p (match (add_strings "1" "x") ((right n) n) ((left e) (str "failed, " e))))
+(p (do (x <- (list 1 2)) (y <- (list 10 20)) (list (plus x y))))
+(bind 5 identity)
+```
+
+```output
+#(just 5) #(nothing)
+#(just 30) #(nothing)
+#(right 42) #(left "not a number: forty")
+failed, not a number: x
+(11 21 12 22)
+glisp: line 15: bind: expected a maybe, an either or a list, got 5
+```
+
 ## 8. Builtin functions
 
 Builtins check their arguments before they run: the number, and the type of
