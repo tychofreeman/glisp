@@ -489,10 +489,20 @@ In order, one PR each:
   same algorithm), `log` exactly, `exp` within a float and `expt` within
   three (Go's `Exp` and `Log` are assembly on amd64). Go's `Log` is wrong
   for subnormals on amd64 (`Log(1e-310)` is -709.09); ours matches
-  libm's -713.80. Not done: Go's exact argument reduction for `sin`,
-  `cos` and `tan` beyond 2^29 (Payne-Hanek), which needs bit operations
-  glisp lacks, so those lose accuracy there. Internally `frexp` and
-  `ldexp` are glisp loops over powers of two.
+  libm's -713.80. Internally `frexp` and `ldexp` are glisp loops over
+  powers of two.
+- [x] **Exact reduction for large arguments.** `sin`, `cos` and `tan` of
+  arguments from 2^29 up reduce them as Go's `trigReduce` does
+  (Payne-Hanek): the 53-bit mantissa times the bits of 4/pi from the
+  right place (a table of 1,272 bits), keeping the bits Go keeps, its
+  quirk included (the bits below the fraction's leading ones come from
+  the top of the low word). glisp has no bit operations, so this is
+  integer arithmetic on lists of 24-bit limbs (`math_bn_*`: add, scale,
+  multiply, shift, mod), which no product overflows in either backend's
+  integers. The accuracy test now draws half the arguments of each from
+  2^29 to the largest float: all agree with Go's exactly. Before,
+  `(sin 1e22)` gave -1.03e72 (Go's -0.8522...) and `(cos 1e300)`
+  `-Infinity`.
 - [x] **The stdlib, expanded once.** Every run expanded the whole stdlib
   again, its macros included: 41µs once, 1.2ms after `deftype`,
   `match` and `do`, 2.1ms with the math functions. Now it is expanded

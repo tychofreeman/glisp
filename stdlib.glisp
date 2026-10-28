@@ -413,8 +413,11 @@
 (def log math_log)
 
 ; (math_trig_reduce x), for a finite x >= 0, is (j z): x is about
-; z + j*pi/4, j from 0 to 7. Exact enough below 2^29; above, less accurate.
+; z + j*pi/4, j from 0 to 7. Below 2^29, Cody and Waite's reduction, with
+; pi/4 in three parts; above, the exact one.
 (defn math_trig_reduce (x)
+  (if (>= x 536870912.0) (math_trig_reduce_exact x) (math_trig_reduce_near x)))
+(defn math_trig_reduce_near (x)
   (let (w (* x 1.2732395447351628)
         y0 (if (< w 4503599627370496.0) (float (truncate w)) w)
         j0 (if (< y0 2305843009213693952.0) (mod (truncate y0) 8) 0)
@@ -423,6 +426,77 @@
         y (if odd (plus y0 1.0) y0))
     (list j (- (- (- x (* y 7.85398125648498535156e-1)) (* y 3.77489470793079817668e-8))
                (* y 2.69515142907905952645e-15)))))
+; Exact argument reduction for large arguments, Go's trigReduce
+; (Payne-Hanek): for x >= 2^29, x = ix * 2^exp with ix an integer of 53
+; bits, and the product of ix with the bits of 4/pi from 2^(exp+61) on
+; gives j (its integer part, mod 8) and the fraction z, with every bit
+; Go's uses. glisp has no bit operations, so the numbers are lists of
+; 24-bit limbs, lowest first, which no product overflows.
+(def math_four_over_pi_bits (apply vector (list
+  0 0 325 15927004 10258474 5503054 11510762 6929281
+  11978027 3307655 2130940 10667863 12416906 12807752 14447748 10200512
+  823901 13898659 2374140 3921465 6443854 8245508 7072349 7768329
+  13842656 5073086 16548467 2337907 435827 15284488 12523387 15880310
+  4190511 16759819 3153886 6169366 11801818 4119148 16621135 9835374
+  10390654 13450431 13916906 5207439 14142434 16153102 7597844 10823124
+  14153407 6438682 12193964 417933 16316119)))
+(defn math_bn_pow2 (n) (if (eq n 0) 1 (* 2 (math_bn_pow2 (- n 1)))))
+(defn math_bn_add (a b) (math_bn_add_carry a b 0))
+(defn math_bn_add_carry (a b c)
+  (if (and (empty? a) (empty? b))
+    (if (eq c 0) (quote ()) (list c))
+    (let (s (plus (if (empty? a) 0 (car a)) (if (empty? b) 0 (car b)) c))
+      (cons (mod s 16777216)
+            (math_bn_add_carry (if (empty? a) a (cdr a)) (if (empty? b) b (cdr b)) (/ s 16777216))))))
+(defn math_bn_scale (a m) (math_bn_scale_carry a m 0))
+(defn math_bn_scale_carry (a m c)
+  (if (empty? a)
+    (if (eq c 0) (quote ()) (list c))
+    (let (p (plus (* (car a) m) c))
+      (cons (mod p 16777216) (math_bn_scale_carry (cdr a) m (/ p 16777216))))))
+(defn math_bn_mul (a b)
+  (if (empty? b) (quote ())
+    (math_bn_add (math_bn_scale a (car b)) (cons 0 (math_bn_mul a (cdr b))))))
+(defn math_bn_drop (a n) (if (or (eq n 0) (empty? a)) a (math_bn_drop (cdr a) (- n 1))))
+(defn math_bn_shr (a k) (math_bn_shr_bits (math_bn_drop a (/ k 24)) (math_bn_pow2 (mod k 24))))
+(defn math_bn_shr_bits (a p)
+  (if (empty? a) a
+    (cons (plus (/ (car a) p) (* (mod (if (empty? (cdr a)) 0 (car (cdr a))) p) (/ 16777216 p)))
+          (math_bn_shr_bits (cdr a) p))))
+(defn math_bn_shl (a k)
+  (if (< k 24) (math_bn_scale a (math_bn_pow2 k)) (cons 0 (math_bn_shl a (- k 24)))))
+(defn math_bn_mod (a n)
+  (cond ((empty? a) a)
+        ((< n 24) (list (mod (car a) (math_bn_pow2 n))))
+        (else (cons (car a) (math_bn_mod (cdr a) (- n 24))))))
+(defn math_bn_to_int (a) (if (empty? a) 0 (plus (car a) (* 16777216 (math_bn_to_int (cdr a))))))
+(defn math_bn_of_int (n) (if (eq n 0) (quote ()) (cons (mod n 16777216) (math_bn_of_int (/ n 16777216)))))
+(defn math_bn_bitlen (a)
+  (if (empty? a) 0
+    (let (rest (math_bn_bitlen (cdr a)))
+      (if (> rest 0) (plus rest 24) (math_bn_int_bitlen (car a))))))
+(defn math_bn_int_bitlen (n) (if (eq n 0) 0 (plus 1 (math_bn_int_bitlen (/ n 2)))))
+; The limbs of 4/pi's bits from limb i to limb last, as a number.
+(defn math_four_over_pi_limbs (i last)
+  (if (> i last) (quote ())
+    (append (math_four_over_pi_limbs (plus i 1) last) (list (vector_ref math_four_over_pi_bits i)))))
+(defn math_trig_reduce_exact (x)
+  (let (fe (math_frexp x)
+        ix (math_bn_of_int (truncate (* (car fe) 9007199254740992.0)))
+        s (plus (- (car (cdr fe)) 53) 61)
+        last (/ (plus s 191) 24)
+        w (math_bn_mod (math_bn_shr (math_four_over_pi_limbs (/ s 24) last) (- (* 24 (plus last 1)) (plus s 192))) 192)
+        r (math_bn_mod (math_bn_shr (math_bn_mul w ix) 64) 128)
+        j (math_bn_to_int (math_bn_shr r 125))
+        hi (math_bn_shr (math_bn_mod r 125) 61)
+        b (math_bn_bitlen hi)
+        ; Go fills the bits below hi's from the top of the low word, not
+        ; from the bits after hi's: the same here.
+        word (math_bn_add (math_bn_shl (math_bn_mod hi (- b 1)) (- 65 b)) (math_bn_shr (math_bn_mod r 64) (- b 1)))
+        z (if (eq b 0) 0.0
+            (math_ldexp (float (plus 4503599627370496 (math_bn_to_int (math_bn_shr word 12)))) (- b 117)))
+        odd (eq (mod j 2) 1))
+    (list (if odd (mod (plus j 1) 8) j) (* (if odd (- z 1.0) z) 0.7853981633974483))))
 (def math_sin_coefficients
   (list 1.58962301576546568060e-10 -2.50507477628578072866e-8 2.75573136213857245213e-6
         -1.98412698295895385996e-4 8.33333333332211858878e-3 -1.66666666666666307295e-1))

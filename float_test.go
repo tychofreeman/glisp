@@ -76,12 +76,26 @@ func TestMathFunctionsAreAccurate(t *testing.T) {
 	one := func(f func(float64) float64) func([]float64) float64 {
 		return func(a []float64) float64 { return f(a[0]) }
 	}
+	// Half the arguments up to bound, half from 2^29, where Go reduces
+	// them exactly, up to the largest float.
+	trig := func(bound float64) func() []float64 {
+		return func() []float64 {
+			if r.IntN(2) == 0 {
+				return []float64{uniform(-bound, bound)}
+			}
+			x := math.Ldexp(uniform(1, 2), 29+r.IntN(995))
+			if r.IntN(2) == 0 {
+				x = -x
+			}
+			return []float64{x}
+		}
+	}
 	fns := []fn{
 		{"exp", one(math.Exp), func() []float64 { return []float64{uniform(-745, 709)} }, 1},
 		{"log", one(logOf), func() []float64 { return []float64{math.Abs(anyFloat())} }, 1},
-		{"sin", one(math.Sin), func() []float64 { return []float64{uniform(-1e6, 1e6)} }, 0},
-		{"cos", one(math.Cos), func() []float64 { return []float64{uniform(-10, 10)} }, 0},
-		{"tan", one(math.Tan), func() []float64 { return []float64{uniform(-1e3, 1e3)} }, 0},
+		{"sin", one(math.Sin), trig(1e6), 0},
+		{"cos", one(math.Cos), trig(10), 0},
+		{"tan", one(math.Tan), trig(1e3), 0},
 		{"atan", one(math.Atan), func() []float64 { return []float64{anyFloat()} }, 0},
 		{"asin", one(math.Asin), func() []float64 { return []float64{uniform(-1, 1)} }, 0},
 		{"acos", one(math.Acos), func() []float64 { return []float64{uniform(-1, 1)} }, 0},
