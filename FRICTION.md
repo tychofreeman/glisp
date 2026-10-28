@@ -1067,3 +1067,8 @@ One entry per PR, written before committing it.
 ### PR: Roadmap for interop with Go
 
 - README only, one `replace_text`. Nothing by hand.
+
+### PR: go-matchers with readable failures
+
+- `go get` for go.mod and go.sum (the Go tool owns them); this entry by
+  `replace_text`. Nothing by hand.

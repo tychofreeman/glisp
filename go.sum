@@ -1,4 +1,4 @@
 github.com/tetratelabs/wazero v1.10.1 h1:2DugeJf6VVk58KTPszlNfeeN8AhhpwcZqkJj2wwFuH8=
 github.com/tetratelabs/wazero v1.10.1/go.mod h1:DRm5twOQ5Gr1AoEdSi0CLjDQF1J9ZAuyqFIjl1KKfQU=
-github.com/tychofreeman/go-matchers v0.0.0-20170710003753-4fe0ec5e7df5 h1:+sgJDz5fkxA+kjVEnF8uGS2SwA4X9Hl3LyZdc/+Iqz4=
-github.com/tychofreeman/go-matchers v0.0.0-20170710003753-4fe0ec5e7df5/go.mod h1:LGG/J1EZnLsi3Ki9XnDm4idAiZqtiVf3jeFyr+zdSC8=
+github.com/tychofreeman/go-matchers v0.0.0-20261028175450-01d1babeb08e h1:WDhWhegJzyd1XudT8FiOqKDDfIlKUnjZ8KufHNkhIeM=
+github.com/tychofreeman/go-matchers v0.0.0-20261028175450-01d1babeb08e/go.mod h1:OaU/lVqZJLiY3IhK+/sqJbTyLghX7af9fvnMDVwoHrs=
