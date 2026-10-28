@@ -22,7 +22,8 @@ Special forms: `quote if lambda def defmacro`. Builtins: `car cdr atom cons
 eq apply p error`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
 predicates `number? string? symbol? list? function? boolean? nil? vector?`,
 strings `str string_length substring chars string< symbol parse_number`, and
-vectors `vector vector_ref vector_length vector_set vector_to_list`.
+vectors `vector vector_ref vector_length vector_set vector_to_list`, and
+`hash`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`.
@@ -264,12 +265,15 @@ prints exactly what the interpreter does, error messages included.
 Planned: immutable maps, like the rest of glisp, built so that a map can
 be fast to build without giving that up.
 
-- [ ] **One hash for both backends.** FNV-1a over a canonical encoding of
-  a value: integers, booleans and nil as fixed codes, strings and
-  symbols by their bytes with a type salt, lists and vectors by their
-  elements' hashes. Functions can't be keys (`eq` never finds them
-  equal). Both backends must hash alike, since a map prints in trie
-  order; a parity test on hashes alone comes first.
+- [x] **One hash for both backends.** `(hash x)`: 32-bit FNV-1a over a
+  canonical encoding (hash.go): an integer is `i` and its 8 bytes;
+  `nil`, `true`, `false` are `n`, `t`, `f`; a string is `s`, its byte
+  length and bytes, a symbol the same after `y`; a list is `(`, its
+  elements, `)`; a vector the same in `[` `]`. Functions have no hash
+  (`eq` never finds two equal). A test pins 15 values computed by a
+  separate Python implementation of the encoding, and parity programs
+  check that compiled code hashes alike, nested lists and vectors
+  included.
 - [ ] **CHAMP in the interpreter.** A hash array mapped trie (Bagwell)
   in Steindorff and Vinju's CHAMP form: 32-way nodes with a bitmap for
   inline key/value pairs and one for child nodes, `popcount` to index

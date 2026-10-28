@@ -903,3 +903,16 @@ One entry per PR, written before committing it.
 ### PR: the parallelism roadmap
 
 - Docs only, one `replace_text` per file through `refactor batch`.
+
+### PR: one hash for both backends
+
+- One 9-step batch, tests first: `create_file` for hash.go and
+  wasm_hash.go, `add_declaration` for the test, `replace_text` for the
+  spec row, the runtime's declaration, definition, field and dispatch.
+- Refused once at the end of the batch: `int32(fnvOffset)` of a typed
+  constant that overflows int32 is a compile error in Go; the refusal
+  named the line (in a step's own text, marked `*`). Going through a
+  variable wraps it, as intended.
+- The expected values come from a Python script implementing the
+  encoding separately (not committed); my test then used `list`, which
+  only the tour defines. One `replace_text`.

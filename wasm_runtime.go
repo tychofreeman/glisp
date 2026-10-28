@@ -8,7 +8,7 @@ type wasmRuntime struct {
 	fdWrite, procExit                                        uint32 // WASI imports
 	reserve, alloc, flush, putByte, putBytes, putStr, putInt uint32
 	putValue, putType, putArgs, failBegin, failEnd           uint32
-	tagOf, pair, cell, equal, invoke                         uint32
+	tagOf, pair, cell, equal, invoke, hashInto               uint32
 	putShow, putQuoted, putDescribed                         uint32
 	builtins                                                 map[string]uint32 // table index of each builtin
 	runeCount, runeOffset, newString                         uint32            // string helpers
@@ -55,6 +55,7 @@ func (c *wasmCompiler) runtime() {
 	rt.cell = c.declare(sig(vals(i64), i64))
 	rt.equal = c.declare(sig(vals(i64, i64), i32))
 	rt.invoke = c.declare(sig(vals(i64, i32, i32, i32), i64))
+	rt.hashInto = c.declare(sig(vals(i64, i32), i32))
 	c.declareStrings()
 	c.declareGC()
 	builtinFuncs := map[string]uint32{}
@@ -83,6 +84,7 @@ func (c *wasmCompiler) runtime() {
 	c.define(rt.cell, c.cellBody)
 	c.define(rt.equal, c.equalBody)
 	c.define(rt.invoke, c.invokeBody)
+	c.define(rt.hashInto, c.hashIntoBody)
 	c.defineStrings()
 	for _, spec := range builtinSpecs {
 		c.define(builtinFuncs[spec.name], func(b *wasmBody) { c.builtinBody(b, spec) })
@@ -1176,6 +1178,13 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		})
 		b.Call(c.rt.failEnd)
 		b.Op(wasm.Unreachable)
+	case "hash":
+		offset := fnvOffset // as an i32, its bits
+		b.arg(0)
+		b.I32Const(int32(offset))
+		b.Call(c.rt.hashInto)
+		b.Op(wasm.I64ExtendI32U)
+		b.encode()
 	case "p":
 		i := b.local(i32)
 		b.until(func() {

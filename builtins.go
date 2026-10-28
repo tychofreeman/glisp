@@ -151,6 +151,7 @@ var builtinSpecs = append([]builtin{
 	{"vector_length", arity{1, 1}, []kind{vectorKind}, vectorLength},
 	{"vector_set", arity{3, 3}, []kind{vectorKind, numberKind, anyKind}, vectorSet},
 	{"vector_to_list", arity{1, 1}, []kind{vectorKind}, vectorToList},
+	{"hash", arity{1, 1}, anyOne, hashBuiltin},
 }, typePredicateSpecs()...)
 
 // typePredicates are the builtins that test a value's type, each with the
