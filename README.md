@@ -568,6 +568,12 @@ In order, one PR each:
   first. The compiler's `usedDefs` kept only the last definition of a
   name, so it missed what earlier instances refer to; it now follows
   every definition.
+- [x] **`sort` and `sort_by`.** `(sort l)` in `compare`'s order,
+  `(sort_by cmp l)` in a comparison's own (-1, 0 or 1, as `compare`
+  gives). A stable merge sort of runs, in glisp, in constant stack like
+  the rest of the list library: two sorts of 600 elements by the generic
+  `compare` take about 0.4 s interpreted. A parity program sorts pairs
+  by their first element, so it checks stability in both backends.
 - [x] **An error's line, restored after a call.** Both backends set the
   line at each call with one and never put it back when the call
   returned, so code without lines (the stdlib's) that failed after a
