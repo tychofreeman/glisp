@@ -957,3 +957,10 @@ One entry per PR, written before committing it.
 - The spec's examples found one difference between the harness and the
   command: an error found while compiling came back as
   `compile error: ...`, where `glisp -wasm` prints `glisp: ...`.
+
+### PR: CLAUDE.md from the example
+
+- CLAUDE.md rewritten with one `replace_text` of the whole file: no tool
+  replaces a file's content (create_file refuses an existing one), so
+  `old` was the file as it stood. A `create_file` that may overwrite, or
+  a `replace_file`, would be the step.
