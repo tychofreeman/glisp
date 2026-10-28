@@ -19,3 +19,37 @@
           (cons (cons (quote let) (cons (cdr (cdr bindings)) body)) nil)))
       (cons (car (cdr bindings)) nil))))
 (defmacro let (lambda (xs) (let_expand (car xs) (cdr xs))))
+
+; (not x) is true unless x is true, the one value if takes as true.
+(defn not (x) (if x false true))
+
+; (and a b ...) is the last of its arguments if all before it are true, and
+; false as soon as one isn't, without evaluating the rest. (and) is true.
+(defn and_expand (xs)
+  (if (eq xs (quote ())) (quote true)
+    (if (eq (cdr xs) (quote ())) (car xs)
+      (cons (quote if) (cons (car xs) (cons (and_expand (cdr xs)) (cons (quote false) nil)))))))
+(defmacro and (lambda (xs) (and_expand xs)))
+
+; (or a b ...) is true as soon as one of its arguments is true, without
+; evaluating the rest, and otherwise the last. (or) is false.
+(defn or_expand (xs)
+  (if (eq xs (quote ())) (quote false)
+    (if (eq (cdr xs) (quote ())) (car xs)
+      (cons (quote if) (cons (car xs) (cons (quote true) (cons (or_expand (cdr xs)) nil)))))))
+(defmacro or (lambda (xs) (or_expand xs)))
+
+; (cond (test body...) ...) is the body of the first clause whose test is
+; true, or nil if none is. A test of else always is.
+(defn cond_test (test) (if (eq test (quote else)) (quote true) test))
+(defn cond_body (body)
+  (if (eq body (quote ())) (quote nil)
+    (if (eq (cdr body) (quote ())) (car body)
+      (cons (cons (quote lambda) (cons (quote ()) body)) nil))))
+(defn cond_expand (clauses)
+  (if (eq clauses (quote ())) (quote nil)
+    (cons (quote if)
+      (cons (cond_test (car (car clauses)))
+        (cons (cond_body (cdr (car clauses)))
+          (cons (cond_expand (cdr clauses)) nil))))))
+(defmacro cond (lambda (clauses) (cond_expand clauses)))

@@ -23,7 +23,8 @@ eq apply p`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
 predicates `number? string? symbol? list? function? boolean? nil?`, and
 strings `str string_length substring chars string< symbol parse_number`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
-every program; it defines `mult`, `defn` and `let`.
+every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
+`cond`.
 
 ## Roadmap
 
@@ -106,6 +107,12 @@ every program; it defines `mult`, `defn` and `let`.
   all of them; `defn` takes either form. A lambda reports a wrong count as
   builtins do (`lambda (a b . rest) expects at least 2 arguments, got 1`),
   since both now share one `arity`.
+- [x] `not`, `and`, `or` and `cond`, in the stdlib. Only `true` is true to
+  `if`, so `(not x)` is true for anything else; `and` and `or` stop at the
+  first argument that decides them and give the last otherwise (`(and)` is
+  true, `(or)` false); `(cond (test body...) ... (else body...))` gives the
+  first clause whose test is true, or nil. All but `not` are macros that
+  expand to `if`, so a call in a clause's body stays a tail call.
 
 ### Design
 

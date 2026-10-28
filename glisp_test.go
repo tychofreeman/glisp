@@ -481,6 +481,29 @@ func TestLambdasTakeTheRestOfTheArgumentsAsAList(t *testing.T) {
 	assertPanicsWith(t, "((lambda (a b . rest) a) 1)", "lambda (a b . rest) expects at least 2 arguments, got 1: (1)")
 }
 
+func TestLogicAndCond(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`(not true)`, `false`},
+		{`(not false)`, `true`},
+		{`(not 5)`, `true`},
+		{`(and)`, `true`},
+		{`(and true 5)`, `5`},
+		{`(and true true false)`, `false`},
+		{`(and false (car 5))`, `false`},
+		{`(or)`, `false`},
+		{`(or false 7)`, `7`},
+		{`(or false false)`, `false`},
+		{`(or true (car 5))`, `true`},
+		{`(cond)`, `nil`},
+		{`(cond (false 1) (true 2))`, `2`},
+		{`(cond ((eq 1 2) 1) (else 3))`, `3`},
+		{`(cond (false 1))`, `nil`},
+		{`(cond (true (p 1) 2))`, `2`},
+	} {
+		AssertThat(t, Show(Process(c.src)), Equals(c.want))
+	}
+}
+
 func TestFunctionsCanBeStoredInLists(t *testing.T) {
 	AssertThat(t, Process("((car (cons plus nil)) 1 2)"), Equals(int64(3)))
 }

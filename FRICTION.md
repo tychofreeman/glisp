@@ -831,3 +831,11 @@ One entry per PR, written before committing it.
   for the file tails these docs are anchored on.
 - Replacing `bind` removed eval.go's `strings` import, and `fix_imports`
   removed wasm_compile.go's at the end, without being asked.
+
+### PR: `not`, `and`, `or`, `cond`
+
+- Glisp, not Go: the stdlib grew by `replace_text` anchored on its last
+  line, and the tests (a table in glisp_test.go, the same programs as
+  parity programs) by `add_declaration` and `replace_text`. One batch of
+  three steps, which passed first time.
+- Read stdlib.glisp with Read: `inspect` reads Go only.
