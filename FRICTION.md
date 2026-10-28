@@ -997,3 +997,9 @@ One entry per PR, written before committing it.
   (it is `expression`); the refusal listed the arguments.
 - The rest by `replace_text`, `create_file` and `add_declaration`, test
   first: the spec's examples and the parity programs. Nothing by hand.
+
+### PR: Pattern matching
+
+- All in glisp: the spec's examples and parity programs first, then the
+  macro in stdlib.glisp, each one `replace_text`. Nothing by hand, and
+  no Go changed: the macro needed nothing the language lacked.
