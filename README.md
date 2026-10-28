@@ -294,6 +294,45 @@ be fast to build without giving that up.
   an immutable map. Keep the node layout and builder able to carry an
   owner, so this needs no redesign.
 
+### Parallelism and concurrency
+
+Where wasm runtimes stand (October 2026): the threads proposal (shared
+memory, atomics, wait/notify) is in V8, Wasmtime, Wasmer, WAMR and, as
+experimental, wazero, but it doesn't create threads. Spawning them is
+`wasi-threads` (Wasmtime behind a flag, WAMR; Wasmer's WASIX) or the
+host's own workers, until the shared-everything-threads proposal
+replaces it. WASI 0.3 (June 2026, on by default in Wasmtime 46) adds
+async functions, streams and futures: concurrency on one event loop,
+not parallelism.
+
+**Preferred for now: share-nothing parallelism** (the user's choice).
+
+- [ ] **Several instances, messages between them.** Each glisp process
+  is its own instance of the module, with its own heap and collector;
+  they exchange values through host functions, actor-style: `spawn` a
+  function in a new instance, `send` and `receive` values. A value
+  crosses by being copied (serialized out of one heap, built in the
+  other), which immutability makes always safe. Works in every runtime
+  today, wazero included, and needs nothing from the collector. The
+  interpreter would do the same with goroutines and a copy at the
+  boundary. To work out: how a spawned function's code and captured
+  values reach the new instance (recompile the program there and send
+  the closure's name and captures, or ship the module once and send a
+  table index), message order and blocking, and what an error in one
+  process does to the others.
+
+Not now, recorded for later:
+
+- [ ] **Green threads in one instance.** Pausing a computation needs the
+  wasm call stack, which code can't save: only frames of tail calls are
+  wholly in linear memory. Needs the stack-switching proposal, Binaryen's
+  Asyncify, or compiling to continuation-passing style.
+- [ ] **Shared-memory threads.** The collector is stop-the-world and the
+  stack, heap and pending-call state are globals: it would need a stack
+  and allocation buffer per thread, stopping every thread at a safe point
+  to collect, and atomics around shared state, on runtimes where thread
+  spawning is still experimental.
+
 ### Missing abstractions
 
 What a review of the code found: concepts each restated in several places,

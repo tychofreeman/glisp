@@ -899,3 +899,7 @@ One entry per PR, written before committing it.
 ### PR: the maps roadmap
 
 - Docs only, one `replace_text` per file through `refactor batch`.
+
+### PR: the parallelism roadmap
+
+- Docs only, one `replace_text` per file through `refactor batch`.
