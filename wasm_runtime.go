@@ -975,6 +975,9 @@ func (b *wasmBody) push(value func()) {
 
 // tagIn leaves whether the tag in local t is one of tags.
 func (b *wasmBody) tagIn(t uint32, tags []int32) {
+	if len(tags) == 0 {
+		b.I32Const(0)
+	}
 	for k, tag := range tags {
 		b.LocalGet(t)
 		b.I32Const(tag)
@@ -1217,6 +1220,10 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		}
 		if op, isVector := vectorOps[name]; isVector {
 			op(c, b)
+			return
+		}
+		if uncompiledMapOps[name] {
+			c.fail(b, name+": maps aren't in compiled code yet", nil)
 			return
 		}
 		c.stringBuiltin(b, name)

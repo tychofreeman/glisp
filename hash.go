@@ -19,15 +19,16 @@ const (
 	fnvPrime  uint32 = 16777619
 )
 
-// hashValue is v's hash.
-func hashValue(v interface{}) uint32 {
+// hashValue is v's hash. fn names the builtin, for the error a function
+// gives.
+func hashValue(fn string, v interface{}) uint32 {
 	h := fnvOffset
-	hashInto(&h, v)
+	hashInto(fn, &h, v)
 	return h
 }
 
 // hashInto feeds v's encoding into the hash *h.
-func hashInto(h *uint32, v interface{}) {
+func hashInto(fn string, h *uint32, v interface{}) {
 	put := func(bytes ...byte) {
 		for _, b := range bytes {
 			*h = (*h ^ uint32(b)) * fnvPrime
@@ -57,21 +58,21 @@ func hashInto(h *uint32, v interface{}) {
 	case List:
 		put('(')
 		for _, x := range v {
-			hashInto(h, x)
+			hashInto(fn, h, x)
 		}
 		put(')')
 	case Vector:
 		put('[')
 		for _, x := range v {
-			hashInto(h, x)
+			hashInto(fn, h, x)
 		}
 		put(']')
 	default:
-		panic(fmt.Sprintf("hash: can't hash %s", described(v)))
+		panic(fmt.Sprintf("%s: can't hash %s", fn, described(v)))
 	}
 }
 
 // hashBuiltin is (hash x): x's hash, a number from 0 to 2^32-1.
 func hashBuiltin(_ *Scope, args List) interface{} {
-	return int64(hashValue(args[0]))
+	return int64(hashValue("hash", args[0]))
 }

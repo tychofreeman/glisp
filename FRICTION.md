@@ -916,3 +916,14 @@ One entry per PR, written before committing it.
 - The expected values come from a Python script implementing the
   encoding separately (not committed); my test then used `list`, which
   only the tour defines. One `replace_text`.
+
+### PR: CHAMP maps in the interpreter
+
+- One 20-step batch: `create_file` for maps.go, maps_test.go and
+  wasm_maps.go (the placeholder), `replace_text` for `hash` taking the
+  builtin's name for its error, the kind, spec rows, `Write`,
+  `typeName`, `equal`, and the wasm `tagIn` and dispatch.
+- One test failed: `reflect.DeepEqual` of two tries that had the same
+  shape but empty slices in one where the other had nil. The test now
+  compares the tries written out (`shape`); a second batch, which also
+  dropped the `reflect` import on its own.
