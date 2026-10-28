@@ -116,7 +116,7 @@ type wasmCompiler struct {
 	closures map[uint32]uint32 // static closure of each table index
 	fnType   uint32            // every glisp function: (self, args, argc) -> value
 	rt       wasmRuntime
-	floats   bool // whether the program can make a float: if not, the module has no float runtime
+	made     map[string]bool // the optional types the program can make (makers): the module has the runtime of no others
 }
 
 func compileWasm(run *runState, tokens List, lines Lines) []byte {
@@ -158,7 +158,7 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 	}
 
 	used := usedDefs(stdlibNodes, programNodes)
-	c := newWasmCompiler(scope, makesFloats(append(append([]Node{}, used...), programNodes...)))
+	c := newWasmCompiler(scope, makes(append(append([]Node{}, used...), programNodes...)))
 	main := &wasmFunc{c: c, wasmBody: &wasmBody{}}
 	main.scratch = main.local(wasm.I64)
 	main.tmp32 = main.local(wasm.I32)
@@ -268,11 +268,11 @@ func globalRefs(node Node) []string {
 	return names
 }
 
-func newWasmCompiler(scope *Scope, floats bool) *wasmCompiler {
+func newWasmCompiler(scope *Scope, made map[string]bool) *wasmCompiler {
 	c := &wasmCompiler{
 		m:        &wasm.Module{},
 		scope:    scope,
-		floats:   floats,
+		made:     made,
 		data:     make([]byte, staticStart),
 		strings:  map[string]uint32{},
 		symbols:  map[string]uint32{},
@@ -312,6 +312,16 @@ func (c *wasmCompiler) finish() []byte {
 	c.m.MemoryPages = uint32(heap/65536 + 1)
 	c.m.DataAt = 8
 	c.m.Data = c.data[8:]
+	// A builtin's table entry is live once something made its closure: a
+	// builtin is only reached through its name.
+	builtin := map[uint32]bool{}
+	for _, t := range c.rt.builtins {
+		builtin[t] = true
+	}
+	c.m.Prune(func(entry int) bool {
+		_, made := c.closures[uint32(entry)]
+		return made || !builtin[uint32(entry)]
+	})
 	return c.m.Encode()
 }
 

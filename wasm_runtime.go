@@ -64,7 +64,7 @@ func (c *wasmCompiler) runtime() {
 	c.declareStrings()
 	c.declareGC()
 	c.declareMaps()
-	if c.floats {
+	if c.made["float"] {
 		c.declareFloats()
 	}
 	builtinFuncs := map[string]uint32{}
@@ -96,7 +96,7 @@ func (c *wasmCompiler) runtime() {
 	c.define(rt.hashInto, c.hashIntoBody)
 	c.defineStrings()
 	c.defineMaps()
-	if c.floats {
+	if c.made["float"] {
 		c.defineFloats()
 	}
 	for _, spec := range builtinSpecs {
@@ -430,39 +430,45 @@ func (c *wasmCompiler) putValueBody(b *wasmBody) {
 		b.Call(c.rt.putStr)
 	})
 	when(tagClosure, func() { c.text(b, "<function>") })
-	when(tagMap, func() {
-		// {k v, k v}
-		b.I32Const('{')
-		b.Call(c.rt.putByte)
-		mapRoot(b, v)
-		b.I32Const(1)
-		b.Call(c.rt.mapPrint)
-		b.Op(wasm.Drop)
-		b.I32Const('}')
-		b.Call(c.rt.putByte)
-	})
+	if c.made["map"] {
+		when(tagMap, func() {
+			// {k v, k v}
+			b.I32Const('{')
+			b.Call(c.rt.putByte)
+			mapRoot(b, v)
+			b.I32Const(1)
+			b.Call(c.rt.mapPrint)
+			b.Op(wasm.Drop)
+			b.I32Const('}')
+			b.Call(c.rt.putByte)
+		})
+	}
 	k := b.local(i32)
-	when(tagVector, func() {
-		// [a b c]
-		b.I32Const('[')
-		b.Call(c.rt.putByte)
-		c.putElements(b, k, v)
-		b.I32Const(']')
-		b.Call(c.rt.putByte)
-	})
-	if c.floats {
+	if c.made["vector"] {
+		when(tagVector, func() {
+			// [a b c]
+			b.I32Const('[')
+			b.Call(c.rt.putByte)
+			c.putElements(b, k, v)
+			b.I32Const(']')
+			b.Call(c.rt.putByte)
+		})
+	}
+	if c.made["float"] {
 		when(tagFloat, func() {
 			b.field(v, 8)
 			b.Call(c.rt.putFloat)
 		})
 	}
-	when(tagData, func() {
-		// #(name a b)
-		c.text(b, "#(")
-		c.putElements(b, k, v)
-		b.I32Const(')')
-		b.Call(c.rt.putByte)
-	})
+	if c.made["data"] {
+		when(tagData, func() {
+			// #(name a b)
+			c.text(b, "#(")
+			c.putElements(b, k, v)
+			b.I32Const(')')
+			b.Call(c.rt.putByte)
+		})
+	}
 	// A list: (a b c).
 	b.I32Const('(')
 	b.Call(c.rt.putByte)
@@ -758,7 +764,7 @@ func (c *wasmCompiler) equalBody(b *wasmBody) {
 	b.Op(wasm.I32Eq)
 	b.returnIf(no)
 	// Floats: equal as floats, so 0.0 is -0.0 and NaN is nothing.
-	if c.floats {
+	if c.made["float"] {
 		b.LocalGet(ta)
 		b.I32Const(tagFloat)
 		b.Op(wasm.I32Eq)
@@ -771,19 +777,21 @@ func (c *wasmCompiler) equalBody(b *wasmBody) {
 		})
 	}
 	// Maps: the same count, and each entry of one in the other.
-	b.LocalGet(ta)
-	b.I32Const(tagMap)
-	b.Op(wasm.I32Eq)
-	b.when(func() {
-		mapCountOf(b, a)
-		mapCountOf(b, bv)
-		b.Op(wasm.I32Ne)
-		b.returnIf(no)
-		mapRoot(b, a)
-		mapRoot(b, bv)
-		b.Call(c.rt.mapAllIn)
-		b.Op(wasm.Return)
-	})
+	if c.made["map"] {
+		b.LocalGet(ta)
+		b.I32Const(tagMap)
+		b.Op(wasm.I32Eq)
+		b.when(func() {
+			mapCountOf(b, a)
+			mapCountOf(b, bv)
+			b.Op(wasm.I32Ne)
+			b.returnIf(no)
+			mapRoot(b, a)
+			mapRoot(b, bv)
+			b.Call(c.rt.mapAllIn)
+			b.Op(wasm.Return)
+		})
+	}
 	// Vectors, and data (the name, then the fields): the same length and
 	// equal values.
 	b.tagIn(ta, []int32{tagVector, tagData})
@@ -1123,7 +1131,7 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.Call(c.rt.pair)
 		b.Call(c.rt.pair)
 	case "plus", "-", "*":
-		if c.floats {
+		if c.made["float"] {
 			c.floatArithmetic(b, name)
 		}
 		sum, i := b.local(i64), b.local(i32)
@@ -1167,7 +1175,7 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.LocalGet(sum)
 		b.encode()
 	case "/", "mod":
-		if name == "/" && c.floats {
+		if name == "/" && c.made["float"] {
 			c.floatBinary(b, func() {
 				b.Op(wasm.F64Div)
 				b.asBits()
@@ -1192,7 +1200,7 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		}
 		b.encode()
 	case "<", ">", "<=", ">=":
-		if c.floats {
+		if c.made["float"] {
 			c.floatBinary(b, func() {
 				b.Op(map[string]byte{"<": wasm.F64Lt, ">": wasm.F64Gt, "<=": wasm.F64Le, ">=": wasm.F64Ge}[name])
 				b.boolean()
@@ -1317,7 +1325,7 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 			return
 		}
 		if op, isFloat := floatOps[name]; isFloat {
-			if !c.floats {
+			if !c.made["float"] {
 				// The program can't make a float, so the rounding builtins
 				// only ever get integers, which they give back, and float
 				// and sqrt, which make floats, are never called.

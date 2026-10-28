@@ -1089,3 +1089,18 @@ One entry per PR, written before committing it.
   the new `with`, which no `fold` could reach (the receiver is not in
   the literal). The wasm side by `replace_statements` (`compileMap`) and
   `replace_text`. Nothing by hand.
+
+### PR: Only the runtime a program reaches
+
+- `rename` made `floatMakers` and `makesFloats` into `makers` and
+  `makes`, then `replace_declaration` gave them their new bodies (it
+  refuses to rename by replacing, which saved a wrong batch). The
+  field `floats bool` became `made map[string]bool` by `replace_text`
+  at the field, the constructor and its call, and once with
+  `all_occurrences` over three files for `c.floats`: no operation
+  changes a field's type from `bool` to a map and rewrites its reads
+  (`change_field_type` takes identical types). The new wasm package
+  file and its test by `create_file`; the gates by `replace_text`. The
+  first pass renumbered imports as if they were defined functions; the
+  unit test didn't call an import, so the compiled programs found it.
+  Nothing by hand.

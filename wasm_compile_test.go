@@ -449,6 +449,32 @@ func TestCompiledProgramsPrintWhatTheInterpreterDoes(t *testing.T) {
 	}
 }
 
+// A module leaves out the runtime its program can't reach: the builtins it
+// never names, and what handles kinds of value it never makes: using one
+// grows the module by its runtime.
+func TestModulesLeaveOutWhatTheyCannotReach(t *testing.T) {
+	size := func(program string) int {
+		module, err := CompileWasm(program)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(module)
+	}
+	for _, c := range []struct {
+		use   string
+		least int
+	}{
+		{`(hash_map 1 2)`, 3000},
+		{`(vector 1)`, 300},
+		{`(data (quote a) 1)`, 300},
+		{`(str 1 "a")`, 300},
+	} {
+		if grown := size(`(p 1) `+c.use) - size(`(p 1)`); grown < c.least {
+			t.Errorf("%s adds %d bytes to (p 1); was its runtime there already?", c.use, grown)
+		}
+	}
+}
+
 func TestCompiledExampleMatchesTheInterpreter(t *testing.T) {
 	program, err := os.ReadFile("examples/numbers.glisp")
 	if err != nil {

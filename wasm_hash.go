@@ -51,7 +51,7 @@ func (c *wasmCompiler) hashIntoBody(b *wasmBody) {
 			b.decode()
 		})
 	})
-	if c.floats {
+	if c.made["float"] {
 		is(tagFloat, func() {
 			// The bits, with one zero and one NaN, as floatBits gives them.
 			putByte('d')
