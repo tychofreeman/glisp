@@ -64,7 +64,9 @@ func (c *wasmCompiler) runtime() {
 	c.declareStrings()
 	c.declareGC()
 	c.declareMaps()
-	c.declareFloats()
+	if c.floats {
+		c.declareFloats()
+	}
 	builtinFuncs := map[string]uint32{}
 	rt.builtins = map[string]uint32{}
 	for _, spec := range builtinSpecs {
@@ -94,7 +96,9 @@ func (c *wasmCompiler) runtime() {
 	c.define(rt.hashInto, c.hashIntoBody)
 	c.defineStrings()
 	c.defineMaps()
-	c.defineFloats()
+	if c.floats {
+		c.defineFloats()
+	}
 	for _, spec := range builtinSpecs {
 		c.define(builtinFuncs[spec.name], func(b *wasmBody) { c.builtinBody(b, spec) })
 	}
@@ -446,10 +450,12 @@ func (c *wasmCompiler) putValueBody(b *wasmBody) {
 		b.I32Const(']')
 		b.Call(c.rt.putByte)
 	})
-	when(tagFloat, func() {
-		b.field(v, 8)
-		b.Call(c.rt.putFloat)
-	})
+	if c.floats {
+		when(tagFloat, func() {
+			b.field(v, 8)
+			b.Call(c.rt.putFloat)
+		})
+	}
 	when(tagData, func() {
 		// #(name a b)
 		c.text(b, "#(")
@@ -752,16 +758,18 @@ func (c *wasmCompiler) equalBody(b *wasmBody) {
 	b.Op(wasm.I32Eq)
 	b.returnIf(no)
 	// Floats: equal as floats, so 0.0 is -0.0 and NaN is nothing.
-	b.LocalGet(ta)
-	b.I32Const(tagFloat)
-	b.Op(wasm.I32Eq)
-	b.returnIf(func() {
-		b.field(a, 8)
-		b.asF64()
-		b.field(bv, 8)
-		b.asF64()
-		b.Op(wasm.F64Eq)
-	})
+	if c.floats {
+		b.LocalGet(ta)
+		b.I32Const(tagFloat)
+		b.Op(wasm.I32Eq)
+		b.returnIf(func() {
+			b.field(a, 8)
+			b.asF64()
+			b.field(bv, 8)
+			b.asF64()
+			b.Op(wasm.F64Eq)
+		})
+	}
 	// Maps: the same count, and each entry of one in the other.
 	b.LocalGet(ta)
 	b.I32Const(tagMap)
@@ -1115,7 +1123,9 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.Call(c.rt.pair)
 		b.Call(c.rt.pair)
 	case "plus", "-", "*":
-		c.floatArithmetic(b, name)
+		if c.floats {
+			c.floatArithmetic(b, name)
+		}
 		sum, i := b.local(i64), b.local(i32)
 		number := func() {
 			b.argAt(i)
@@ -1157,7 +1167,7 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.LocalGet(sum)
 		b.encode()
 	case "/", "mod":
-		if name == "/" {
+		if name == "/" && c.floats {
 			c.floatBinary(b, func() {
 				b.Op(wasm.F64Div)
 				b.asBits()
@@ -1182,10 +1192,12 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		}
 		b.encode()
 	case "<", ">", "<=", ">=":
-		c.floatBinary(b, func() {
-			b.Op(map[string]byte{"<": wasm.F64Lt, ">": wasm.F64Gt, "<=": wasm.F64Le, ">=": wasm.F64Ge}[name])
-			b.boolean()
-		})
+		if c.floats {
+			c.floatBinary(b, func() {
+				b.Op(map[string]byte{"<": wasm.F64Lt, ">": wasm.F64Gt, "<=": wasm.F64Le, ">=": wasm.F64Ge}[name])
+				b.boolean()
+			})
+		}
 		// Encoding keeps integers' order.
 		b.arg(0)
 		b.arg(1)
@@ -1305,6 +1317,13 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 			return
 		}
 		if op, isFloat := floatOps[name]; isFloat {
+			if !c.floats {
+				// The program can't make a float, so the rounding builtins
+				// only ever get integers, which they give back, and float
+				// and sqrt, which make floats, are never called.
+				b.arg(0)
+				return
+			}
 			op(c, b)
 			return
 		}

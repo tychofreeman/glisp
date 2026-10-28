@@ -150,6 +150,32 @@ func TestMathFunctionsAreAccurate(t *testing.T) {
 	}
 }
 
+// A module has the float runtime only if the program can make a float:
+// adding a float to a program without one adds the runtime, and adding one
+// to a program with floats adds almost nothing.
+func TestModulesWithoutFloatsLeaveOutTheirRuntime(t *testing.T) {
+	size := func(program string) int {
+		module, err := CompileWasm(program)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(module)
+	}
+	growth := func(program string) int { return size(program+" 2.5") - size(program) }
+	for _, program := range []string{`(p 1)`, `(p (/ 7 2) (floor 3) (plus 1 2) (< 1 2))`,
+		`(p (map (lambda (x) (* x x)) (list 1 2)) (hash "a") (eq 1 2))`} {
+		if g := growth(program); g < 4000 {
+			t.Errorf("%s: a float adds %d bytes; was the float runtime there already?", program, g)
+		}
+	}
+	for _, program := range []string{`(p 1.5)`, `(p (float 1))`, `(p (sqrt 4))`, `(p (parse_number "1"))`,
+		`(p (quote (a 1.5)))`, `(p (exp 1))`, `(defmacro f (lambda (xs) 2.5)) (p (f))`} {
+		if g := growth(program); g > 100 {
+			t.Errorf("%s: a float adds %d bytes; was the float runtime left out?", program, g)
+		}
+	}
+}
+
 // Floats print as Haskell's show prints a Double.
 func TestFloatsPrintAsHaskellShows(t *testing.T) {
 	for _, c := range []struct {

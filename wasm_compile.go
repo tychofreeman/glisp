@@ -115,6 +115,7 @@ type wasmCompiler struct {
 	closures map[uint32]uint32 // static closure of each table index
 	fnType   uint32            // every glisp function: (self, args, argc) -> value
 	rt       wasmRuntime
+	floats   bool // whether the program can make a float: if not, the module has no float runtime
 }
 
 func compileWasm(run *runState, tokens List, lines Lines) []byte {
@@ -155,11 +156,12 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 		}
 	}
 
-	c := newWasmCompiler(scope)
+	used := usedDefs(stdlibNodes, programNodes)
+	c := newWasmCompiler(scope, makesFloats(append(append([]Node{}, used...), programNodes...)))
 	main := &wasmFunc{c: c, wasmBody: &wasmBody{}}
 	main.scratch = main.local(wasm.I64)
 	main.tmp32 = main.local(wasm.I32)
-	for _, node := range usedDefs(stdlibNodes, programNodes) {
+	for _, node := range used {
 		main.expr(node)
 		main.Op(wasm.Drop)
 	}
@@ -265,10 +267,11 @@ func globalRefs(node Node) []string {
 	return names
 }
 
-func newWasmCompiler(scope *Scope) *wasmCompiler {
+func newWasmCompiler(scope *Scope, floats bool) *wasmCompiler {
 	c := &wasmCompiler{
 		m:        &wasm.Module{},
 		scope:    scope,
+		floats:   floats,
 		data:     make([]byte, staticStart),
 		strings:  map[string]uint32{},
 		symbols:  map[string]uint32{},

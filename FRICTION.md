@@ -1054,3 +1054,12 @@ One entry per PR, written before committing it.
 - `replace_statements` with `function` for `newScope`, `add_declaration`
   for `stdlibExpanded` (it added the `sync` import), `replace_text` for
   the compiler's loop and a parity program. Nothing by hand.
+
+### PR: No float runtime without floats
+
+- `add_parameter` gave `newWasmCompiler` the flag (`true` at its call,
+  replaced in the same batch); `replace_text` for the gates around each
+  float path; `makesFloats` by `replace_text` too (`add_declaration`
+  would have done). The first size test compared different programs
+  and failed on their own code's size; rewritten to add a float to the
+  same program. Nothing by hand.
