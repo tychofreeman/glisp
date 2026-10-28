@@ -166,9 +166,11 @@ digits), an exponent (`e` or `E`, an optional sign and digits), or both:
 `.5` and `1.` are symbols. A float literal is the float nearest to the
 decimal it spells.
 
-**Strings** are any text between double quotes, and may span lines. There are
-no escapes: `\n` in a string is a backslash and an `n`, and a string can't
-contain `"`.
+**Strings** are any text between double quotes, and may span lines. A
+backslash starts an escape: `\"` is a double quote, `\\` a backslash,
+`\n` a newline and `\t` a tab. A backslash before anything else is an
+error. Inside a list, vector or map a string is printed with the same
+escapes, so it reads back as the same string.
 
 **Symbols** are any other run of characters that aren't whitespace,
 parentheses or `"`: `x`, `string_length`, `nil?`, `<=`, `+`, `->`. A run of
@@ -182,7 +184,8 @@ digits too long for 64 bits is a symbol too.
 (p 1.5 -0.25 2e3 1e-3)
 (p "a string
 over two lines")
-(p "no \n escapes")
+(p "a \"quoted\" word" "back\\slash" "two\nlines")
+(p (list "tab\there" "q\""))
 ```
 
 ```output
@@ -190,7 +193,9 @@ over two lines")
 1.5 -0.25 2000.0 1.0e-3
 a string
 over two lines
-no \n escapes
+a "quoted" word back\slash two
+lines
+("tab\there" "q\"")
 => ()
 ```
 

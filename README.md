@@ -450,8 +450,11 @@ In order, one PR each:
   in every module (4.5KB; the module for `(p 1)` went from 17.9KB to
   22.4KB): leave out runtime functions a program can't reach, as the
   stdlib already is.
-- [ ] **String escapes.** `\"`, `\\`, `\n` and `\t` in string literals,
-  so a string can hold a quote; the printer already writes them.
+- [x] **String escapes.** `\"`, `\\`, `\n` and `\t` in string literals,
+  so a string can hold a quote; a backslash before anything else is an
+  error (`line 1: unknown escape \q in a string`). The tokenizer reads
+  them; both printers already wrote them, so a string inside a list
+  prints as it reads back.
 
 Not now, recorded for later: explicit laziness; purity (side effects stay
 allowed anywhere, kept apart by convention); generic operations that

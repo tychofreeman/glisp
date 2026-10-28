@@ -1026,3 +1026,9 @@ One entry per PR, written before committing it.
 - One wasm validation error the type check couldn't see (an f64 left
   outside the block that used it), found by the tests; one
   `replace_text`.
+
+### PR: String escapes
+
+- Test first (the spec's example and parity programs), then the
+  tokenizer: `replace_text` for the branch in `tokenizer.list` and
+  `add_declaration` for `escape`. Nothing by hand.
