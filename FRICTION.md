@@ -927,3 +927,18 @@ One entry per PR, written before committing it.
   shape but empty slices in one where the other had nil. The test now
   compares the tries written out (`shape`); a second batch, which also
   dropped the `reflect` import on its own.
+
+### PR: CHAMP maps in compiled code
+
+- One 22-step batch: the parity programs, the tags, the `tagKinds` rows,
+  the encoder's `i32.popcnt`, the runtime's declarations, dispatch,
+  printing and equality cases, and `hashInto` taking the builtin's name,
+  all by `replace_text`. wasm_maps.go replaced the placeholder of the
+  same name: `create_file` refuses an existing file, so the new one went
+  in as wasm_maps2.go, then `delete_file` the old and `move_file` the new
+  into its place. A `create_file` that replaces, or a `replace_file`,
+  would have been one step.
+- It passed the first time; I checked a 3,000-step program by hand
+  outside the tests too (interpreter and wazero output byte for byte
+  alike), since 700 lines of hand-written trie code passing at once was
+  more than I trusted.

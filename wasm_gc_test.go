@@ -72,7 +72,7 @@ func TestCompiledGarbageIsCollected(t *testing.T) {
 }
 
 func TestEveryTagHasAKind(t *testing.T) {
-	for tag := int32(tagInt); tag <= tagVector; tag++ {
+	for tag := int32(tagInt); tag <= tagMapNode; tag++ {
 		found := false
 		for _, k := range tagKinds {
 			found = found || k.tag == tag

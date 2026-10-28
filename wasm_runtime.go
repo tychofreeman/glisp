@@ -12,7 +12,10 @@ type wasmRuntime struct {
 	putShow, putQuoted, putDescribed                         uint32
 	builtins                                                 map[string]uint32 // table index of each builtin
 	runeCount, runeOffset, newString                         uint32            // string helpers
-	objSize, gcCopy, gcReloc, gc                             uint32            // the garbage collector
+	newNode, nodeSplice, pairNode, nodeGet, nodePut          uint32            // maps
+	nodeRemove, mapPrint, mapPush, mapAllIn                  uint32
+	newMap, mapPut, mapGet, mapRemove                        uint32
+	objSize, gcCopy, gcReloc, gc                             uint32 // the garbage collector
 }
 
 var (
@@ -55,9 +58,10 @@ func (c *wasmCompiler) runtime() {
 	rt.cell = c.declare(sig(vals(i64), i64))
 	rt.equal = c.declare(sig(vals(i64, i64), i32))
 	rt.invoke = c.declare(sig(vals(i64, i32, i32, i32), i64))
-	rt.hashInto = c.declare(sig(vals(i64, i32), i32))
+	rt.hashInto = c.declare(sig(vals(i64, i32, i32), i32))
 	c.declareStrings()
 	c.declareGC()
+	c.declareMaps()
 	builtinFuncs := map[string]uint32{}
 	rt.builtins = map[string]uint32{}
 	for _, spec := range builtinSpecs {
@@ -86,6 +90,7 @@ func (c *wasmCompiler) runtime() {
 	c.define(rt.invoke, c.invokeBody)
 	c.define(rt.hashInto, c.hashIntoBody)
 	c.defineStrings()
+	c.defineMaps()
 	for _, spec := range builtinSpecs {
 		c.define(builtinFuncs[spec.name], func(b *wasmBody) { c.builtinBody(b, spec) })
 	}
@@ -417,6 +422,17 @@ func (c *wasmCompiler) putValueBody(b *wasmBody) {
 		b.Call(c.rt.putStr)
 	})
 	when(tagClosure, func() { c.text(b, "<function>") })
+	when(tagMap, func() {
+		// {k v, k v}
+		b.I32Const('{')
+		b.Call(c.rt.putByte)
+		mapRoot(b, v)
+		b.I32Const(1)
+		b.Call(c.rt.mapPrint)
+		b.Op(wasm.Drop)
+		b.I32Const('}')
+		b.Call(c.rt.putByte)
+	})
 	k := b.local(i32)
 	when(tagVector, func() {
 		// [a b c]
@@ -714,6 +730,20 @@ func (c *wasmCompiler) equalBody(b *wasmBody) {
 	b.I32Const(tagClosure)
 	b.Op(wasm.I32Eq)
 	b.returnIf(no)
+	// Maps: the same count, and each entry of one in the other.
+	b.LocalGet(ta)
+	b.I32Const(tagMap)
+	b.Op(wasm.I32Eq)
+	b.when(func() {
+		mapCountOf(b, a)
+		mapCountOf(b, bv)
+		b.Op(wasm.I32Ne)
+		b.returnIf(no)
+		mapRoot(b, a)
+		mapRoot(b, bv)
+		b.Call(c.rt.mapAllIn)
+		b.Op(wasm.Return)
+	})
 	// Vectors: the same length and equal values.
 	b.LocalGet(ta)
 	b.I32Const(tagVector)
@@ -1185,6 +1215,7 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		offset := fnvOffset // as an i32, its bits
 		b.arg(0)
 		b.I32Const(int32(offset))
+		b.I32Const(int32(c.str("hash")))
 		b.Call(c.rt.hashInto)
 		b.Op(wasm.I64ExtendI32U)
 		b.encode()
@@ -1222,8 +1253,8 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 			op(c, b)
 			return
 		}
-		if uncompiledMapOps[name] {
-			c.fail(b, name+": maps aren't in compiled code yet", nil)
+		if op, isMap := mapOps[name]; isMap {
+			op(c, b)
 			return
 		}
 		c.stringBuiltin(b, name)

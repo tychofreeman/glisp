@@ -39,6 +39,8 @@ const (
 	I64GeS byte = 0x59
 	I64GeU byte = 0x5a
 
+	I32Popcnt byte = 0x69
+
 	I32Add  byte = 0x6a
 	I32Sub  byte = 0x6b
 	I32Mul  byte = 0x6c

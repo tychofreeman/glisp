@@ -48,6 +48,8 @@ const (
 	tagClosure // table index at +4, count at +8, captured cells from +16
 	tagCell    // a captured variable: its value at +8
 	tagVector  // length at +4, values from +8
+	tagMap     // count at +4, root node at +8
+	tagMapNode // bitmaps at +4 and +8, slot count at +12, slots from +16
 )
 
 // The memory layout. Static objects (the four constants, strings, quoted
@@ -89,6 +91,7 @@ const (
 	gToNext             // and where the next copy goes
 	gFromEnd            // and where from-space ends
 	gDelta              // and how far to-space moves when it slides down
+	gMapChanged         // whether the last map update added or removed a key
 	gNames
 )
 
