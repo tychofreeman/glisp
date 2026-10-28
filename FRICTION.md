@@ -858,3 +858,19 @@ One entry per PR, written before committing it.
   `error`. The tour printed exactly what it did before, plus one new line.
 - Nothing structural for glisp source exists in the tools, which only
   parse Go: the `cond` rewrite was text replacement computed outside them.
+
+### PR: compile only the stdlib a program uses
+
+- Measured before deciding (a throwaway benchmark, outside the commit):
+  the plan was to load the stdlib once per process, but the interpreter's
+  load costs 41us; wazero compiling each module (17.6ms for 25KB) was the
+  cost, so the fix became leaving unused stdlib out of the module.
+- One 3-step batch: the test and `usedDefs`/`globalRefs` by
+  `add_declaration`, the call site by `replace_text`.
+- To show the test fails without the change, `replace_statements` with
+  `function` stubbed `usedDefs` to `return stdlib`; the test failed, and
+  `refactor undo` restored it. A quick, clean "does this test test
+  anything" loop.
+- My own mistake outside the tools: timing master against the branch with
+  uncommitted changes, `git stash` and `checkout`, I popped the stash onto
+  master and timed the change twice. Committing first fixed it.
