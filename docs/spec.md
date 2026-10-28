@@ -832,6 +832,37 @@ failed, not a number: x
 glisp: line 15: bind: expected a maybe, an either or a list, got 5
 ```
 
+### Math
+
+| Name | What it is |
+|------|------------|
+| `pi` | the float nearest π |
+| `(exp x)`, `(log x)` | e to the power `x`; the natural logarithm of `x` (`NaN` below 0, `-Infinity` at 0) |
+| `(sin x)`, `(cos x)`, `(tan x)` | the trigonometric functions, of `x` in radians |
+| `(asin x)`, `(acos x)`, `(atan x)` | their inverses (`NaN` outside -1 to 1 for `asin` and `acos`) |
+| `(atan2 y x)` | the angle of the point (x, y), from -π to π |
+| `(expt x y)` | `x` to the power `y`: an integer for integers with `y` at least 0 (wrapping as integer arithmetic does), otherwise a float |
+
+They take integers or floats and, but for `expt` of integers, give floats.
+They are written in glisp in the stdlib, with Go's math package's
+algorithms, so both backends compute the same float. The results are
+within a float or so of the true value; `sin`, `cos` and `tan` lose
+accuracy for arguments beyond about 5×10⁸.
+
+```glisp
+(p pi (exp 1) (log 10) (log 1e-310))
+(p (sin (/ pi 6)) (cos 0) (tan (/ pi 4)) (atan 1) (atan2 1 -1) (acos -1))
+(p (expt 2 10) (expt 2 -1) (expt 2.0 0.5) (expt -8 (/ 1.0 3)) (expt 10 -3))
+(exp 1000)
+```
+
+```output
+3.141592653589793 2.718281828459045 2.302585092994046 -713.8013788281542
+0.49999999999999994 1.0 1.0 0.7853981633974483 2.356194490192345 3.141592653589793
+1024 0.5 1.4142135623730951 NaN 1.0e-3
+=> Infinity
+```
+
 ## 8. Builtin functions
 
 Builtins check their arguments before they run: the number, and the type of
