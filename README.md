@@ -467,6 +467,14 @@ In order, one PR each:
   `cos` and `tan` beyond 2^29 (Payne-Hanek), which needs bit operations
   glisp lacks, so those lose accuracy there. Internally `frexp` and
   `ldexp` are glisp loops over powers of two.
+- [x] **The stdlib, expanded once.** Every run expanded the whole stdlib
+  again, its macros included: 41µs once, 1.2ms after `deftype`,
+  `match` and `do`, 2.1ms with the math functions. Now it is expanded
+  once (`stdlibExpanded`), in a scope of its own; a run copies in its
+  macros and evaluates its nodes, and the compiler resolves the same
+  nodes: 26µs a run, and the tests 31s to 24s. The macros are closures
+  over the stdlib's scope, so a program that defines `let_expand` or
+  `fold` no longer changes what `let` or `match` do.
 - [ ] **Floats, later.** The float runtime, with its bignums, is
   in every module (4.5KB; the module for `(p 1)` went from 17.9KB to
   22.4KB): leave out runtime functions a program can't reach, as the

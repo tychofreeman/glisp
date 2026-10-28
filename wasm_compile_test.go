@@ -311,6 +311,7 @@ var wasmPrograms = []string{
 	`(do (5 <- (just 1)) (just 2))`,
 	`(do (x <- (just 1) 2) (just x))`,
 	`(do (x <- 7) (just x))`,
+	`(defn let_expand (a b) 5) (defn fold (a b c) 6) (let (x 1) (match (list x) ((list y) (plus x y))))`,
 	`1.5`,
 	`-0.0`,
 	`(p 0.1 1.0 100.0 1234567.0 12345678.0 0.01 1e21 5e-324 1.7976931348623157e308 -2.5e-7)`,
