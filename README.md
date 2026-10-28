@@ -19,7 +19,7 @@ compiles the program to a WebAssembly module instead, which runs in any
 WASI runtime (including Node's `node:wasi`) and prints the same output.
 
 Special forms: `quote if lambda def defmacro`. Builtins: `car cdr atom cons
-eq apply p`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
+eq apply p error`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
 predicates `number? string? symbol? list? function? boolean? nil?`, and
 strings `str string_length substring chars string< symbol parse_number`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
@@ -113,6 +113,10 @@ every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
   true, `(or)` false); `(cond (test body...) ... (else body...))` gives the
   first clause whose test is true, or nil. All but `not` are macros that
   expand to `if`, so a call in a clause's body stays a tail call.
+- [x] `(error x ...)` fails with its arguments joined as `str` joins them,
+  reported like any error: `glisp: line 2: negative: -2`, the line of the
+  `error` call. (The interpreter drops trailing spaces from an error
+  message; compiled code keeps them.)
 
 ### Design
 

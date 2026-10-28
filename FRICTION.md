@@ -839,3 +839,11 @@ One entry per PR, written before committing it.
   parity programs) by `add_declaration` and `replace_text`. One batch of
   three steps, which passed first time.
 - Read stdlib.glisp with Read: `inspect` reads Go only.
+
+### PR: `error`
+
+- One 5-step batch, tests first: `add_declaration` for the test and for
+  `raise`, `replace_text` for the spec row, the wasm case and the parity
+  programs. The only failure was my test's expected line (3, where the
+  call to `check` is; the error is reported at 2, the `error` call inside
+  it, as documented), fixed with one `replace_text`.

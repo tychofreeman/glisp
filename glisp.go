@@ -169,6 +169,11 @@ func printValues(scope *Scope, params List) interface{} {
 	return List{}
 }
 
+// raise is (error x ...): it fails with its arguments as str joins them.
+func raise(scope *Scope, args List) interface{} {
+	panic(showJoined(scope, args).(string))
+}
+
 var builtins = builtinTable()
 
 //go:embed stdlib.glisp

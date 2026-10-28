@@ -132,6 +132,7 @@ var builtinSpecs = append([]builtin{
 	{"eq", arity{2, 2}, nil, eq},
 	{"apply", arity{2, -1}, []kind{functionKind, anyKind}, apply},
 	{"p", arity{0, -1}, nil, printValues},
+	{"error", arity{1, -1}, nil, raise},
 	{"str", arity{0, -1}, nil, showJoined},
 	{"string_length", arity{1, 1}, oneString, stringLength},
 	{"substring", arity{3, 3}, []kind{stringKind, numberKind, numberKind}, substring},

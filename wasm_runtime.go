@@ -1096,6 +1096,20 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 		b.Call(c.rt.invoke)
 		b.LocalGet(start)
 		b.GlobalSet(gSP)
+	case "error":
+		i := b.local(i32)
+		b.Call(c.rt.failBegin)
+		b.until(func() {
+			b.LocalGet(i)
+			b.LocalGet(argc)
+			b.Op(wasm.I32GeU)
+		}, func() {
+			b.argAt(i)
+			b.Call(c.rt.putShow)
+			b.incr(i)
+		})
+		b.Call(c.rt.failEnd)
+		b.Op(wasm.Unreachable)
 	case "p":
 		i := b.local(i32)
 		b.until(func() {
