@@ -513,6 +513,21 @@ In order, one PR each:
   to programs with and without floats and checks what it costs. Left
   for later: the same for other parts of the runtime a program can't
   reach (maps, vectors, data), in general by reachability.
+- [x] **Only the runtime a program reaches.** Two parts. In general,
+  `wasm.Module.Prune` removes every function no export calls, directly
+  or through others, nor a live table entry: it reads the calls out of
+  each body (`renumberCalls`, which knows every instruction `Code`
+  writes, and a test holds it to that) and renumbers them. A builtin's
+  table entry is live once the compiler has made its closure, which only
+  naming it does; a dead entry points at one function that traps, so
+  the table keeps its indices. Then for what a call graph can't see,
+  since printing, equality and hashing dispatch on the tag: `makes`
+  (was `makesFloats`) finds which optional types the code can make
+  (`makers`: floats, maps from `hash_map`, vectors, data), and the
+  dispatch leaves out the branches for the others. The module for
+  `(p 1)` went from 19.3KB to 8.6KB; using a map adds 3.5KB, a float
+  1.6KB, `(exp 1)` 29KB (was 48KB in all). A test checks that each kind
+  costs its runtime only when used.
 - [x] **String escapes.** `\"`, `\\`, `\n` and `\t` in string literals,
   so a string can hold a quote; a backslash before anything else is an
   error (`line 1: unknown escape \q in a string`). The tokenizer reads

@@ -344,7 +344,7 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 			b.I32Const('9')
 			b.Op(wasm.I32GtU, wasm.I32Or)
 			b.returnIf(func() {
-				if !c.floats { // parse_number isn't called
+				if !c.made["float"] { // parse_number isn't called
 					b.I64Const(addrNil)
 					return
 				}

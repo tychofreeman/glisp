@@ -2,7 +2,6 @@ package glisp
 
 import (
 	"math"
-	"slices"
 
 	"github.com/tychofreeman/glisp/wasm"
 )
@@ -20,46 +19,63 @@ const (
 	scratchSize = 5*bnSize + 24
 )
 
-// floatMakers are the builtins that make a float from what isn't one;
-// arithmetic gives a float only from a float.
-var floatMakers = map[string]bool{"float": true, "sqrt": true, "parse_number": true}
+// makers are the builtins that make a value of an optional type from values
+// of other types: arithmetic gives a float only from a float, and map_put a
+// map only from a map. A builtin is only reached by its name.
+var makers = map[string]string{
+	"float": "float", "sqrt": "float", "parse_number": "float",
+	"hash_map": "map", "vector": "vector", "data": "data",
+}
 
-// makesFloats reports whether the code in nodes can make a float: whether it
-// has a float literal or quoted float, or names a builtin that makes one. A
-// builtin is only reached by its name, so a module whose code can't make a
-// float never has one, and leaves the float runtime out.
-func makesFloats(nodes []Node) bool {
-	var datum func(d interface{}) bool
-	datum = func(d interface{}) bool {
+// makes is the optional types the code in nodes can make: those of its
+// literals and quoted data, and of the makers it names. A module whose code
+// can't make a type never has a value of it, and leaves out the runtime
+// that handles one.
+func makes(nodes []Node) map[string]bool {
+	made := map[string]bool{}
+	var datum func(d interface{})
+	datum = func(d interface{}) {
 		switch d := d.(type) {
 		case float64:
-			return true
+			made["float"] = true
 		case List:
-			return slices.ContainsFunc(d, datum)
+			for _, x := range d {
+				datum(x)
+			}
 		}
-		return false
 	}
-	var node func(n Node) bool
-	node = func(n Node) bool {
+	var node func(n Node)
+	node = func(n Node) {
 		switch n := n.(type) {
 		case Const:
-			return datum(n.Value)
+			datum(n.Value)
 		case Quote:
-			return datum(n.Datum)
+			datum(n.Datum)
 		case Ref:
-			return floatMakers[n.Name]
+			if typ, found := makers[n.Name]; found {
+				made[typ] = true
+			}
 		case If:
-			return node(n.Cond) || node(n.Then) || node(n.Else)
+			node(n.Cond)
+			node(n.Then)
+			node(n.Else)
 		case Lambda:
-			return slices.ContainsFunc(n.Body, node)
+			for _, x := range n.Body {
+				node(x)
+			}
 		case Def:
-			return node(n.Value)
+			node(n.Value)
 		case Apply:
-			return node(n.Fn) || slices.ContainsFunc(n.Args, node)
+			node(n.Fn)
+			for _, x := range n.Args {
+				node(x)
+			}
 		}
-		return false
 	}
-	return slices.ContainsFunc(nodes, node)
+	for _, n := range nodes {
+		node(n)
+	}
+	return made
 }
 
 func (c *wasmCompiler) declareFloats() {

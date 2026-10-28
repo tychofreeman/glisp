@@ -164,7 +164,7 @@ func TestModulesWithoutFloatsLeaveOutTheirRuntime(t *testing.T) {
 	growth := func(program string) int { return size(program+" 2.5") - size(program) }
 	for _, program := range []string{`(p 1)`, `(p (/ 7 2) (floor 3) (plus 1 2) (< 1 2))`,
 		`(p (map (lambda (x) (* x x)) (list 1 2)) (hash "a") (eq 1 2))`} {
-		if g := growth(program); g < 4000 {
+		if g := growth(program); g < 1000 {
 			t.Errorf("%s: a float adds %d bytes; was the float runtime there already?", program, g)
 		}
 	}
