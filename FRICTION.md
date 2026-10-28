@@ -1072,3 +1072,20 @@ One entry per PR, written before committing it.
 
 - `go get` for go.mod and go.sum (the Go tool owns them); this entry by
   `replace_text`. Nothing by hand.
+
+### PR: Transients inside hash_map
+
+- The owner threaded through by `add_parameter` (`o *owner` on
+  `champNode.put`, `pairNode` and `Map.put`; `own bool` on `inserted`,
+  `replaced` and `removed`, all passing `nil` or `false`), then
+  `add_field` for `champNode.owner` and `add_declaration` for `owner` and
+  `with`. `add_field` refuses while an unkeyed literal of the struct
+  would no longer list every field, so the three in `remove` got `, nil`
+  by `replace_text` first: an operation that keys a struct's literals
+  (or adds the field's value to unkeyed ones) would have done it. The
+  batch put the refactorings before those edits, since a refactoring
+  needs code that type-checks. `champNode.put`'s body by
+  `replace_statements` with `function`: every node it made went through
+  the new `with`, which no `fold` could reach (the receiver is not in
+  the literal). The wasm side by `replace_statements` (`compileMap`) and
+  `replace_text`. Nothing by hand.

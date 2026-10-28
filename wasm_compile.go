@@ -95,6 +95,7 @@ const (
 	gFromEnd            // and where from-space ends
 	gDelta              // and how far to-space moves when it slides down
 	gMapChanged         // whether the last map update added or removed a key
+	gOwned              // nodes at or above it are hash_map's to change in place
 	gScratch            // where printing a float keeps its bignums
 	gNames
 )
@@ -306,6 +307,7 @@ func (c *wasmCompiler) finish() []byte {
 	c.m.Globals[gStackBase].Init = int64(stack)
 	c.m.Globals[gHeapStart].Init = int64(heap)
 	c.m.Globals[gGCNext].Init = int64(heap + gcThreshold)
+	c.m.Globals[gOwned].Init = -1
 	c.defineGC()
 	c.m.MemoryPages = uint32(heap/65536 + 1)
 	c.m.DataAt = 8

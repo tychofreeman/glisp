@@ -36,7 +36,9 @@ func hashInto(fn string, h *uint32, v interface{}) {
 	}
 	text := func(tag byte, s string) {
 		put(tag)
-		put(binary.LittleEndian.AppendUint32(nil, uint32(len(s)))...)
+		var n [4]byte
+		binary.LittleEndian.PutUint32(n[:], uint32(len(s)))
+		put(n[:]...)
 		put([]byte(s)...)
 	}
 	switch v := v.(type) {
