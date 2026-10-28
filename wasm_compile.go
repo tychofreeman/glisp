@@ -202,13 +202,14 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 
 // usedDefs returns the stdlib forms a program needs: all but the definitions
 // of names that nothing it runs refers to, directly or through another
-// definition. Macro helpers, needed only while expanding, stay out of the
-// module.
+// definition (every definition of the name: a generic operation has one
+// per instance). Macro helpers, needed only while expanding, stay out of
+// the module.
 func usedDefs(stdlib, program []Node) []Node {
-	defs := map[string]Node{}
+	defs := map[string][]Node{}
 	for _, node := range stdlib {
 		if def, isDef := node.(Def); isDef {
-			defs[def.Name] = def.Value
+			defs[def.Name] = append(defs[def.Name], def.Value)
 		}
 	}
 	used := map[string]bool{}
@@ -217,7 +218,7 @@ func usedDefs(stdlib, program []Node) []Node {
 		for _, name := range names {
 			if !used[name] {
 				used[name] = true
-				if value, found := defs[name]; found {
+				for _, value := range defs[name] {
 					use(globalRefs(value))
 				}
 			}

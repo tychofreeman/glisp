@@ -1104,3 +1104,16 @@ One entry per PR, written before committing it.
   first pass renumbered imports as if they were defined functions; the
   unit test didn't call an import, so the compiled programs found it.
   Nothing by hand.
+
+### PR: Generic operations
+
+- The operations are glisp, in stdlib.glisp, one `replace_text`; so
+  were the spec section and README. `usedDefs` assumed one definition
+  a name, which instances break: two `replace_text` steps (the map's
+  type and the loop over a name's definitions); `change_type` or a
+  `change_field_type` for a local's type would have done the first.
+  A wasm parity program found it (the interpreter has no `usedDefs`).
+  The spec example first ended in `(fmap inc "abc")`, which both
+  backends report at line 7, the last line a call ran on, not 14: a
+  line is never restored when a call returns (a roadmap item now).
+  Nothing by hand.

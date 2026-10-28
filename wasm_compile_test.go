@@ -345,6 +345,7 @@ var wasmPrograms = []string{
 	`(defn fill (m n) (if (eq n 0) m (fill (map_put m n (* n n)) (- n 1)))) (defn drain (m n) (if (eq n 0) m (drain (map_remove m n) (- n 2)))) (def m (drain (fill (hash_map) 2000) 2000)) (p (map_count m) (map_get m 1999) (map_get m 1998) (eq m (fill (hash_map) 0)))`,
 	`(defn evens (m n) (if (eq n 0) m (evens (map_put m (* 2 n) n) (- n 1)))) (eq (evens (hash_map) 500) (apply map (map_to_list (evens (hash_map) 500))))`,
 	`(defn pairs (n x acc) (if (eq n 0) acc (let (y (mod (plus (* x 25173) 13849) 65536)) (pairs (- n 1) y (cons (mod y 300) (cons n acc)))))) (def m (apply hash_map (pairs 3000 7 nil))) (def m2 (map_put m 5 (quote x))) (p (map_count m) (map_to_list m)) (p (map_get m 5) (map_get m2 5)) (eq m (apply hash_map (pairs 3000 7 nil)))`,
+	`(deftype point (pt x y)) (definstance show ((x point?)) (str "<" (pt_x x) " " (pt_y x) ">")) (defgeneric size (x) x) (definstance size ((x list?)) (length x)) (p (fmap (lambda (x) (* x 2)) (list 1 2)) (fmap car (vector (list 1))) (fmap (lambda (x) x) (hash_map 1 2)) (fmap (lambda (x) 0) (just 1))) (p (show (list (pt 1 2) "s" (vector (pt 3 4)) (hash_map (quote k) (pt 5 6))))) (p (compare (list 1 (vector "a")) (list 1 (vector "b"))) (compare (nothing) (just 1)) (compare (pt 1 2) (pt 1 1)) (size (list 1 2))) (size 7)`,
 	`((lambda args args) 1 2)`,
 	`((lambda args args))`,
 	`((lambda (a . rest) (cons a rest)) 1 2 3)`,

@@ -533,11 +533,30 @@ In order, one PR each:
   error (`line 1: unknown escape \q in a string`). The tokenizer reads
   them; both printers already wrote them, so a string inside a list
   prints as it reads back.
+- [x] **Generic operations.** Typeclasses without types, in glisp
+  itself: `(defgeneric name (param ...) on)` defines a function that
+  fails for any value, and `(definstance name (param ... (p type?) ...)
+  body ...)` redefines it to run its body when `(type? p)` holds, and
+  the definition before it otherwise; a later instance is tried first,
+  so a program extends or overrides the stdlib's. The stdlib has `fmap`
+  (lists, vectors, map values, maybe, either), `show` (as `p` prints,
+  but through `show` for the values inside containers, so a program's
+  instance for its type shows inside a list) and `compare` (a total
+  order within a type, `nothing` before `just`), with `data_fields`.
+  Dispatch is a chain of predicate tests, one per instance, newest
+  first. The compiler's `usedDefs` kept only the last definition of a
+  name, so it missed what earlier instances refer to; it now follows
+  every definition.
+- [ ] **An error's line, restored after a call.** Both backends set the
+  line at each call with one and never put it back when the call
+  returns, so code without lines (the stdlib's) that fails after a call
+  reports the line of whatever ran last: `(fmap inc "abc")` after a
+  program's own `show` instance reports that instance's line, not the
+  `fmap` call's. Saving the line around a call (in `Eval`, and in
+  `invoke` and the tail-call protocol in wasm) would fix it.
 
 Not now, recorded for later: explicit laziness; purity (side effects stay
-allowed anywhere, kept apart by convention); generic operations that
-dispatch on a value's type, like typeclasses without types (`fmap`,
-`show`); automatic currying, which conflicts with functions of any number
+allowed anywhere, kept apart by convention); automatic currying, which conflicts with functions of any number
 of arguments (`partial` instead); integers of any size; static types.
 
 ### Interop with Go

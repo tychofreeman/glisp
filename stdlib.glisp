@@ -259,6 +259,78 @@
                 (list (quote lambda) (quote (_)) (do_expand (cdr steps)))))))
 (defmacro do (lambda (steps) (do_expand steps)))
 
+; Generic operations: functions with an instance for each type of value
+; they take, typeclasses without types. (defgeneric name (param ...) on)
+; defines name to fail for any value of on; (definstance name (param ...)
+; body ...), with one parameter written (p type?), adds the instance for
+; the values for which (type? p) holds. A later instance is tried first,
+; so a program can add instances for its own types, or replace these.
+(defmacro defgeneric (lambda (xs)
+  (list (quote defn) (car xs) (car (cdr xs))
+    (list (quote error) (str (car xs) ": no instance for ") (list (quote show) (car (cdr (cdr xs))))))))
+(defn definstance_param (p) (if (cons? p) (car p) p))
+(defn definstance_test (name params)
+  (cond ((empty? params) (error "definstance: expected a parameter (name type?) for " name))
+        ((cons? (car params)) (list (car (cdr (car params))) (car (car params))))
+        (else (definstance_test name (cdr params)))))
+(defn definstance_expand (xs)
+  (let (name (car xs) params (car (cdr xs)) plain (map definstance_param params))
+    (list (quote def) name
+      (list (quote let) (list (quote definstance_next) name)
+        (list (quote lambda) plain
+          (list (quote if) (definstance_test name params)
+            (cons (quote begin) (cdr (cdr xs)))
+            (cons (quote definstance_next) plain)))))))
+(defmacro definstance (lambda (xs) (definstance_expand xs)))
+
+; (data_fields d) is the fields of d, as a list.
+(defn data_fields (d) (data_fields_from d 0))
+(defn data_fields_from (d i)
+  (if (eq i (data_length d)) (quote ()) (cons (data_ref d i) (data_fields_from d (plus i 1)))))
+
+; (fmap f x) applies f to each value x holds: the elements of a list or a
+; vector, the values of a map, the value of a just or a right.
+(defgeneric fmap (f x) x)
+(definstance fmap (f (x list?)) (map f x))
+(definstance fmap (f (x vector?)) (apply vector (map f (vector_to_list x))))
+(definstance fmap (f (x map?))
+  (apply hash_map (fold (lambda (acc kv) (cons (car kv) (cons (f (car (cdr kv))) acc)))
+                        (quote ()) (map_to_list x))))
+(definstance fmap (f (x maybe?)) (match x ((just v) (just (f v))) ((nothing) x)))
+(definstance fmap (f (x either?)) (match x ((right v) (right (f v))) ((left _) x)))
+
+; (show x) is x written as a string, as p prints it, but through show's
+; instances for the values inside lists, vectors, maps and data.
+(defn show_join (sep xs)
+  (if (empty? xs) "" (fold (lambda (acc x) (str acc sep x)) (car xs) (cdr xs))))
+(defn show (x)
+  (let (s (str (list x))) (substring s 1 (- (string_length s) 1))))
+(definstance show ((x cons?)) (str "(" (show_join " " (map show x)) ")"))
+(definstance show ((x vector?)) (str "[" (show_join " " (map show (vector_to_list x))) "]"))
+(definstance show ((x map?))
+  (str "{" (show_join ", " (map (lambda (kv) (str (show (car kv)) " " (show (car (cdr kv))))) (map_to_list x))) "}"))
+(definstance show ((x data?)) (str "#(" (show_join " " (cons (show (data_name x)) (map show (data_fields x)))) ")"))
+
+; (compare a b) is -1, 0 or 1 as a sorts before, with or after b, two
+; values of one type: numbers by value, strings and symbols by their
+; characters, false before true, lists, vectors and data element by
+; element (data by constructor name first, but nothing before just).
+(defgeneric compare (a b) a)
+(defn compare_by (less a b) (cond ((less a b) -1) ((less b a) 1) (else 0)))
+(defn compare_lists (a b)
+  (cond ((empty? a) (if (empty? b) 0 -1))
+        ((empty? b) 1)
+        (else (let (c (compare (car a) (car b))) (if (eq c 0) (compare_lists (cdr a) (cdr b)) c)))))
+(definstance compare ((a number?) b) (compare_by < a b))
+(definstance compare ((a string?) b) (compare_by string< a b))
+(definstance compare ((a symbol?) b) (compare_by string< (str a) (str b)))
+(definstance compare ((a boolean?) b) (compare (if a 1 0) (if b 1 0)))
+(definstance compare ((a list?) b) (compare_lists a b))
+(definstance compare ((a vector?) b) (compare_lists (vector_to_list a) (vector_to_list b)))
+(definstance compare ((a data?) b) (compare_lists (cons (data_name a) (data_fields a)) (cons (data_name b) (data_fields b))))
+(definstance compare ((a maybe?) b)
+  (compare_lists (cons (just? a) (data_fields a)) (cons (just? b) (data_fields b))))
+
 ; Math functions, on floats (an integer argument is taken as a float).
 ; They are Go's math package's algorithms (from Cephes and FreeBSD's msun),
 ; written with the arithmetic builtins, so both backends compute the same
