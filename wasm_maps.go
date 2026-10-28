@@ -128,6 +128,15 @@ func setChanged(b *wasmBody, changed int32) {
 	b.GlobalSet(gMapChanged)
 }
 
+// owned leaves whether the node at local p is the current build's own,
+// which it may change in place: made since the build began, at or above
+// gOwned. No collection runs during a build, so nothing moves meanwhile.
+func owned(b *wasmBody, p uint32) {
+	b.LocalGet(p)
+	b.GlobalGet(gOwned)
+	b.Op(wasm.I32GeU)
+}
+
 // newNode(dataMap, nodeMap, n) is a new node with n slots, not yet set.
 func (c *wasmCompiler) newNodeBody(b *wasmBody) {
 	dm, nm, n, p := b.param(0), b.param(1), b.param(2), b.local(i32)
@@ -369,12 +378,19 @@ func (c *wasmCompiler) nodePutBody(b *wasmBody) {
 		b.LocalGet(key)
 		b.Call(c.rt.equal)
 	}
-	// replaceValue returns p with the value at slot i+1 replaced.
+	// replaceValue returns p with the value at slot i+1 replaced: p itself
+	// if the build owns it.
 	replaceValue := func(dataMap, nodeMap func()) {
-		splice(dataMap, nodeMap, at(b, i, 1), constant(b, 1), at(b, i, 1), constant(b, 1))
-		storeSlot(b, q, at(b, i, 1), loc(value))
 		setChanged(b, 0)
-		b.LocalGet(q)
+		owned(b, p)
+		b.ifElse(wasm.BlockI32, func() {
+			storeSlot(b, p, at(b, i, 1), loc(value))
+			b.LocalGet(p)
+		}, func() {
+			splice(dataMap, nodeMap, at(b, i, 1), constant(b, 1), at(b, i, 1), constant(b, 1))
+			storeSlot(b, q, at(b, i, 1), loc(value))
+			b.LocalGet(q)
+		})
 	}
 	b.LocalGet(s)
 	b.I32Const(32)
@@ -463,11 +479,17 @@ func (c *wasmCompiler) nodePutBody(b *wasmBody) {
 		b.LocalGet(name)
 		b.Call(c.rt.nodePut)
 		b.LocalSet(n)
-		splice(loc(dm), loc(nm), loc(i), constant(b, 1), loc(i), constant(b, 1))
-		storeSlot(b, q, loc(i), func() {
+		child := func() {
 			b.LocalGet(n)
 			b.Op(wasm.I64ExtendI32U)
+		}
+		owned(b, p)
+		b.returnIf(func() {
+			storeSlot(b, p, loc(i), child)
+			b.LocalGet(p)
 		})
+		splice(loc(dm), loc(nm), loc(i), constant(b, 1), loc(i), constant(b, 1))
+		storeSlot(b, q, loc(i), child)
 		b.LocalGet(q)
 	})
 	// A new key in an empty slot.
@@ -825,10 +847,11 @@ func (c *wasmCompiler) nameOf(b *wasmBody, name string) {
 	b.I32Const(int32(c.str(name)))
 }
 
-// (hash_map k v ...): the empty map, with each pair put in turn.
+// (hash_map k v ...): the empty map, with each pair put in turn, changing
+// the nodes the build itself made in place.
 func (c *wasmCompiler) compileMap(b *wasmBody) {
 	argc := b.param(paramArgc)
-	m, i := b.local(i64), b.local(i32)
+	root, count, i, key, value, name := b.local(i32), b.local(i32), b.local(i32), b.local(i64), b.local(i64), b.local(i32)
 	b.LocalGet(argc)
 	b.I32Const(1)
 	b.Op(wasm.I32And)
@@ -843,30 +866,48 @@ func (c *wasmCompiler) compileMap(b *wasmBody) {
 			c.text(b, " arguments")
 		})
 	})
-	b.I32Const(0)
+	c.nameOf(b, "hash_map")
+	b.LocalSet(name)
+	// The nodes from here on are this build's own, to change in place.
+	b.GlobalGet(gHP)
+	b.GlobalSet(gOwned)
 	b.I32Const(0)
 	b.I32Const(0)
 	b.I32Const(0)
 	b.Call(c.rt.newNode)
-	b.Call(c.rt.newMap)
-	b.LocalSet(m)
+	b.LocalSet(root)
 	eachSlot(b, i, constant(b, 0), argc, 2, func() {
-		b.LocalGet(m)
 		b.argAt(i)
+		b.LocalSet(key)
 		b.LocalGet(i)
 		b.I32Const(1)
 		b.Op(wasm.I32Add)
 		b.LocalSet(i)
 		b.argAt(i)
+		b.LocalSet(value)
 		b.LocalGet(i)
 		b.I32Const(1)
 		b.Op(wasm.I32Sub)
 		b.LocalSet(i)
-		c.nameOf(b, "hash_map")
-		b.Call(c.rt.mapPut)
-		b.LocalSet(m)
+		b.LocalGet(root)
+		b.LocalGet(key)
+		b.LocalGet(value)
+		c.hashKey(b, key, name)
+		b.I32Const(0)
+		b.LocalGet(name)
+		b.Call(c.rt.nodePut)
+		b.LocalSet(root)
+		b.LocalGet(count)
+		b.GlobalGet(gMapChanged)
+		b.Op(wasm.I32Add)
+		b.LocalSet(count)
 	})
-	b.LocalGet(m)
+	// Then the map is frozen: no node is anyone's.
+	b.I32Const(-1)
+	b.GlobalSet(gOwned)
+	b.LocalGet(count)
+	b.LocalGet(root)
+	b.Call(c.rt.newMap)
 }
 
 func (c *wasmCompiler) compileMapGet(b *wasmBody) {

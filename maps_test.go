@@ -52,7 +52,7 @@ func TestMapsAgreeWithGoMaps(t *testing.T) {
 			delete(want, k)
 		} else {
 			v := int64(r.Intn(1000))
-			m = m.put("test", k, v)
+			m = m.put("test", k, v, nil)
 			want[k] = v
 		}
 		if m.count != len(want) {
@@ -75,9 +75,9 @@ func TestMapsAgreeWithGoMaps(t *testing.T) {
 func TestMapsHaveOneShape(t *testing.T) {
 	all, odd := Map{}, Map{}
 	for k := int64(0); k < 1000; k++ {
-		all = all.put("test", k, k)
+		all = all.put("test", k, k, nil)
 		if k%2 == 1 {
-			odd = odd.put("test", k, k)
+			odd = odd.put("test", k, k, nil)
 		}
 	}
 	for k := int64(0); k < 1000; k += 2 {
@@ -89,6 +89,79 @@ func TestMapsHaveOneShape(t *testing.T) {
 	if Write(all) != Write(odd) {
 		t.Error("equal maps print differently")
 	}
+}
+
+// hash_map builds its map in place: it edits the nodes it has made itself
+// rather than copying the path to each, and makes the trie that map_put
+// after map_put would.
+func TestHashMapBuildsInPlace(t *testing.T) {
+	var args List
+	m := Map{}
+	for i := int64(0); i < 1000; i++ {
+		k := i * 7919 % 1000
+		args = append(args, k, i)
+		m = m.put("test", k, i, nil)
+	}
+	built := makeMap(nil, args).(Map)
+	AssertThat(t, shape(built.root), Equals(shape(m.root)))
+	AssertThat(t, Write(built), Equals(Write(m)))
+	if allocs := testing.AllocsPerRun(5, func() { makeMap(nil, args) }); allocs > 3000 {
+		t.Errorf("hash_map of 1000 pairs made %v allocations, want at most 3000", allocs)
+	}
+}
+
+// Building a map of n keys, and counting words, against Go's own map: how
+// far the persistent map is from a mutable one.
+func BenchmarkMaps(b *testing.B) {
+	const n = 10000
+	var args List
+	for i := int64(0); i < n; i++ {
+		args = append(args, i*7919%n, i)
+	}
+	r := rand.New(rand.NewSource(1))
+	words := make([]interface{}, 50000)
+	for i := range words {
+		words[i] = fmt.Sprintf("w%d", r.Intn(2000))
+	}
+	b.Run("build/go", func(b *testing.B) {
+		for range b.N {
+			m := map[int64]interface{}{}
+			for i := 0; i < len(args); i += 2 {
+				m[args[i].(int64)] = args[i+1]
+			}
+		}
+	})
+	b.Run("build/hash_map", func(b *testing.B) {
+		for range b.N {
+			makeMap(nil, args)
+		}
+	})
+	b.Run("build/map_put", func(b *testing.B) {
+		for range b.N {
+			m := Map{}
+			for i := 0; i < len(args); i += 2 {
+				m = m.put("map_put", args[i], args[i+1], nil)
+			}
+		}
+	})
+	b.Run("words/go", func(b *testing.B) {
+		for range b.N {
+			m := map[string]int64{}
+			for _, w := range words {
+				m[w.(string)]++
+			}
+		}
+	})
+	b.Run("words/map_put", func(b *testing.B) {
+		for range b.N {
+			m := Map{}
+			for _, w := range words {
+				c, _ := m.get("map_get", w)
+				k, _ := c.(int64)
+				m = m.put("map_put", w, k+1, nil)
+			}
+		}
+	})
 }
 
 // shape is n's trie written out: each node's bitmaps and keys, then its
@@ -108,7 +181,7 @@ func shape(n *champNode) string {
 func TestMapsKeepCollidingKeys(t *testing.T) {
 	root := &champNode{}
 	for k := int64(0); k < 5; k++ {
-		root, _ = root.put(mapEntry{k, k * 10, 42}, 0)
+		root, _ = root.put(mapEntry{k, k * 10, 42}, 0, nil)
 	}
 	for k := int64(0); k < 5; k++ {
 		if v, found := root.get(k, 42, 0); !found || v != k*10 {

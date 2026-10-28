@@ -307,10 +307,36 @@ be fast to build without giving that up.
   so a map has the same shape and prints the same in both backends: a
   parity program puts and removes 3,000 pseudo-random keys and prints
   the result, and another builds 2,000 entries and removes half.
-- [ ] **Transients inside.** `hash_map` and other bulk builds mutate nodes
-  they made themselves, then freeze the result; no program sees the
-  steps. Then measure against a mutable Go map, building and updating
-  (a word count), to see where the gap is.
+- [x] **Transients inside.** `hash_map` changes in place the nodes it made
+  itself, then freezes the result; no program sees the steps, and the
+  trie is the one `map_put` after `map_put` makes (a test compares their
+  shapes). In the interpreter a node carries its `owner` (the builder),
+  and an owned node's slices are edited in place (`slices.Insert`); a
+  node a builder takes over gets its own copies first, so nothing it
+  shares with a frozen map changes. In wasm, where no collection runs
+  inside a builtin, owned is an address: a node at or above `gOwned`,
+  the heap's end when the build began, is the build's own; a value
+  replaced or a subtrie changed is stored in place, and the map object
+  is made once, at the end. Measured (`BenchmarkMaps`, 10,000 integer
+  keys; 50,000 words from 2,000):
+
+  | | Go `map` | `hash_map` | `map_put` each |
+  |---|---|---|---|
+  | build, interpreter | 1.0 ms | 2.3 ms (was 10; 1.6 allocations a key, was 6.9) | 10.0 ms |
+  | word count, interpreter | 1.2 ms | | 41 ms (was 58) |
+  | build ×50, compiled (wazero) | | 0.48 s (was 0.84) | 0.94 s |
+
+  Where the gap is: a word count updates one key at a time, so it copies
+  the path to it on every update (3 nodes, each with its slice), and
+  hashed the key twice, for `map_get` and `map_put`; hashing a string no
+  longer allocates (a third of the word count's allocations). What is
+  left is the path copying itself, which only an explicit transient
+  removes. Interpreted programs that build long lists pay more than any
+  map: see the next item.
+- [ ] **Lists that share, in the interpreter.** A `List` is a Go slice, so
+  `cons` copies the whole list: building a 50,000-word list with `cons`
+  took 26 s of a word count whose map updates take 41 ms. A pair type
+  (car, cdr), as wasm has, makes `cons` constant time.
 - [ ] **Explicit transients, later (the door left open).** If
   write-heavy programs need it, Clojure's model: a transient taken
   from a map, updated in place by its one owner, and frozen back into
