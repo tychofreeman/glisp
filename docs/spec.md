@@ -659,6 +659,8 @@ false true 7 5 false
 | `(identity x)` | `x` |
 | `(compose f g ...)` | the function that applies the last of its arguments first: `((compose f g) x)` is `(f (g x))` |
 | `(partial f x ...)` | `f` with its first arguments given: `((partial f x) y)` is `(f x y)` |
+| `(sort l)` | the elements of `l` in the order `compare` gives (see [generic operations](#generic-operations)); equal elements keep their order |
+| `(sort_by cmp l)` | the same, in the order of `cmp`, a function of two values that gives -1, 0 or 1 as `compare` does |
 
 Each takes `nil` or `()` as the empty list, and an empty result is `()`.
 They all run in constant stack, so they work on lists of any length.
@@ -674,6 +676,7 @@ does changes the others that use it (`map` uses `fold` and `reverse`).
 (p (append (list 1 2) (list 3)) (map square nil) (empty? nil) (empty? nums))
 (def inc_then_double (compose (partial * 2) (partial plus 1)))
 (p (inc_then_double 5) ((partial plus 1 2) 3) (identity 7))
+(p (sort (list 3 1 2)) (sort (list "b" "a")) (sort_by (lambda (a b) (compare b a)) nums))
 (fold (lambda (acc x) (plus acc (square x))) 0 nums)
 ```
 
@@ -682,6 +685,7 @@ does changes the others that use it (`map` uses `fold` and `reverse`).
 15 (1 2 3 4 5) (5 4 3 2 1)
 (1 2 3) () true false
 12 6 7
+(1 2 3) ("a" "b") (5 4 3 2 1)
 => 55
 ```
 

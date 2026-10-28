@@ -1149,3 +1149,9 @@ One entry per PR, written before committing it.
   List, *Pair:`), which is what most of these edits were. One edit was
   refused at the end of the batch (ranging over an `interface{}`) and
   the batch rolled back whole. Nothing by hand.
+
+### PR: sort and sort_by
+
+- glisp, in stdlib.glisp, one `replace_text`; the spec rows, example
+  and parity program by `replace_text` too, before the code. Nothing by
+  hand.

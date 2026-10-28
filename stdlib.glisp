@@ -331,6 +331,26 @@
 (definstance compare ((a maybe?) b)
   (compare_lists (cons (just? a) (data_fields a)) (cons (just? b) (data_fields b))))
 
+; (sort l) is l's elements in compare's order, and (sort_by cmp l) in the
+; order of cmp, which gives -1, 0 or 1 as compare does. Both are stable:
+; equal elements keep their order. A merge sort of runs, in constant stack.
+(defn sort (l) (sort_by compare l))
+(defn sort_by (cmp l) (sort_runs cmp (map list l)))
+(defn sort_runs (cmp runs)
+  (cond ((empty? runs) (quote ()))
+        ((empty? (cdr runs)) (car runs))
+        (else (sort_runs cmp (sort_pairs cmp runs (quote ()))))))
+(defn sort_pairs (cmp runs acc)
+  (cond ((empty? runs) (reverse acc))
+        ((empty? (cdr runs)) (reverse (cons (car runs) acc)))
+        (else (sort_pairs cmp (cdr (cdr runs))
+                (cons (sort_merge cmp (car runs) (car (cdr runs)) (quote ())) acc)))))
+(defn sort_merge (cmp a b acc)
+  (cond ((empty? a) (append (reverse acc) b))
+        ((empty? b) (append (reverse acc) a))
+        ((> (cmp (car a) (car b)) 0) (sort_merge cmp a (cdr b) (cons (car b) acc)))
+        (else (sort_merge cmp (cdr a) b (cons (car a) acc)))))
+
 ; Math functions, on floats (an integer argument is taken as a float).
 ; They are Go's math package's algorithms (from Cephes and FreeBSD's msun),
 ; written with the arithmetic builtins, so both backends compute the same
