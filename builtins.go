@@ -80,6 +80,11 @@ func arguments(n int) string {
 	return fmt.Sprintf("%d arguments", n)
 }
 
+// int63 is n wrapped to 63 bits. Compiled code keeps an integer in 63 bits
+// (the 64th tags it), so the interpreter's integers wrap there too: from
+// 2^62-1 the next is -2^62.
+func int63(n int64) int64 { return n << 1 >> 1 }
+
 // check panics unless args are what b takes.
 func (b builtin) check(args List) {
 	if !b.allows(len(args)) {

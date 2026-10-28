@@ -69,5 +69,5 @@ func parseNumber(_ *Scope, args List) interface{} {
 	if negative {
 		n = -n
 	}
-	return n
+	return int63(n)
 }

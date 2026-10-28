@@ -232,7 +232,10 @@ prints exactly what the interpreter does, error messages included.
   only calls that aren't tail calls use Go's stack, which crashes Go past
   about 300,000 deep. Lambdas now evaluate to a `*Closure` holding their
   code and scope; builtins stay `Function`s.
-- [ ] Integers are 63 bits (one bit tags them); the interpreter's are 64.
+- [x] Integers are 63 bits in both backends: compiled code tags one bit of
+  each value, so the interpreter wraps its integers there too (`int63` on
+  every literal and arithmetic result). From 2^62-1 the next integer is
+  -2^62; `(* 4611686018427387903 2)` is -2 in both.
 - [x] Direct calls to builtins: a call naming `plus - * < > <= >= eq car cdr
   cons atom number? list? nil?` with the usual arguments runs the operation
   inline when the name still holds the builtin (checked at run time, so

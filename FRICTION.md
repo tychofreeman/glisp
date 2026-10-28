@@ -874,3 +874,13 @@ One entry per PR, written before committing it.
 - My own mistake outside the tools: timing master against the branch with
   uncommitted changes, `git stash` and `checkout`, I popped the stash onto
   master and timed the change twice. Committing first fixed it.
+
+### PR: 63-bit integers in the interpreter
+
+- One 10-step batch, tests first: `add_declaration` for the test table and
+  `int63`, `replace_text` for each place an integer is made (a literal,
+  `parse_number`, and the results of `plus`, `-`, `*`, `/`), with enough
+  of the surrounding lines to be unique.
+- The only failure was an expected value I worked out wrong
+  (3037000500^2 wraps to 145474192); the parity test, which compares with
+  compiled code, had it right. One `replace_text`.
