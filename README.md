@@ -34,8 +34,8 @@ data `data data_name data_ref data_length`, and `hash`.
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`, and a list library: `list`, `empty?`, `length`, `map`, `filter`,
 `fold`, `foldr`, `reverse`, `append`, `identity`, `compose`, `partial` and
-`cons?`; `deftype`, which defines data types; `match`; and errors as
-values, `maybe` (`just`, `nothing`), `either` (`left`, `right`), `bind`
+`cons?`; `deftype`, which defines data types; `match`; math (`pi exp
+log sin cos tan asin acos atan atan2 expt`); and errors as values, `maybe` (`just`, `nothing`), `either` (`left`, `right`), `bind`
 and `do`.
 
 ## Roadmap
@@ -453,9 +453,21 @@ In order, one PR each:
   1280 bits. Checked against strconv on 6,000 strings (random floats
   printed shortest and to 21 digits, random decimals of up to 40 digits
   with exponents from -350 to 350, the ties and boundaries).
-- [ ] **Floats, later.** Functions wasm has no instruction for (`exp`, `log`,
-  `sin`, ...), which must print alike in both backends, so both would
-  need one implementation. And the float runtime, with its bignums, is
+- [x] **Math functions.** `pi`, `exp`, `log`, `sin`, `cos`, `tan`,
+  `asin`, `acos`, `atan`, `atan2` and `expt`, written in glisp in the
+  stdlib with Go's math package's algorithms (Cephes and FreeBSD msun),
+  so both backends compute the same float by construction, no wasm was
+  needed, and a program that doesn't use them doesn't include them.
+  Against Go's math on 300 random arguments each and the special values:
+  the trigonometric functions and their inverses agree exactly (the
+  same algorithm), `log` exactly, `exp` within a float and `expt` within
+  three (Go's `Exp` and `Log` are assembly on amd64). Go's `Log` is wrong
+  for subnormals on amd64 (`Log(1e-310)` is -709.09); ours matches
+  libm's -713.80. Not done: Go's exact argument reduction for `sin`,
+  `cos` and `tan` beyond 2^29 (Payne-Hanek), which needs bit operations
+  glisp lacks, so those lose accuracy there. Internally `frexp` and
+  `ldexp` are glisp loops over powers of two.
+- [ ] **Floats, later.** The float runtime, with its bignums, is
   in every module (4.5KB; the module for `(p 1)` went from 17.9KB to
   22.4KB): leave out runtime functions a program can't reach, as the
   stdlib already is.

@@ -258,3 +258,255 @@
         (else (list (quote bind) (car steps)
                 (list (quote lambda) (quote (_)) (do_expand (cdr steps)))))))
 (defmacro do (lambda (steps) (do_expand steps)))
+
+; Math functions, on floats (an integer argument is taken as a float).
+; They are Go's math package's algorithms (from Cephes and FreeBSD's msun),
+; written with the arithmetic builtins, so both backends compute the same
+; float for each. The public names are the math_ functions, so that a
+; program that defines its own log or abs doesn't change exp or expt.
+(def pi 3.141592653589793)
+(def math_inf (/ 1.0 0))
+(defn math_nan? (x) (not (eq x x)))
+(defn math_inf? (x) (or (eq x math_inf) (eq x (- math_inf))))
+(defn math_abs (x) (if (< x 0.0) (- x) x))
+(defn math_signbit (x) (or (< x 0.0) (and (eq x 0.0) (< (/ 1.0 x) 0.0))))
+(defn math_copysign (v y) (if (math_signbit y) (- (math_abs v)) (math_abs v)))
+; (math_poly x cs) is cs as a polynomial in x, highest power first.
+(defn math_poly (x cs) (fold (lambda (acc c) (plus (* acc x) c)) (car cs) (cdr cs)))
+
+; (math_frexp x), for a finite x > 0, is (m e): x = m * 2^e, 0.5 <= m < 1.
+(defn math_frexp (x) (math_frexp_up x 0))
+(defn math_frexp_up (x e)
+  (cond ((>= x 18446744073709551616.0) (math_frexp_up (* x 5.421010862427522e-20) (plus e 64)))
+        ((>= x 1.0) (math_frexp_up (* x 0.5) (plus e 1)))
+        (else (math_frexp_down x e))))
+(defn math_frexp_down (x e)
+  (cond ((< x 5.421010862427522e-20) (math_frexp_down (* x 18446744073709551616.0) (- e 64)))
+        ((< x 0.5) (math_frexp_down (* x 2.0) (- e 1)))
+        (else (list x e))))
+; (math_ldexp x e) is x * 2^e.
+(defn math_ldexp (x e)
+  (cond ((> e 1000) (math_ldexp (* x 1.0715086071862673e301) (- e 1000)))
+        ((< e -1000) (math_ldexp (* x 9.332636185032189e-302) (plus e 1000)))
+        ((< e 0) (/ x (math_pow2 (- e) 2.0 1.0)))
+        (else (* x (math_pow2 e 2.0 1.0)))))
+; (math_pow2 n b acc) is acc * b^n, by squaring.
+(defn math_pow2 (n b acc)
+  (if (eq n 0) acc
+    (math_pow2 (/ n 2) (* b b) (if (eq (mod n 2) 1) (* acc b) acc))))
+
+(def math_ln2_hi 6.93147180369123816490e-01)
+(def math_ln2_lo 1.90821492927058770002e-10)
+
+(defn math_exp (x)
+  (let (x (float x))
+    (cond ((math_nan? x) x)
+          ((> x 7.09782712893383973096e+02) math_inf)
+          ((< x -7.45133219101941108420e+02) 0.0)
+          ((and (> x -3.725290298461914e-09) (< x 3.725290298461914e-09)) (plus 1.0 x))
+          (else
+            (let (k (if (< x 0.0)
+                      (truncate (- (* 1.44269504088896338700e+00 x) 0.5))
+                      (truncate (plus (* 1.44269504088896338700e+00 x) 0.5)))
+                  hi (- x (* (float k) math_ln2_hi))
+                  lo (* (float k) math_ln2_lo)
+                  r (- hi lo)
+                  t (* r r)
+                  c (- r (* t (math_poly t (list 4.13813679705723846039e-08 -1.65339022054652515390e-06
+                                                 6.61375632143793436117e-05 -2.77777777770155933842e-03
+                                                 1.66666666666666657415e-01))))
+                  y (- 1.0 (- (- lo (/ (* r c) (- 2.0 c))) hi)))
+              (math_ldexp y k))))))
+(def exp math_exp)
+
+(defn math_log (x)
+  (let (x (float x))
+    (cond ((or (math_nan? x) (eq x math_inf)) x)
+          ((< x 0.0) (/ 0.0 0))
+          ((eq x 0.0) (- math_inf))
+          (else
+            (let (fe (math_frexp x)
+                  low (< (car fe) 0.7071067811865476)
+                  f (- (if low (* (car fe) 2.0) (car fe)) 1.0)
+                  k (float (if low (- (car (cdr fe)) 1) (car (cdr fe))))
+                  s (/ f (plus 2.0 f))
+                  s2 (* s s)
+                  s4 (* s2 s2)
+                  t1 (* s2 (plus 6.666666666666735130e-01 (* s4 (plus 2.857142874366239149e-01
+                           (* s4 (plus 1.818357216161805012e-01 (* s4 1.479819860511658591e-01)))))))
+                  t2 (* s4 (plus 3.999999999940941908e-01 (* s4 (plus 2.222219843214978396e-01
+                           (* s4 1.531383769920937332e-01)))))
+                  hfsq (* (* 0.5 f) f))
+              (- (* k math_ln2_hi) (- (- hfsq (plus (* s (plus hfsq (plus t1 t2))) (* k math_ln2_lo))) f)))))))
+(def log math_log)
+
+; (math_trig_reduce x), for a finite x >= 0, is (j z): x is about
+; z + j*pi/4, j from 0 to 7. Exact enough below 2^29; above, less accurate.
+(defn math_trig_reduce (x)
+  (let (w (* x 1.2732395447351628)
+        y0 (if (< w 4503599627370496.0) (float (truncate w)) w)
+        j0 (if (< y0 2305843009213693952.0) (mod (truncate y0) 8) 0)
+        odd (eq (mod j0 2) 1)
+        j (if odd (mod (plus j0 1) 8) j0)
+        y (if odd (plus y0 1.0) y0))
+    (list j (- (- (- x (* y 7.85398125648498535156e-1)) (* y 3.77489470793079817668e-8))
+               (* y 2.69515142907905952645e-15)))))
+(def math_sin_coefficients
+  (list 1.58962301576546568060e-10 -2.50507477628578072866e-8 2.75573136213857245213e-6
+        -1.98412698295895385996e-4 8.33333333332211858878e-3 -1.66666666666666307295e-1))
+(def math_cos_coefficients
+  (list -1.13585365213876817300e-11 2.08757008419747316778e-9 -2.75573141792967388112e-7
+        2.48015872888517045348e-5 -1.38888888888730564116e-3 4.16666666666665929218e-2))
+(defn math_sin_part (z zz) (plus z (* (* z zz) (math_poly zz math_sin_coefficients))))
+(defn math_cos_part (zz) (plus (- 1.0 (* 0.5 zz)) (* (* zz zz) (math_poly zz math_cos_coefficients))))
+
+(defn math_sin (x)
+  (let (x (float x))
+    (cond ((or (eq x 0.0) (math_nan? x)) x)
+          ((math_inf? x) (/ 0.0 0))
+          (else
+            (let (jz (math_trig_reduce (math_abs x))
+                  j (if (> (car jz) 3) (- (car jz) 4) (car jz))
+                  negative (if (> (car jz) 3) (not (< x 0.0)) (< x 0.0))
+                  z (car (cdr jz))
+                  y (if (or (eq j 1) (eq j 2)) (math_cos_part (* z z)) (math_sin_part z (* z z))))
+              (if negative (- y) y))))))
+(def sin math_sin)
+
+(defn math_cos (x)
+  (let (x (float x))
+    (if (or (math_nan? x) (math_inf? x)) (/ 0.0 0)
+      (let (jz (math_trig_reduce (math_abs x))
+            high (> (car jz) 3)
+            j (if high (- (car jz) 4) (car jz))
+            negative (if (> j 1) (not high) high)
+            z (car (cdr jz))
+            y (if (or (eq j 1) (eq j 2)) (math_sin_part z (* z z)) (math_cos_part (* z z))))
+        (if negative (- y) y)))))
+(def cos math_cos)
+
+(defn math_tan (x)
+  (let (x (float x))
+    (cond ((or (eq x 0.0) (math_nan? x)) x)
+          ((math_inf? x) (/ 0.0 0))
+          (else
+            (let (jz (math_trig_reduce (math_abs x))
+                  z (car (cdr jz))
+                  zz (* z z)
+                  y0 (if (> zz 1e-14)
+                       (plus z (* z (/ (* zz (math_poly zz (list -1.30936939181383777646e4
+                                                                 1.15351664838587416140e6
+                                                                 -1.79565251976484877988e7)))
+                                       (math_poly zz (list 1.0 1.36812963470692954678e4
+                                                           -1.32089234440210967447e6
+                                                           2.50083801823357915839e7
+                                                           -5.38695755929454629881e7)))))
+                       z)
+                  y (if (eq (mod (/ (car jz) 2) 2) 1) (/ -1.0 y0) y0))
+              (if (< x 0.0) (- y) y))))))
+(def tan math_tan)
+
+(defn math_xatan (x)
+  (let (z (* x x)
+        r (/ (* z (math_poly z (list -8.750608600031904122785e-01 -1.615753718733365076637e+01
+                                     -7.500855792314704667340e+01 -1.228866684490136173410e+02
+                                     -6.485021904942025371773e+01)))
+             (math_poly z (list 1.0 2.485846490142306297962e+01 1.650270098316988542046e+02
+                                4.328810604912902668951e+02 4.853903996359136964868e+02
+                                1.945506571482613964425e+02))))
+    (plus (* x r) x)))
+(defn math_satan (x)
+  (cond ((<= x 0.66) (math_xatan x))
+        ((> x 2.41421356237309504880)
+         (plus (- 1.5707963267948966 (math_xatan (/ 1.0 x))) 6.123233995736765886130e-17))
+        (else (plus (plus 0.7853981633974483 (math_xatan (/ (- x 1.0) (plus x 1.0))))
+                    3.061616997868383e-17))))
+(defn math_atan (x)
+  (let (x (float x))
+    (cond ((eq x 0.0) x)
+          ((> x 0.0) (math_satan x))
+          (else (- (math_satan (- x)))))))
+(def atan math_atan)
+
+(defn math_asin (x)
+  (let (x (float x) a (math_abs x))
+    (cond ((eq x 0.0) x)
+          ((> a 1.0) (/ 0.0 0))
+          (else
+            (let (temp (sqrt (- 1.0 (* a a)))
+                  r (if (> a 0.7) (- 1.5707963267948966 (math_satan (/ temp a))) (math_satan (/ a temp))))
+              (if (< x 0.0) (- r) r))))))
+(def asin math_asin)
+(defn acos (x) (- 1.5707963267948966 (math_asin x)))
+
+(defn math_atan2 (y x)
+  (let (y (float y) x (float x))
+    (cond ((or (math_nan? y) (math_nan? x)) (/ 0.0 0))
+          ((eq y 0.0) (if (and (>= x 0.0) (not (math_signbit x))) (math_copysign 0.0 y) (math_copysign pi y)))
+          ((eq x 0.0) (math_copysign 1.5707963267948966 y))
+          ((eq x math_inf) (math_copysign (if (math_inf? y) 0.7853981633974483 0.0) y))
+          ((eq x (- math_inf)) (math_copysign (if (math_inf? y) 2.356194490192345 pi) y))
+          ((math_inf? y) (math_copysign 1.5707963267948966 y))
+          (else
+            (let (q (math_atan (/ y x)))
+              (cond ((>= x 0.0) q)
+                    ((<= q 0.0) (plus q pi))
+                    (else (- q pi))))))))
+(def atan2 math_atan2)
+
+; (expt x y) is x to the power y: an integer for integers with y >= 0
+; (wrapping as integer arithmetic does), a float otherwise.
+(defn expt (x y)
+  (if (and (integer? x) (integer? y) (>= y 0))
+    (math_pow2 y x 1)
+    (math_pow (float x) (float y))))
+(defn math_odd_integer? (y)
+  (and (< (math_abs y) 9007199254740992.0) (eq y (float (truncate y))) (not (eq (mod (truncate y) 2) 0))))
+(defn math_pow (x y)
+  (cond ((or (eq y 0.0) (eq x 1.0)) 1.0)
+        ((eq y 1.0) x)
+        ((or (math_nan? x) (math_nan? y)) (/ 0.0 0))
+        ((eq x 0.0)
+         (if (< y 0.0)
+           (if (and (math_signbit x) (math_odd_integer? y)) (- math_inf) math_inf)
+           (if (and (math_signbit x) (math_odd_integer? y)) x 0.0)))
+        ((math_inf? y)
+         (cond ((eq x -1.0) 1.0)
+               ((eq (< (math_abs x) 1.0) (> y 0.0)) 0.0)
+               (else math_inf)))
+        ((eq x (- math_inf)) (math_pow (/ 1.0 x) (- y)))
+        ((eq x math_inf) (if (< y 0.0) 0.0 math_inf))
+        ((eq y 0.5) (sqrt x))
+        ((eq y -0.5) (/ 1.0 (sqrt x)))
+        (else (math_pow_finite x y))))
+(defn math_pow_finite (x y)
+  (let (ay (math_abs y)
+        whole (if (< ay 4611686018427387904.0) (float (truncate ay)) ay)
+        fraction (- ay whole))
+    (cond ((and (not (eq fraction 0.0)) (< x 0.0)) (/ 0.0 0))
+          ((>= whole 4611686018427387904.0)
+           (cond ((eq x -1.0) 1.0)
+                 ((eq (< (math_abs x) 1.0) (> y 0.0)) 0.0)
+                 (else math_inf)))
+          (else
+            (let (up (> fraction 0.5)
+                  yf (if up (- fraction 1.0) fraction)
+                  yi (if up (plus (truncate whole) 1) (truncate whole))
+                  a1 (if (eq yf 0.0) 1.0 (math_exp (* yf (math_log x))))
+                  fe (math_frexp (math_abs x))
+                  x1 (if (< x 0.0) (- (car fe)) (car fe))
+                  r (math_pow_loop yi x1 (car (cdr fe)) a1 0))
+              (if (< y 0.0)
+                (math_ldexp (/ 1.0 (car r)) (- (car (cdr r))))
+                (math_ldexp (car r) (car (cdr r)))))))))
+; (math_pow_loop i x1 xe a1 ae) multiplies a1 * 2^ae by (x1 * 2^xe)^i, by
+; squaring, keeping the exponents apart so nothing overflows.
+(defn math_pow_loop (i x1 xe a1 ae)
+  (cond ((eq i 0) (list a1 ae))
+        ((or (< xe -4096) (> xe 4096)) (list a1 (plus ae xe)))
+        (else
+          (let (odd (eq (mod i 2) 1)
+                x2 (* x1 x1)
+                small (< x2 0.5))
+            (math_pow_loop (/ i 2) (if small (plus x2 x2) x2) (if small (- (* xe 2) 1) (* xe 2))
+                           (if odd (* a1 x1) a1) (if odd (plus ae xe) ae))))))

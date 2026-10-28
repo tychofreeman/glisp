@@ -8,6 +8,148 @@ import (
 	"testing"
 )
 
+// ulps is how many floats apart a and b are, or a large number if one is
+// NaN and the other isn't.
+func ulps(a, b float64) uint64 {
+	switch {
+	case math.IsNaN(a) || math.IsNaN(b):
+		if math.IsNaN(a) && math.IsNaN(b) {
+			return 0
+		}
+		return math.MaxUint64
+	case a == b:
+		return 0
+	case math.Signbit(a) != math.Signbit(b):
+		return math.MaxUint64
+	}
+	x, y := math.Float64bits(a), math.Float64bits(b)
+	if x > y {
+		return x - y
+	}
+	return y - x
+}
+
+// readShown is a float as glisp prints it.
+func readShown(t *testing.T, s string) float64 {
+	switch s {
+	case "NaN":
+		return math.NaN()
+	case "Infinity":
+		return math.Inf(1)
+	case "-Infinity":
+		return math.Inf(-1)
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		t.Fatalf("%q isn't a float", s)
+	}
+	return f
+}
+
+// The stdlib's math functions are within a few floats of Go's math package
+// (as accurate, for the ones whose algorithm is the same on this machine),
+// and print alike compiled.
+func TestMathFunctionsAreAccurate(t *testing.T) {
+	r := rand.New(rand.NewPCG(5, 6))
+	uniform := func(lo, hi float64) float64 { return lo + (hi-lo)*r.Float64() }
+	anyFloat := func() float64 {
+		for {
+			if f := math.Float64frombits(r.Uint64()); !math.IsNaN(f) && !math.IsInf(f, 0) {
+				return f
+			}
+		}
+	}
+	// Go's Log is wrong for subnormals on amd64 (Log(1e-310) is -709.09,
+	// not -713.80), so scale them first.
+	logOf := func(x float64) float64 {
+		if x > 0 && x < 0x1p-1022 {
+			return math.Log(x*0x1p54) - 54*math.Ln2
+		}
+		return math.Log(x)
+	}
+	type fn struct {
+		name   string
+		of     func(a []float64) float64
+		args   func() []float64
+		within uint64
+	}
+	one := func(f func(float64) float64) func([]float64) float64 {
+		return func(a []float64) float64 { return f(a[0]) }
+	}
+	fns := []fn{
+		{"exp", one(math.Exp), func() []float64 { return []float64{uniform(-745, 709)} }, 1},
+		{"log", one(logOf), func() []float64 { return []float64{math.Abs(anyFloat())} }, 1},
+		{"sin", one(math.Sin), func() []float64 { return []float64{uniform(-1e6, 1e6)} }, 0},
+		{"cos", one(math.Cos), func() []float64 { return []float64{uniform(-10, 10)} }, 0},
+		{"tan", one(math.Tan), func() []float64 { return []float64{uniform(-1e3, 1e3)} }, 0},
+		{"atan", one(math.Atan), func() []float64 { return []float64{anyFloat()} }, 0},
+		{"asin", one(math.Asin), func() []float64 { return []float64{uniform(-1, 1)} }, 0},
+		{"acos", one(math.Acos), func() []float64 { return []float64{uniform(-1, 1)} }, 0},
+		{"atan2", func(a []float64) float64 { return math.Atan2(a[0], a[1]) },
+			func() []float64 { return []float64{uniform(-1e3, 1e3), uniform(-1e3, 1e3)} }, 0},
+		{"expt", func(a []float64) float64 { return math.Pow(a[0], a[1]) },
+			func() []float64 { return []float64{uniform(0, 100), uniform(-150, 150)} }, 3},
+	}
+	specials := []float64{0, math.Copysign(0, -1), 1, -1, 0.5, 2, math.Inf(1), math.Inf(-1), math.NaN(), 1e-310, 710, -746}
+	// A special value as code: the names Write gives NaN and the
+	// infinities aren't literals.
+	code := func(f float64) string {
+		return strings.NewReplacer("-Infinity", "(- math_inf)", "Infinity", "math_inf", "NaN", "(/ 0.0 0)").Replace(Write(f))
+	}
+	var program strings.Builder
+	var cases [][][]float64 // each line's arguments
+	for _, f := range fns {
+		arity := len(f.args())
+		var line [][]float64
+		program.WriteString("(p (map (lambda (a) (apply " + f.name + " a)) (list")
+		for _, a := range specials {
+			for _, b := range specials[:1+(arity-1)*(len(specials)-1)] {
+				args := []float64{a, b}[:arity]
+				program.WriteString(" (list")
+				for _, x := range args {
+					program.WriteString(" " + code(x))
+				}
+				program.WriteString(")")
+				line = append(line, args)
+			}
+		}
+		program.WriteString(")))\n(p (map (lambda (a) (apply " + f.name + " a)) (quote (")
+		cases = append(cases, line)
+		line = nil
+		for range 300 {
+			args := f.args()
+			program.WriteString(" (")
+			for _, x := range args {
+				program.WriteString(" " + Write(x))
+			}
+			program.WriteString(")")
+			line = append(line, args)
+		}
+		program.WriteString("))))\n")
+		cases = append(cases, line)
+	}
+	got := strings.Split(runInterpreted(t, program.String()), "\n")
+	worst := map[string]uint64{}
+	for i, line := range cases {
+		f := fns[i/2]
+		results := strings.Fields(strings.Trim(got[i], "()"))
+		if len(results) != len(line) {
+			t.Fatalf("%s: %d results for %d cases: %s", f.name, len(results), len(line), got[i])
+		}
+		for j, args := range line {
+			u := ulps(readShown(t, results[j]), f.of(args))
+			worst[f.name] = max(worst[f.name], u)
+			if u > f.within {
+				t.Errorf("(%s %v) = %s, Go's math gives %v: %d floats apart", f.name, args, results[j], f.of(args), u)
+			}
+		}
+	}
+	t.Logf("most floats apart from Go's math: %v", worst)
+	if compiled := compiledPrints(t, program.String()); compiled != strings.Join(got, "\n") {
+		t.Errorf("compiled, the math functions print differently")
+	}
+}
+
 // Floats print as Haskell's show prints a Double.
 func TestFloatsPrintAsHaskellShows(t *testing.T) {
 	for _, c := range []struct {

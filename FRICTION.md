@@ -1040,3 +1040,11 @@ One entry per PR, written before committing it.
   `replace_text` in two batches. One bug the tests caught: `select`'s
   operands in the wrong order, so exponents changed sign; one
   `replace_text`. Nothing by hand.
+
+### PR: Math functions
+
+- All glisp, in stdlib.glisp, one `replace_text`; the accuracy test
+  (Go's math as the reference) and the spec by `replace_text`. The
+  test's first version wrote each case as a top-level form, which made
+  a 970KB module that took wazero 5s to compile; rewritten to pass the
+  inputs as quoted lists, 0.7s. Nothing by hand.
