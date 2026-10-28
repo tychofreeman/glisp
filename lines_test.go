@@ -10,6 +10,9 @@ var lineErrors = []struct{ src, want string }{
 	{"(defn ev (n) (if (eq n 0) (car n) (od (- n 1))))\n(defn od (n)\n  (ev (- n 1)))\n(ev 10)", "line 1: car: expected a list, got number 0"},
 	{"(p 1)\n\n(let (a 1)\n  (cdr a))", "line 4: cdr: expected a list, got number 1"},
 	{"; a comment\n(p \"two\nlines\")\n(car 1)", "line 4: car: expected a list, got number 1"},
+	// The stdlib's fmap fails after calling a show instance from line 1,
+	// whose call has returned: the call being made is still line 3's.
+	{"(definstance show ((x vector?))\n  (str \"v\"))\n(fmap car \"abc\")", "line 3: fmap: no instance for \"abc\""},
 }
 
 func TestRunErrorsGiveTheirLine(t *testing.T) {

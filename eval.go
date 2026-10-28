@@ -6,6 +6,20 @@ import (
 
 // Eval evaluates node in scope: the interpreter, a backend for core glisp.
 func Eval(node Node, scope *Scope) interface{} {
+	// A call that has returned is no longer the call being made: put the
+	// line back, unless an error stops the program first (it keeps the line).
+	if scope.run == nil {
+		return evaluate(node, scope)
+	}
+	run, line := scope.run, scope.run.line
+	value := evaluate(node, scope)
+	run.line = line
+	return value
+}
+
+// evaluate is Eval, but leaves the line of the call being made as the last
+// call it made left it.
+func evaluate(node Node, scope *Scope) interface{} {
 	for {
 		switch n := node.(type) {
 		case Const:
