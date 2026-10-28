@@ -624,6 +624,7 @@ false true 7 5 false
 |----------|--------|
 | `(list x ...)` | the list of its arguments |
 | `(empty? l)` | whether `l` is `nil` or the empty list |
+| `(cons? x)` | whether `x` is a list with at least one element |
 | `(length l)` | the number of elements of `l` |
 | `(map f l)` | the list of `(f x)` for each element `x` of `l` |
 | `(filter f l)` | the elements `x` of `l` for which `(f x)` is `true` |
@@ -699,6 +700,67 @@ glisp: line 1: circle_r: expected a circle, got #(rect 1 2)
 
 The error names line 1: code a macro made has the line of the macro call,
 here `deftype`.
+
+### Pattern matching
+
+`(match x (pattern body...) ...)` evaluates `x` once, then the body of the
+first clause whose pattern matches its value, with the names in the
+pattern bound to the parts they matched. If no pattern matches, it is an
+error. A body is in tail position.
+
+| Pattern | Matches |
+|---------|---------|
+| `_` | anything, binding nothing |
+| a symbol, `x` | anything, binding `x` to it |
+| `42`, `"text"`, `true`, `false`, `nil` | that value (by `eq`) |
+| `(quote datum)` | `datum`: `(quote yes)` matches the symbol `yes` |
+| `()` | `nil` or the empty list |
+| `(list p ...)` | a list of exactly as many elements, each matching its pattern |
+| `(cons h t)` | a non-empty list whose first element matches `h` and the rest `t` |
+| `(vector p ...)` | a vector of exactly as many values, each matching its pattern |
+| `(c p ...)` | a data value made by the constructor `c`, with as many fields, each matching its pattern |
+
+Patterns nest. A name may appear only once in a pattern. The heads
+`quote`, `list`, `cons` and `vector` are patterns of their own, so a
+constructor with one of those names can't be matched.
+
+```glisp
+(deftype shape (circle r) (rect w h))
+(defn area (s)
+  (match s
+    ((circle r) (* 3 (* r r)))
+    ((rect w h) (* w h))))
+(p (map area (list (circle 2) (rect 3 4))))
+(defn describe (x)
+  (match x
+    (0 "zero")
+    ((quote yes) "the symbol yes")
+    (() "empty")
+    ((list a) (str "one: " a))
+    ((list a (list b c)) (str "a, then a pair: " a b c))
+    ((cons h t) (str h " and " (length t) " more"))
+    ((vector _ y) (str "a vector, then " y))
+    ((circle (rect w _)) (str "a circle of a rect " w " wide"))
+    (_ "something else")))
+(p (describe 0) "|" (describe (quote yes)) "|" (describe nil))
+(p (describe (list 1)) "|" (describe (list 1 (list 2 3))) "|" (describe (list 1 2 3)))
+(p (describe (vector 7 8)) "|" (describe (circle (rect 5 1))) "|" (describe 9))
+(defn sum (l) (match l (() 0) ((cons h t) (plus h (sum t)))))
+(p (sum (list 1 2 3)))
+(match 5 (0 "zero"))
+```
+
+```output
+(12 12)
+zero | the symbol yes | empty
+one: 1 | a, then a pair: 123 | 1 and 2 more
+a vector, then 8 | a circle of a rect 5 wide | something else
+6
+glisp: line 23: match: no clause matches 5
+```
+
+`match` is a macro: a clause becomes an `if` that tests the value's shape
+from the outside in, then a `let` of the names.
 
 ## 8. Builtin functions
 

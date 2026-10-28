@@ -33,8 +33,8 @@ data `data data_name data_ref data_length`, and `hash`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`, and a list library: `list`, `empty?`, `length`, `map`, `filter`,
-`fold`, `foldr`, `reverse`, `append`, `identity`, `compose` and `partial`;
-and `deftype`, which defines data types.
+`fold`, `foldr`, `reverse`, `append`, `identity`, `compose`, `partial` and
+`cons?`; `deftype`, which defines data types; and `match`.
 
 ## Roadmap
 
@@ -405,10 +405,15 @@ In order, one PR each:
   with its own scope elsewhere. The expander splices it, so no backend
   sees a new node. The parity check now compares what the command
   prints, so an error found while compiling counts as the same.
-- [ ] **Pattern matching.** `(match x ((circle r) ...) ((cons h t) ...)
-  (_ ...))` over constructors, lists, vectors and literals, binding the
-  names in a pattern; a stdlib macro, so both backends get it from the
-  expander.
+- [x] **Pattern matching.** `(match x ((circle r) ...) ((cons h t) ...)
+  (_ ...))` over constructors, lists (`()`, `(list p ...)`, `(cons h
+  t)`), vectors, literals and quoted data, nested, binding the names in a
+  pattern; no match is an error, and a name may appear once in a pattern.
+  A stdlib macro, so both backends get it from the expander: each clause
+  becomes an `if` of the pattern's tests, outside in, then a `let` of
+  its names, the value bound once to `__match`, and bodies stay in tail
+  position (a loop of 100,000 through `match` runs in constant stack).
+  The stdlib also gains `cons?`, a non-empty list, which the tests use.
 - [ ] **Errors as values.** `maybe` (`just`, `nothing`) and `either`
   (`left`, `right`) as data types in the stdlib, a `bind` that chains a
   step after one that may fail, and a `do` macro to write a chain as a
