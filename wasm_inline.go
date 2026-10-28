@@ -143,10 +143,14 @@ var inlineBuiltins = map[string]inlineBuiltin{
 		b.Call(rt.tagOf)
 		b.isList()
 	}),
-	"number?": predicate(func(b *wasmBody, _ *wasmRuntime, arg func(int)) {
+	"number?": predicate(func(b *wasmBody, rt *wasmRuntime, arg func(int)) {
 		arg(0)
 		b.I64Const(1)
 		b.Op(wasm.I64And, wasm.I32WrapI64)
+		arg(0)
+		b.Call(rt.tagOf)
+		b.I32Const(tagFloat)
+		b.Op(wasm.I32Eq, wasm.I32Or)
 	}),
 	"nil?": predicate(func(b *wasmBody, _ *wasmRuntime, arg func(int)) {
 		arg(0)

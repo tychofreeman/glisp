@@ -51,6 +51,24 @@ func (c *wasmCompiler) hashIntoBody(b *wasmBody) {
 			b.decode()
 		})
 	})
+	is(tagFloat, func() {
+		// The bits, with one zero and one NaN, as floatBits gives them.
+		putByte('d')
+		putBytes(8, func() {
+			b.field(v, 8)
+			b.asF64()
+			b.f64Const(0)
+			b.Op(wasm.F64Eq)
+			b.ifElse(wasm.BlockI64, func() { b.I64Const(0) }, func() {
+				b.field(v, 8)
+				b.asF64()
+				b.field(v, 8)
+				b.asF64()
+				b.Op(wasm.F64Ne)
+				b.ifElse(wasm.BlockI64, func() { b.I64Const(0x7ff8000000000000) }, func() { b.field(v, 8) })
+			})
+		})
+	})
 	is(tagNil, func() { putByte('n') })
 	is(tagTrue, func() { putByte('t') })
 	is(tagFalse, func() { putByte('f') })

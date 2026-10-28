@@ -23,8 +23,8 @@ compiles the program to a WebAssembly module instead, which runs in any
 WASI runtime (including Node's `node:wasi`) and prints the same output.
 
 Special forms: `quote if lambda def defmacro begin`. Builtins: `car cdr atom cons
-eq apply p error`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
-predicates `number? string? symbol? list? function? boolean? nil? vector?
+eq apply p error`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, floats `float floor ceiling
+truncate round sqrt`, and type predicates `number? integer? float? string? symbol? list? function? boolean? nil? vector?
 map? data?`,
 strings `str string_length substring chars string< symbol parse_number`, and
 vectors `vector vector_ref vector_length vector_set vector_to_list`, maps
@@ -423,10 +423,33 @@ In order, one PR each:
   chain as a sequence of steps, `(x <- m)` binding a name. `bind`
   dispatches on the value it gets, so `do` needs no type to know which
   chain it is in. `error` still stops the program. All glisp, no Go.
-- [ ] **Floating-point numbers.** 64-bit floats beside the integers,
-  literals such as `1.5` and `-2e-3`, arithmetic that gives a float when
-  an operand is one, conversions, and printing the shortest decimal that
-  reads back as the same float, alike in both backends.
+- [x] **Floating-point numbers.** 64-bit floats beside the integers:
+  literals such as `1.5` and `-2e-3` (digits on both sides of a point);
+  `plus`, `-`, `*`, `/` and the comparisons take every argument as a
+  float when one is (`/` of two integers still truncates; `mod` takes
+  integers); IEEE 754 division by zero (`Infinity`, `NaN`); `float`,
+  `floor`, `ceiling`, `truncate`, `round` (half to even) and `sqrt`;
+  `integer?` and `float?`, with `number?` true for both; `eq` never
+  equates an integer and a float; floats hash as `d` and their bits
+  (one zero, one NaN), so they can be map keys. Builtins that need an
+  integer (`substring`, `vector_ref`, `vector_set`, `data_ref`, `mod`)
+  now say "expected an integer". A float prints as Haskell's `show`
+  prints a Double: the shortest digits that read back as it, with a
+  point from 0.1 to 10^7 and in scientific notation otherwise. In
+  compiled code a float is a boxed object (`tagFloat`) and printing is
+  Burger and Dybvig's free-format algorithm on 1280-bit bignums in a
+  scratch area, checked against the interpreter's strconv on 3,000
+  floats (random bits, powers of 2 and 10, subnormals, the extremes).
+  The wasm encoder gained the f64 instructions; floats stay i64 bits in
+  locals, reinterpreted for each operation.
+- [ ] **Floats, later.** `parse_number` of a float: reading a decimal
+  exactly in compiled code needs the bignums again (or Eisel-Lemire
+  with a fallback). Functions wasm has no instruction for (`exp`, `log`,
+  `sin`, ...), which must print alike in both backends, so both would
+  need one implementation. And the float runtime, with its bignums, is
+  in every module (4.5KB; the module for `(p 1)` went from 17.9KB to
+  22.4KB): leave out runtime functions a program can't reach, as the
+  stdlib already is.
 - [ ] **String escapes.** `\"`, `\\`, `\n` and `\t` in string literals,
   so a string can hold a quote; the printer already writes them.
 

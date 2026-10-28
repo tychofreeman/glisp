@@ -446,7 +446,7 @@ func TestBuiltinsCheckTheirArgumentsFromTheirSpec(t *testing.T) {
 	assertPanicsWith(t, "(apply 1 nil)", "apply: expected a function, got number 1")
 	assertPanicsWith(t, "(car 1)", "car: expected a list, got number 1")
 	assertPanicsWith(t, `(substring "abc" 1)`, "substring: expects 3 arguments, got 2")
-	assertPanicsWith(t, `(substring "abc" "x" 2)`, `substring: expected a number, got string "x"`)
+	assertPanicsWith(t, `(substring "abc" "x" 2)`, `substring: expected an integer, got string "x"`)
 }
 
 func TestApplySpreadsItsLastArgument(t *testing.T) {

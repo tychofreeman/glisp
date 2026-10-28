@@ -1008,3 +1008,21 @@ One entry per PR, written before committing it.
 
 - All in glisp, test first: the spec's example and parity programs, then
   the stdlib, each one `replace_text`. Nothing by hand.
+
+### PR: Floating-point numbers
+
+- Test first: the spec's examples, parity programs and two tests
+  (Haskell's format, and 3,000 floats printed by both backends), whose
+  batch declared `formatFloat` as a stub (in ast.go, which the next
+  batch removed with `replace_text`).
+- The implementation in one 50-step batch: `replace_statements` with
+  `function` for `plus`, `minus` and `times`; `create_file` for
+  floats.go and wasm_floats.go; `replace_text` for the rest, including
+  the type predicates' table, whose element type changed from a pair of
+  strings to a struct, by hand in text: no tool changes the type of a
+  variable's elements and fixes its uses (`change_field_type` is for
+  fields). Refused once, at the end, by the type check: two functions
+  named `rounding`; renamed in the batch's JSON and resent.
+- One wasm validation error the type check couldn't see (an f64 left
+  outside the block that used it), found by the tests; one
+  `replace_text`.
