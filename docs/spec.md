@@ -832,6 +832,53 @@ failed, not a number: x
 glisp: line 15: bind: expected a maybe, an either or a list, got 5
 ```
 
+### Generic operations
+
+A generic operation has an instance for each type of value it takes:
+typeclasses without types. `(defgeneric name (param ...) on)` defines
+`name` to fail for any value of `on`; `(definstance name (param ...)
+body ...)`, with one parameter written `(p type?)`, adds the instance for
+the values for which `(type? p)` holds. A later instance is tried before
+earlier ones, so a program can add instances for its own types, or
+replace those of the stdlib, whose generic operations are these:
+
+| Function | Result |
+|----------|--------|
+| `(fmap f x)` | `f` applied to each value `x` holds: the elements of a list or a vector, the values of a map, the value of a `just` or a `right` (a `nothing` or a `left` is itself) |
+| `(show x)` | `x` written as a string, as `p` prints it, but through `show`'s instances for the values inside lists, vectors, maps and data |
+| `(compare a b)` | -1, 0 or 1 as `a` sorts before, with or after `b`, two values of one type: numbers by value, strings and symbols by their characters, `false` before `true`, lists, vectors and data element by element (data by constructor name first, but `nothing` before `just`) |
+| `(data_fields d)` | the fields of `d`, as a list |
+
+```glisp
+(def inc (lambda (x) (plus x 1)))
+(p (fmap inc (list 1 2)) (fmap inc (vector 1 2)) (fmap inc (hash_map "a" 1)))
+(p (fmap inc (just 1)) (fmap inc (nothing)) (fmap inc (right 1)) (fmap inc (left "no")))
+(p (show (list 1 "a" (vector 2.5 (quote s)) (hash_map 1 (just "x")))))
+(p (compare 1 2) (compare "b" "a") (compare (list 1 2) (list 1 2)) (compare (nothing) (just 0)))
+(deftype point (pt x y))
+(definstance show ((x point?)) (str "<" (pt_x x) " " (pt_y x) ">"))
+(definstance compare ((a point?) b) (compare (list (pt_x a) (pt_y a)) (list (pt_x b) (pt_y b))))
+(p (show (list (pt 1 2) (vector (pt 3 4)))) (compare (pt 1 2) (pt 1 3)))
+(defgeneric size (x) x)
+(definstance size ((x list?)) (length x))
+(definstance size ((x vector?)) (vector_length x))
+(p (size (list 1 2 3)) (size (vector)))
+(size "abc")
+```
+
+```output
+(2 3) [2 3] {"a" 2}
+#(just 2) #(nothing) #(right 2) #(left "no")
+(1 "a" [2.5 s] {1 #(just "x")})
+-1 1 0 -1
+(<1 2> [<3 4>]) -1
+3 0
+glisp: line 10: size: no instance for "abc"
+```
+
+The error names line 10, where `size` was defined: the call being made
+is the `error` that `defgeneric` put there.
+
 ### Math
 
 | Name | What it is |
