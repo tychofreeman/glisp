@@ -24,7 +24,7 @@ var gcThreshold = 8 << 20
 
 // tagForward marks an object the collector has copied; its new address is
 // at +4.
-const tagForward = 10
+const tagForward = 255
 
 // declareGC declares the collector's functions; gc itself is defined by
 // defineGC, once the program's globals are known.

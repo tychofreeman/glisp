@@ -20,8 +20,9 @@ WASI runtime (including Node's `node:wasi`) and prints the same output.
 
 Special forms: `quote if lambda def defmacro`. Builtins: `car cdr atom cons
 eq apply p error`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
-predicates `number? string? symbol? list? function? boolean? nil?`, and
-strings `str string_length substring chars string< symbol parse_number`.
+predicates `number? string? symbol? list? function? boolean? nil? vector?`,
+strings `str string_length substring chars string< symbol parse_number`, and
+vectors `vector vector_ref vector_length vector_set vector_to_list`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`.
@@ -117,6 +118,13 @@ every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
   reported like any error: `glisp: line 2: negative: -2`, the line of the
   `error` call. (The interpreter drops trailing spaces from an error
   message; compiled code keeps them.)
+- [x] Vectors: `(vector 1 2 3)` prints as `[1 2 3]`; `vector_ref` reads a
+  value by index in constant time, `vector_length` counts them,
+  `vector_to_list` lists them, and `(apply vector list)` makes one from a
+  list. Like everything else in glisp they don't change: `vector_set`
+  returns a new vector. `eq` compares them value by value; `vector?` tests
+  for one. In compiled code a vector is one more row of `tagKinds`, so the
+  collector needed nothing else.
 
 ### Design
 

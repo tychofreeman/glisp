@@ -103,7 +103,7 @@ func eq(_ *Scope, args List) interface{} {
 	return equal(args[0], args[1])
 }
 
-// equal reports whether two glisp values are equal: lists element by element,
+// equal reports whether two glisp values are equal: lists and vectors element by element,
 // other values with ==. Values whose type can't be compared with ==, such as
 // functions, are never equal.
 func equal(a, b interface{}) bool {
@@ -118,6 +118,10 @@ func equal(a, b interface{}) bool {
 			}
 		}
 		return true
+	}
+	if va, isVector := a.(Vector); isVector {
+		vb, isVector := b.(Vector)
+		return isVector && equal(List(va), List(vb))
 	}
 	if a == nil || b == nil {
 		return a == nil && b == nil

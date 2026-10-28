@@ -33,17 +33,18 @@ const (
 	stringKind
 	listKind // a list, or nil as the empty list
 	functionKind
+	vectorKind
 )
 
 // noun names k in a message: "expected a number".
 func (k kind) noun() string {
-	return [...]string{"anything", "a number", "a string", "a list", "a function"}[k]
+	return [...]string{"anything", "a number", "a string", "a list", "a function", "a vector"}[k]
 }
 
 // types are the types of k's values, as typeName names them; none for
 // anyKind, which takes any value.
 func (k kind) types() []string {
-	return [][]string{nil, {"number"}, {"string"}, {"list", "nil"}, {"function"}}[k]
+	return [][]string{nil, {"number"}, {"string"}, {"list", "nil"}, {"function"}, {"vector"}}[k]
 }
 
 // has reports whether v is of kind k.
@@ -145,13 +146,18 @@ var builtinSpecs = append([]builtin{
 	{"string<", arity{2, 2}, oneString, stringLess},
 	{"symbol", arity{1, 1}, oneString, toSymbol},
 	{"parse_number", arity{1, 1}, oneString, parseNumber},
+	{"vector", arity{0, -1}, nil, makeVector},
+	{"vector_ref", arity{2, 2}, []kind{vectorKind, numberKind}, vectorRef},
+	{"vector_length", arity{1, 1}, []kind{vectorKind}, vectorLength},
+	{"vector_set", arity{3, 3}, []kind{vectorKind, numberKind, anyKind}, vectorSet},
+	{"vector_to_list", arity{1, 1}, []kind{vectorKind}, vectorToList},
 }, typePredicateSpecs()...)
 
 // typePredicates are the builtins that test a value's type, each with the
 // type it tests, as typeName names it.
 var typePredicates = [][2]string{
 	{"number?", "number"}, {"string?", "string"}, {"symbol?", "symbol"}, {"list?", "list"},
-	{"function?", "function"}, {"boolean?", "bool"}, {"nil?", "nil"},
+	{"function?", "function"}, {"boolean?", "bool"}, {"nil?", "nil"}, {"vector?", "vector"},
 }
 
 func typePredicateSpecs() []builtin {

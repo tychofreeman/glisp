@@ -415,6 +415,35 @@ func (c *wasmCompiler) putValueBody(b *wasmBody) {
 		b.Call(c.rt.putStr)
 	})
 	when(tagClosure, func() { c.text(b, "<function>") })
+	k := b.local(i32)
+	when(tagVector, func() {
+		// [a b c]
+		b.I32Const('[')
+		b.Call(c.rt.putByte)
+		b.until(func() {
+			b.LocalGet(k)
+			b.LocalGet(v)
+			b.Op(wasm.I32WrapI64)
+			b.I32Load(4)
+			b.Op(wasm.I32GeU)
+		}, func() {
+			b.LocalGet(k)
+			b.when(func() {
+				b.I32Const(' ')
+				b.Call(c.rt.putByte)
+			})
+			b.LocalGet(v)
+			b.Op(wasm.I32WrapI64)
+			b.LocalGet(k)
+			b.I32Const(3)
+			b.Op(wasm.I32Shl, wasm.I32Add)
+			b.I64Load(8)
+			b.Call(c.rt.putValue)
+			b.incr(k)
+		})
+		b.I32Const(']')
+		b.Call(c.rt.putByte)
+	})
 	// A list: (a b c).
 	b.I32Const('(')
 	b.Call(c.rt.putByte)
@@ -683,6 +712,43 @@ func (c *wasmCompiler) equalBody(b *wasmBody) {
 	b.I32Const(tagClosure)
 	b.Op(wasm.I32Eq)
 	b.returnIf(no)
+	// Vectors: the same length and equal values.
+	b.LocalGet(ta)
+	b.I32Const(tagVector)
+	b.Op(wasm.I32Eq)
+	b.when(func() {
+		value := func(v uint32) {
+			b.LocalGet(v)
+			b.Op(wasm.I32WrapI64)
+			b.LocalGet(i)
+			b.I32Const(3)
+			b.Op(wasm.I32Shl, wasm.I32Add)
+			b.I64Load(8)
+		}
+		b.LocalGet(a)
+		b.Op(wasm.I32WrapI64)
+		b.I32Load(4)
+		b.LocalTee(n)
+		b.LocalGet(bv)
+		b.Op(wasm.I32WrapI64)
+		b.I32Load(4)
+		b.Op(wasm.I32Ne)
+		b.returnIf(no)
+		b.until(func() {
+			b.LocalGet(i)
+			b.LocalGet(n)
+			b.Op(wasm.I32GeU)
+		}, func() {
+			value(a)
+			value(bv)
+			b.Call(c.rt.equal)
+			b.Op(wasm.I32Eqz)
+			b.returnIf(no)
+			b.incr(i)
+		})
+		b.I32Const(1)
+		b.Op(wasm.Return)
+	})
 	b.LocalGet(ta)
 	b.I32Const(tagString)
 	b.Op(wasm.I32Eq)
@@ -1138,6 +1204,10 @@ func (c *wasmCompiler) builtinBody(b *wasmBody, spec builtin) {
 			b.LocalSet(t)
 			b.tagIn(t, tagsOf(typ))
 			b.boolean()
+			return
+		}
+		if op, isVector := vectorOps[name]; isVector {
+			op(c, b)
 			return
 		}
 		c.stringBuiltin(b, name)
