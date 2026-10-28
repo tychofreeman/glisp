@@ -38,6 +38,8 @@ var tagKinds = []tagKind{
 	{tagClosure, "function", &layout{size: 16, count: 8, elem: 8, elemValues: true}},
 	{tagCell, "", &layout{size: 16, values: []uint32{8}}},
 	{tagVector, "vector", &layout{size: 8, count: 4, elem: 8, elemValues: true}},
+	{tagMap, "map", &layout{size: 16, values: []uint32{8}}},
+	{tagMapNode, "", &layout{size: 16, count: 12, elem: 8, elemValues: true}},
 }
 
 // tagsOf are the tags of the types typs.

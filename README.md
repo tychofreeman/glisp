@@ -24,8 +24,8 @@ predicates `number? string? symbol? list? function? boolean? nil? vector?
 map?`,
 strings `str string_length substring chars string< symbol parse_number`, and
 vectors `vector vector_ref vector_length vector_set vector_to_list`, maps
-`map map_get map_put map_remove map_has map_count map_keys map_to_list`
-(interpreted only, so far), and `hash`.
+`map map_get map_put map_remove map_has map_count map_keys map_to_list`,
+and `hash`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`.
@@ -288,13 +288,17 @@ be fast to build without giving that up.
   against a Go `map` with random operations (maps.go, maps_test.go),
   for one shape however a map was built (removing the even keys of
   0..999 leaves the trie of the odd ones), and for keys whose whole
-  hashes collide. Until the next step, compiled code fails on the map
-  builtins (`map: maps aren't in compiled code yet`); `map?` is false
-  there.
-- [ ] **CHAMP in wasm.** One `tagKinds` row per node kind (a header,
-  the slot count, values), so the collector needs nothing else, and a
-  `tagMap` object holding the count and root; `i32.popcnt` in the
-  encoder.
+  hashes collide.
+- [x] **CHAMP in wasm.** The same tries in memory (wasm_maps.go): a
+  `tagMap` object (count, root) and `tagMapNode` nodes (two bitmaps, a
+  slot count, then keys and values and subtries), both rows of
+  `tagKinds`, so the collector needed nothing else; `i32.popcnt` in the
+  encoder. One `nodeSplice` copies a node with slots taken out and put
+  in, which every update is. Puts, removes (folding a one-entry subtrie
+  back up), printing and equality follow the interpreter step for step,
+  so a map has the same shape and prints the same in both backends: a
+  parity program puts and removes 3,000 pseudo-random keys and prints
+  the result, and another builds 2,000 entries and removes half.
 - [ ] **Transients inside.** `map` and other bulk builds mutate nodes
   they made themselves, then freeze the result; no program sees the
   steps. Then measure against a mutable Go map, building and updating

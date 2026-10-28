@@ -5,9 +5,10 @@ import "github.com/tychofreeman/glisp/wasm"
 // Hashing in compiled code: the encoding hash.go describes, fed to the same
 // FNV-1a.
 
-// hashIntoBody is hashInto(v, h): the hash h with v's encoding fed in.
+// hashIntoBody is hashInto(v, h, name): the hash h with v's encoding fed
+// in. name, a string, names the builtin for the error a function gives.
 func (c *wasmCompiler) hashIntoBody(b *wasmBody) {
-	v, h := b.param(0), b.param(1)
+	v, h, name := b.param(0), b.param(1), b.param(2)
 	t, p, n, i := b.local(i32), b.local(i32), b.local(i32), b.local(i32)
 	put := func(value func()) {
 		b.LocalGet(h)
@@ -89,6 +90,7 @@ func (c *wasmCompiler) hashIntoBody(b *wasmBody) {
 		}, func() {
 			b.field(v, 8)
 			b.LocalGet(h)
+			b.LocalGet(name)
 			b.Call(c.rt.hashInto)
 			b.LocalSet(h)
 			b.field(v, 16)
@@ -111,11 +113,17 @@ func (c *wasmCompiler) hashIntoBody(b *wasmBody) {
 			element(b, p, func() { b.LocalGet(i) })
 			b.I64Load(8)
 			b.LocalGet(h)
+			b.LocalGet(name)
 			b.Call(c.rt.hashInto)
 			b.LocalSet(h)
 			b.incr(i)
 		})
 		putByte(']')
 	})
-	c.fail(b, "hash: can't hash ", func() { c.typeAndValue(b, v) })
+	c.fail(b, "", func() {
+		b.LocalGet(name)
+		b.Call(c.rt.putStr)
+		c.text(b, ": can't hash ")
+		c.typeAndValue(b, v)
+	})
 }
