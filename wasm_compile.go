@@ -134,8 +134,17 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 		return nodes
 	}
 	var stdlibNodes, programNodes []Node
-	for _, form := range stdlibForms {
-		stdlibNodes = append(stdlibNodes, expand(form)...)
+	nodes, macros := stdlibExpanded()
+	for name, macro := range macros {
+		scope.add(name, macro)
+	}
+	for _, node := range nodes {
+		if def, isDef := node.(Def); isDef {
+			if _, isLambda := def.Value.(Lambda); isLambda {
+				Eval(node, scope) // so the program's macros can call it
+			}
+		}
+		stdlibNodes = append(stdlibNodes, Resolve(node))
 	}
 	var programLines []int
 	for _, token := range tokens {

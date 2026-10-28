@@ -1048,3 +1048,9 @@ One entry per PR, written before committing it.
   test's first version wrote each case as a top-level form, which made
   a 970KB module that took wazero 5s to compile; rewritten to pass the
   inputs as quoted lists, 0.7s. Nothing by hand.
+
+### PR: The stdlib, expanded once
+
+- `replace_statements` with `function` for `newScope`, `add_declaration`
+  for `stdlibExpanded` (it added the `sync` import), `replace_text` for
+  the compiler's loop and a parity program. Nothing by hand.

@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"sync"
 )
 
 type Function func(_ *Scope, params List) interface{}
@@ -230,15 +231,40 @@ var builtinScope = &Scope{table: builtins}
 // stdlibForms is stdlib.glisp, read once.
 var stdlibForms = Read(TokenizeString(stdlib)).(List)
 
-// newScope makes the top-level scope for one run: its own definitions over
-// the builtins, which it never changes, with the stdlib loaded.
-func newScope() *Scope {
-	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}, run: &runState{}}
+// stdlibExpanded is the stdlib expanded once, in a scope of its own: its
+// nodes, and the macros it defines. A run evaluates the nodes in its own
+// scope; the macros, closures over the stdlib's scope, expand the run's
+// forms, so a program's definitions don't change what a stdlib macro does.
+var stdlibExpanded = sync.OnceValues(func() ([]Node, map[string]Macro) {
+	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}}
 	expander := NewExpander(scope)
+	var nodes []Node
 	for _, form := range stdlibForms {
 		for _, node := range expander.ExpandTop(form) {
 			Eval(node, scope)
+			nodes = append(nodes, node)
 		}
+	}
+	macros := map[string]Macro{}
+	for name, value := range scope.table {
+		if macro, isMacro := value.(Macro); isMacro {
+			macros[name] = macro
+		}
+	}
+	return nodes, macros
+})
+
+// newScope makes the top-level scope for one run: its own definitions over
+// the builtins, which it never changes, with the stdlib loaded: its macros,
+// and its definitions, evaluated from the nodes expanded once.
+func newScope() *Scope {
+	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}, run: &runState{}}
+	nodes, macros := stdlibExpanded()
+	for name, macro := range macros {
+		scope.add(name, macro)
+	}
+	for _, node := range nodes {
+		Eval(node, scope)
 	}
 	return scope
 }
