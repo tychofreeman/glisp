@@ -1117,3 +1117,13 @@ One entry per PR, written before committing it.
   backends report at line 7, the last line a call ran on, not 14: a
   line is never restored when a call returns (a roadmap item now).
   Nothing by hand.
+
+### PR: Exact reduction for large trigonometric arguments
+
+- glisp, in stdlib.glisp, by `replace_text` (the table generated from
+  Go's `mPi4` by a script); the test's argument generators by
+  `replace_text`. The first version named a helper `math_pow2`, which
+  the stdlib already had with three parameters, so `exp` broke: a
+  second definition silently replaces the first. An operation that
+  refuses a glisp definition of a name already defined (or a warning
+  from the expander) would have caught it. Nothing by hand.
