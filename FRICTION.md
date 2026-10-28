@@ -1063,3 +1063,7 @@ One entry per PR, written before committing it.
   would have done). The first size test compared different programs
   and failed on their own code's size; rewritten to add a float to the
   same program. Nothing by hand.
+
+### PR: Roadmap for interop with Go
+
+- README only, one `replace_text`. Nothing by hand.
