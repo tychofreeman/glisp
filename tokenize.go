@@ -21,8 +21,8 @@ func TokenizeFile(fname string) List {
 	return tokenizeList(b, false)
 }
 
-// Tokenize reads every form in bs. It panics on unbalanced parens or an
-// unterminated string.
+// Tokenize reads every form in bs. It panics on unbalanced parens, an
+// unterminated string or an unknown escape in one.
 func Tokenize(bs *bytes.Buffer) List {
 	return tokenizeList(bs, false)
 }
@@ -77,7 +77,9 @@ func (t *tokenizer) list(nested bool) List {
 		if c == '\n' {
 			t.line++
 		}
-		if inQuote && c != '"' {
+		if inQuote && c == '\\' {
+			acc += t.escape()
+		} else if inQuote && c != '"' {
 			acc += string(c)
 		} else if !unicode.IsSpace(c) && c != '(' && c != ')' && c != '"' {
 			acc += string(c)
@@ -115,4 +117,24 @@ func (t *tokenizer) list(nested bool) List {
 		r = append(r, token(acc))
 	}
 	return r
+}
+
+// escape reads an escape in a string, after its backslash, and returns the
+// character it stands for: \" and \\ themselves, \n a newline, \t a tab.
+// At the end of the input it returns nothing, and the string is
+// unterminated.
+func (t *tokenizer) escape() string {
+	if t.bs.Len() == 0 {
+		return ""
+	}
+	c, _, _ := t.bs.ReadRune()
+	switch c {
+	case '"', '\\':
+		return string(c)
+	case 'n':
+		return "\n"
+	case 't':
+		return "\t"
+	}
+	panic(fmt.Sprintf("line %d: unknown escape \\%c in a string", t.line, c))
 }
