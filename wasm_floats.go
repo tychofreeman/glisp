@@ -30,6 +30,7 @@ func (c *wasmCompiler) declareFloats() {
 	rt.bnSub = c.declare(sig(vals(i32, i32)))
 	rt.bnCmp = c.declare(sig(vals(i32, i32), i32))
 	rt.putFloat = c.declare(sig(vals(i64)))
+	rt.parseFloat = c.declare(sig(vals(i32), i64))
 }
 
 func (c *wasmCompiler) defineFloats() {
@@ -43,6 +44,7 @@ func (c *wasmCompiler) defineFloats() {
 	c.define(rt.bnSub, bnSubBody)
 	c.define(rt.bnCmp, bnCmpBody)
 	c.define(rt.putFloat, c.putFloatBody)
+	c.define(rt.parseFloat, c.parseFloatBody)
 }
 
 // floatOps compile the float builtins. Their arguments have been checked
@@ -397,6 +399,337 @@ func bnCmpBody(b *wasmBody) {
 		})
 	})
 	b.I32Const(0)
+}
+
+// parseFloat(s) is the float the string object s spells, as readFloat reads
+// it, or nil. The digits kept make a bignum N, and the value is N * 10^e:
+// as A/B, with A and B bignums, scaled by 2^k into [1, 2); then as many
+// bits of the quotient as the float has, rounded to nearest, ties to even.
+func (c *wasmCompiler) parseFloatBody(b *wasmBody) {
+	s := b.param(0)
+	n, i, ch, negative, nd, e := b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32)
+	count, point, exponent, minusE, ev, k, p, j := b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32), b.local(i32)
+	q, bits := b.local(i64), b.local(i64)
+	at := func(offset int32) func() {
+		return func() {
+			b.GlobalGet(gScratch)
+			b.I32Const(offset)
+			b.Op(wasm.I32Add)
+		}
+	}
+	A, B, Z, T := at(0), at(bnSize), at(2*bnSize), at(4*bnSize)
+	set := func(x func(), v int64) {
+		x()
+		b.I64Const(v)
+		b.Call(c.rt.bnSet)
+	}
+	compare := func(x, y func()) {
+		x()
+		y()
+		b.Call(c.rt.bnCmp)
+	}
+	double := func(x func()) {
+		x()
+		x()
+		x()
+		b.Call(c.rt.bnAdd)
+	}
+	none := func() { b.returnIf(func() { b.I64Const(addrNil) }) }
+	next := func() { // ch is the byte at i, or 0 at the end
+		b.I32Const(0)
+		b.LocalSet(ch)
+		b.LocalGet(i)
+		b.LocalGet(n)
+		b.Op(wasm.I32LtU)
+		b.when(func() {
+			b.byteAt(s, i)
+			b.LocalSet(ch)
+		})
+	}
+	is := func(chars ...byte) { // whether ch is one of chars
+		for x, char := range chars {
+			b.LocalGet(ch)
+			b.I32Const(int32(char))
+			b.Op(wasm.I32Eq)
+			if x > 0 {
+				b.Op(wasm.I32Or)
+			}
+		}
+	}
+	digit := func() { // ch - '0', or 10 or more if ch isn't a digit
+		b.LocalGet(ch)
+		b.I32Const('0')
+		b.Op(wasm.I32Sub)
+	}
+	// digits reads a run of digits, each with each, and leaves how many.
+	digits := func(each func()) {
+		b.I32Const(0)
+		b.LocalSet(count)
+		b.until(func() {
+			next()
+			digit()
+			b.I32Const(10)
+			b.Op(wasm.I32GeU)
+		}, func() {
+			each()
+			b.incr(i)
+			b.incr(count)
+		})
+		b.LocalGet(count)
+	}
+	// keep adds a digit of the mantissa to N: up to maxDigits significant
+	// ones; a whole digit past them still scales the value by 10.
+	keep := func() {
+		b.LocalGet(nd)
+		b.I32Const(maxDigits)
+		b.Op(wasm.I32GeU)
+		b.ifElse(wasm.BlockVoid, func() { b.incr(e) }, func() {
+			b.LocalGet(nd)
+			b.Op(wasm.I32Eqz)
+			is('0')
+			b.Op(wasm.I32And, wasm.I32Eqz)
+			b.when(func() {
+				A()
+				b.I32Const(10)
+				b.Call(c.rt.bnMul)
+				T()
+				digit()
+				b.Op(wasm.I64ExtendI32U)
+				b.Call(c.rt.bnSet)
+				A()
+				A()
+				T()
+				b.Call(c.rt.bnAdd)
+				b.incr(nd)
+			})
+		})
+	}
+
+	b.LocalGet(s)
+	b.I32Load(4)
+	b.LocalSet(n)
+	set(A, 0)
+	next()
+	is('-')
+	b.when(func() {
+		b.I32Const(1)
+		b.LocalSet(negative)
+		b.incr(i)
+	})
+	digits(keep)
+	b.Op(wasm.I32Eqz)
+	none()
+	next()
+	is('.')
+	b.when(func() {
+		b.incr(i)
+		b.I32Const(1)
+		b.LocalSet(point)
+		digits(func() {
+			b.LocalGet(e)
+			b.I32Const(1)
+			b.Op(wasm.I32Sub)
+			b.LocalSet(e)
+			keep()
+		})
+		b.Op(wasm.I32Eqz)
+		none()
+	})
+	next()
+	is('e', 'E')
+	b.when(func() {
+		b.incr(i)
+		b.I32Const(1)
+		b.LocalSet(exponent)
+		next()
+		is('+', '-')
+		b.when(func() {
+			is('-')
+			b.LocalSet(minusE)
+			b.incr(i)
+		})
+		digits(func() {
+			b.LocalGet(ev)
+			b.I32Const(10)
+			b.Op(wasm.I32Mul)
+			digit()
+			b.Op(wasm.I32Add)
+			b.LocalTee(ev)
+			b.I32Const(100000)
+			b.Op(wasm.I32GtU)
+			b.when(func() {
+				b.I32Const(100000)
+				b.LocalSet(ev)
+			})
+		})
+		b.Op(wasm.I32Eqz)
+		none()
+	})
+	b.LocalGet(i)
+	b.LocalGet(n)
+	b.Op(wasm.I32Ne)
+	b.LocalGet(point)
+	b.LocalGet(exponent)
+	b.Op(wasm.I32Or, wasm.I32Eqz, wasm.I32Or)
+	none()
+	b.LocalGet(e)
+	b.I32Const(0)
+	b.LocalGet(ev)
+	b.Op(wasm.I32Sub)
+	b.LocalGet(ev)
+	b.LocalGet(minusE)
+	b.Op(wasm.Select, wasm.I32Add)
+	b.LocalSet(e)
+
+	// The value is below 10^(nd+e) and at least 10^(nd+e-1).
+	b.LocalGet(nd)
+	b.Op(wasm.I32Eqz)
+	b.LocalGet(nd)
+	b.LocalGet(e)
+	b.Op(wasm.I32Add)
+	b.I32Const(-324)
+	b.Op(wasm.I32LtS, wasm.I32Or)
+	b.ifElse(wasm.BlockVoid, func() {}, func() {
+		b.LocalGet(nd)
+		b.LocalGet(e)
+		b.Op(wasm.I32Add)
+		b.I32Const(310)
+		b.Op(wasm.I32GtS)
+		b.ifElse(wasm.BlockVoid, func() {
+			b.I64Const(0x7ff0000000000000)
+			b.LocalSet(bits)
+		}, func() {
+			// A/B = N * 10^e.
+			set(B, 1)
+			b.until(func() {
+				b.LocalGet(e)
+				b.Op(wasm.I32Eqz)
+			}, func() {
+				b.LocalGet(e)
+				b.I32Const(0)
+				b.Op(wasm.I32GtS)
+				b.ifElse(wasm.BlockVoid, func() {
+					A()
+					b.I32Const(10)
+					b.Call(c.rt.bnMul)
+					b.LocalGet(e)
+					b.I32Const(1)
+					b.Op(wasm.I32Sub)
+					b.LocalSet(e)
+				}, func() {
+					B()
+					b.I32Const(10)
+					b.Call(c.rt.bnMul)
+					b.incr(e)
+				})
+			})
+			// Scale by 2^k so that 1 <= A/B < 2.
+			b.until(func() {
+				T()
+				B()
+				B()
+				b.Call(c.rt.bnAdd)
+				compare(A, T)
+				b.I32Const(0)
+				b.Op(wasm.I32LtS)
+			}, func() {
+				double(B)
+				b.incr(k)
+			})
+			b.until(func() {
+				compare(A, B)
+				b.I32Const(0)
+				b.Op(wasm.I32GeS)
+			}, func() {
+				double(A)
+				b.LocalGet(k)
+				b.I32Const(1)
+				b.Op(wasm.I32Sub)
+				b.LocalSet(k)
+			})
+			// p bits of mantissa: 53, fewer for a subnormal, none below
+			// half the least subnormal.
+			b.I32Const(53)
+			b.I32Const(1075)
+			b.LocalGet(k)
+			b.Op(wasm.I32Add)
+			b.LocalGet(k)
+			b.I32Const(-1022)
+			b.Op(wasm.I32GeS, wasm.Select)
+			b.LocalTee(p)
+			b.I32Const(0)
+			b.Op(wasm.I32GeS)
+			b.when(func() {
+				// p bits and a rounding bit, then whether anything is left.
+				b.until(func() {
+					b.LocalGet(j)
+					b.LocalGet(p)
+					b.Op(wasm.I32GtS)
+				}, func() {
+					b.LocalGet(q)
+					b.I64Const(1)
+					b.Op(wasm.I64Shl)
+					b.LocalSet(q)
+					compare(A, B)
+					b.I32Const(0)
+					b.Op(wasm.I32GeS)
+					b.when(func() {
+						A()
+						B()
+						b.Call(c.rt.bnSub)
+						b.LocalGet(q)
+						b.I64Const(1)
+						b.Op(wasm.I64Or)
+						b.LocalSet(q)
+					})
+					double(A)
+					b.incr(j)
+				})
+				set(Z, 0)
+				// mantissa = q/2, plus 1 if the rounding bit is set and
+				// anything is left or the mantissa is odd.
+				b.LocalGet(q)
+				b.I64Const(1)
+				b.Op(wasm.I64ShrU)
+				b.LocalGet(q)
+				b.I64Const(1)
+				b.Op(wasm.I64And, wasm.I32WrapI64)
+				compare(A, Z)
+				b.LocalGet(q)
+				b.I64Const(1)
+				b.Op(wasm.I64ShrU, wasm.I32WrapI64)
+				b.I32Const(1)
+				b.Op(wasm.I32And, wasm.I32Or, wasm.I32And, wasm.I64ExtendI32U, wasm.I64Add)
+				b.LocalSet(bits)
+				b.LocalGet(k)
+				b.I32Const(-1022)
+				b.Op(wasm.I32GeS)
+				b.when(func() {
+					b.LocalGet(k)
+					b.I32Const(1022)
+					b.Op(wasm.I32Add, wasm.I64ExtendI32U)
+					b.I64Const(52)
+					b.Op(wasm.I64Shl)
+					b.LocalGet(bits)
+					b.Op(wasm.I64Add)
+					b.LocalSet(bits)
+				})
+				b.LocalGet(bits)
+				b.I64Const(0x7ff0000000000000)
+				b.Op(wasm.I64GeU)
+				b.when(func() {
+					b.I64Const(0x7ff0000000000000)
+					b.LocalSet(bits)
+				})
+			})
+		})
+	})
+	b.LocalGet(bits)
+	b.LocalGet(negative)
+	b.Op(wasm.I64ExtendI32U)
+	b.I64Const(63)
+	b.Op(wasm.I64Shl, wasm.I64Or)
+	b.Call(c.rt.boxFloat)
 }
 
 // putFloat(bits) prints the float as formatFloat does. Its digits are the

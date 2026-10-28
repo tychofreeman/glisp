@@ -16,7 +16,7 @@ type wasmRuntime struct {
 	nodeRemove, mapPrint, mapPush, mapAllIn                  uint32
 	newMap, mapPut, mapGet, mapRemove                        uint32
 	objSize, gcCopy, gcReloc, gc                             uint32 // the garbage collector
-	boxFloat, floatBits, putFloat                            uint32 // floats
+	boxFloat, floatBits, putFloat, parseFloat                uint32 // floats
 	bnSet, bnMul, bnShl, bnAdd, bnSub, bnCmp                 uint32 // bignums, for printing them
 }
 

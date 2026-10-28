@@ -45,9 +45,10 @@ type FloatToken struct {
 func (f FloatToken) Str() string     { return f.value }
 func (f FloatToken) Type() TokenType { return FLOAT }
 
-// Value is the float nearest the literal: out of range, an infinity or 0.
+// Value is the float the literal spells, as parse_number reads it: out of
+// range, an infinity or 0.
 func (f FloatToken) Value() float64 {
-	v, _ := strconv.ParseFloat(f.value, 64)
+	v, _ := readFloat(strings.TrimPrefix(f.value, "+"))
 	return v
 }
 
