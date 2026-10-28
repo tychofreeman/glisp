@@ -20,10 +20,12 @@ WASI runtime (including Node's `node:wasi`) and prints the same output.
 
 Special forms: `quote if lambda def defmacro`. Builtins: `car cdr atom cons
 eq apply p error`, `true false nil`, arithmetic `plus - * / mod < > <= >=`, and type
-predicates `number? string? symbol? list? function? boolean? nil? vector?`,
+predicates `number? string? symbol? list? function? boolean? nil? vector?
+map?`,
 strings `str string_length substring chars string< symbol parse_number`, and
-vectors `vector vector_ref vector_length vector_set vector_to_list`, and
-`hash`.
+vectors `vector vector_ref vector_length vector_set vector_to_list`, maps
+`map map_get map_put map_remove map_has map_count map_keys map_to_list`
+(interpreted only, so far), and `hash`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`.
@@ -274,7 +276,7 @@ be fast to build without giving that up.
   separate Python implementation of the encoding, and parity programs
   check that compiled code hashes alike, nested lists and vectors
   included.
-- [ ] **CHAMP in the interpreter.** A hash array mapped trie (Bagwell)
+- [x] **CHAMP in the interpreter.** A hash array mapped trie (Bagwell)
   in Steindorff and Vinju's CHAMP form: 32-way nodes with a bitmap for
   inline key/value pairs and one for child nodes, `popcount` to index
   them, collision nodes at the bottom, and compaction on removal so
@@ -283,7 +285,12 @@ be fast to build without giving that up.
   through `builtinSpecs` with a `mapKind`: `map`, `map_get` (with an
   optional default), `map_put`, `map_remove`, `map_has`, `map_count`,
   `map_keys`, `map_to_list`, `map?`; printed `{k v, k v}`. Tested
-  against a Go `map` with random operations.
+  against a Go `map` with random operations (maps.go, maps_test.go),
+  for one shape however a map was built (removing the even keys of
+  0..999 leaves the trie of the odd ones), and for keys whose whole
+  hashes collide. Until the next step, compiled code fails on the map
+  builtins (`map: maps aren't in compiled code yet`); `map?` is false
+  there.
 - [ ] **CHAMP in wasm.** One `tagKinds` row per node kind (a header,
   the slot count, values), so the collector needs nothing else, and a
   `tagMap` object holding the count and root; `i32.popcnt` in the

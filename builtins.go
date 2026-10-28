@@ -34,17 +34,18 @@ const (
 	listKind // a list, or nil as the empty list
 	functionKind
 	vectorKind
+	mapKind
 )
 
 // noun names k in a message: "expected a number".
 func (k kind) noun() string {
-	return [...]string{"anything", "a number", "a string", "a list", "a function", "a vector"}[k]
+	return [...]string{"anything", "a number", "a string", "a list", "a function", "a vector", "a map"}[k]
 }
 
 // types are the types of k's values, as typeName names them; none for
 // anyKind, which takes any value.
 func (k kind) types() []string {
-	return [][]string{nil, {"number"}, {"string"}, {"list", "nil"}, {"function"}, {"vector"}}[k]
+	return [][]string{nil, {"number"}, {"string"}, {"list", "nil"}, {"function"}, {"vector"}, {"map"}}[k]
 }
 
 // has reports whether v is of kind k.
@@ -152,13 +153,21 @@ var builtinSpecs = append([]builtin{
 	{"vector_set", arity{3, 3}, []kind{vectorKind, numberKind, anyKind}, vectorSet},
 	{"vector_to_list", arity{1, 1}, []kind{vectorKind}, vectorToList},
 	{"hash", arity{1, 1}, anyOne, hashBuiltin},
+	{"map", arity{0, -1}, nil, makeMap},
+	{"map_get", arity{2, 3}, []kind{mapKind, anyKind}, mapGet},
+	{"map_put", arity{3, 3}, []kind{mapKind, anyKind}, mapPut},
+	{"map_remove", arity{2, 2}, []kind{mapKind, anyKind}, mapRemove},
+	{"map_has", arity{2, 2}, []kind{mapKind, anyKind}, mapHas},
+	{"map_count", arity{1, 1}, []kind{mapKind}, mapCount},
+	{"map_keys", arity{1, 1}, []kind{mapKind}, mapKeys},
+	{"map_to_list", arity{1, 1}, []kind{mapKind}, mapToList},
 }, typePredicateSpecs()...)
 
 // typePredicates are the builtins that test a value's type, each with the
 // type it tests, as typeName names it.
 var typePredicates = [][2]string{
 	{"number?", "number"}, {"string?", "string"}, {"symbol?", "symbol"}, {"list?", "list"},
-	{"function?", "function"}, {"boolean?", "bool"}, {"nil?", "nil"}, {"vector?", "vector"},
+	{"function?", "function"}, {"boolean?", "bool"}, {"nil?", "nil"}, {"vector?", "vector"}, {"map?", "map"},
 }
 
 func typePredicateSpecs() []builtin {
