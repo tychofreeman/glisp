@@ -556,6 +556,36 @@ func TestVectors(t *testing.T) {
 	assertPanicsWith(t, `(vector_length 5)`, `vector_length: expected a vector, got number 5`)
 }
 
+func TestHashIsFNV1aOverTheEncoding(t *testing.T) {
+	// From an implementation of the encoding apart from this one: the hash
+	// decides the order maps print in, so it must not change by accident.
+	for _, c := range []struct {
+		src  string
+		want int64
+	}{
+		{`0`, 2294983236},
+		{`-1`, 1997622588},
+		{`4611686018427387903`, 3071390204},
+		{`nil`, 3943445553},
+		{`true`, 4044111267},
+		{`false`, 3809224601},
+		{`""`, 3997408162},
+		{`"abc"`, 4046054095},
+		{`"héllo"`, 685703913},
+		{`(quote abc)`, 2971179945},
+		{`(quote ())`, 685372826},
+		{`(quote (1 2))`, 2400568583},
+		{`(quote (1 (2 "x") b))`, 282103428},
+		{`(vector)`, 1947613349},
+		{`(vector 1 (quote (a)))`, 2684796319},
+	} {
+		AssertThat(t, Process("(hash "+c.src+")"), Equals(c.want))
+	}
+	AssertThat(t, Process(`(eq (hash (quote (1 2))) (hash (cons 1 (cons 2 nil))))`), IsTrue)
+	assertPanicsWith(t, "(hash car)", "hash: can't hash function <function>")
+	assertPanicsWith(t, "(hash (cons 1 (cons car nil)))", "hash: can't hash function <function>")
+}
+
 func TestFunctionsCanBeStoredInLists(t *testing.T) {
 	AssertThat(t, Process("((car (cons plus nil)) 1 2)"), Equals(int64(3)))
 }
