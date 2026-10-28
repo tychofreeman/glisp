@@ -2,6 +2,7 @@ package glisp
 
 import (
 	"math"
+	"slices"
 
 	"github.com/tychofreeman/glisp/wasm"
 )
@@ -18,6 +19,48 @@ const (
 	bnSize      = 4 * bnLimbs
 	scratchSize = 5*bnSize + 24
 )
+
+// floatMakers are the builtins that make a float from what isn't one;
+// arithmetic gives a float only from a float.
+var floatMakers = map[string]bool{"float": true, "sqrt": true, "parse_number": true}
+
+// makesFloats reports whether the code in nodes can make a float: whether it
+// has a float literal or quoted float, or names a builtin that makes one. A
+// builtin is only reached by its name, so a module whose code can't make a
+// float never has one, and leaves the float runtime out.
+func makesFloats(nodes []Node) bool {
+	var datum func(d interface{}) bool
+	datum = func(d interface{}) bool {
+		switch d := d.(type) {
+		case float64:
+			return true
+		case List:
+			return slices.ContainsFunc(d, datum)
+		}
+		return false
+	}
+	var node func(n Node) bool
+	node = func(n Node) bool {
+		switch n := n.(type) {
+		case Const:
+			return datum(n.Value)
+		case Quote:
+			return datum(n.Datum)
+		case Ref:
+			return floatMakers[n.Name]
+		case If:
+			return node(n.Cond) || node(n.Then) || node(n.Else)
+		case Lambda:
+			return slices.ContainsFunc(n.Body, node)
+		case Def:
+			return node(n.Value)
+		case Apply:
+			return node(n.Fn) || slices.ContainsFunc(n.Args, node)
+		}
+		return false
+	}
+	return slices.ContainsFunc(nodes, node)
+}
 
 func (c *wasmCompiler) declareFloats() {
 	rt := &c.rt

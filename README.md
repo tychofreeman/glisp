@@ -475,10 +475,18 @@ In order, one PR each:
   nodes: 26µs a run, and the tests 31s to 24s. The macros are closures
   over the stdlib's scope, so a program that defines `let_expand` or
   `fold` no longer changes what `let` or `match` do.
-- [ ] **Floats, later.** The float runtime, with its bignums, is
-  in every module (4.5KB; the module for `(p 1)` went from 17.9KB to
-  22.4KB): leave out runtime functions a program can't reach, as the
-  stdlib already is.
+- [x] **No float runtime without floats.** The float runtime (boxing,
+  printing and reading with bignums, about 4.3KB) was in every module.
+  A float can only come from a float literal or quoted float, or from
+  `float`, `sqrt` or `parse_number` (arithmetic gives a float only from
+  a float), and a builtin is only reached by its name; so the compiler
+  checks the code the module will hold (`makesFloats`, after `usedDefs`)
+  and, if it can't make a float, leaves out the float runtime and every
+  float path in arithmetic, comparison, equality, hashing and printing.
+  The module for `(p 1)` went from 23.5KB to 19.2KB. A test adds a float
+  to programs with and without floats and checks what it costs. Left
+  for later: the same for other parts of the runtime a program can't
+  reach (maps, vectors, data), in general by reachability.
 - [x] **String escapes.** `\"`, `\\`, `\n` and `\t` in string literals,
   so a string can hold a quote; a backslash before anything else is an
   error (`line 1: unknown escape \q in a string`). The tokenizer reads
