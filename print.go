@@ -25,6 +25,12 @@ func Write(v interface{}) string {
 			parts[i] = Write(item)
 		}
 		return "(" + strings.Join(parts, " ") + ")"
+	case Vector:
+		parts := make([]string, len(v))
+		for i, item := range v {
+			parts[i] = Write(item)
+		}
+		return "[" + strings.Join(parts, " ") + "]"
 	case Symbol:
 		return v.Str()
 	case nil:
@@ -75,6 +81,8 @@ func typeName(v interface{}) string {
 		return "symbol"
 	case List:
 		return "list"
+	case Vector:
+		return "vector"
 	case Function, *Closure:
 		return "function"
 	case Macro:

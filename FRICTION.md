@@ -884,3 +884,14 @@ One entry per PR, written before committing it.
 - The only failure was an expected value I worked out wrong
   (3037000500^2 wraps to 145474192); the parity test, which compares with
   compiled code, had it right. One `replace_text`.
+
+### PR: vectors
+
+- One 20-step batch, tests first, passed the first time: `create_file`
+  for vectors.go and wasm_vectors.go, `add_declaration` for the test,
+  and `replace_text` for the rest (the kind tables, spec rows, `Write`,
+  `typeName`, `equal`, the tag, the `tagKinds` row, and the wasm print,
+  equality and dispatch cases).
+- The new tag collided with the collector's forwarding marker (10); the
+  marker moved to 255. Nothing tied the two together but the numbers: an
+  enum for the tags with the marker outside it would make that visible.

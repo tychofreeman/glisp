@@ -47,6 +47,7 @@ const (
 	tagSymbol  // like a string
 	tagClosure // table index at +4, count at +8, captured cells from +16
 	tagCell    // a captured variable: its value at +8
+	tagVector  // length at +4, values from +8
 )
 
 // The memory layout. Static objects (the four constants, strings, quoted

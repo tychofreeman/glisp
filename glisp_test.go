@@ -529,6 +529,33 @@ func TestIntegersWrapAt63Bits(t *testing.T) {
 	}
 }
 
+func TestVectors(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`(vector 1 (quote (a b)) "s")`, `[1 (a b) "s"]`},
+		{`(vector)`, `[]`},
+		{`(vector_ref (vector 1 2 3) 1)`, `2`},
+		{`(vector_length (vector 1 2 3))`, `3`},
+		{`(let (v (vector 1 2)) (cons (vector_set v 0 9) (cons v nil)))`, `([9 2] [1 2])`},
+		{`(vector_to_list (vector 1 2))`, `(1 2)`},
+		{`(apply vector (quote (1 2 3)))`, `[1 2 3]`},
+		{`(eq (vector 1 (quote (2))) (vector 1 (quote (2))))`, `true`},
+		{`(eq (vector 1) (vector 2))`, `false`},
+		{`(eq (vector 1) (vector 1 2))`, `false`},
+		{`(eq (vector) (quote ()))`, `false`},
+		{`(vector? (vector))`, `true`},
+		{`(vector? (quote ()))`, `false`},
+		{`(atom (vector))`, `true`},
+		{`(list? (vector))`, `false`},
+	} {
+		AssertThat(t, Show(Process(c.src)), Equals(c.want))
+	}
+	assertPanicsWith(t, `(vector_ref (vector 1) 1)`, `vector_ref: index 1 out of range for a vector of length 1`)
+	assertPanicsWith(t, `(vector_ref (vector 1) -1)`, `vector_ref: index -1 out of range for a vector of length 1`)
+	assertPanicsWith(t, `(vector_set (vector) 0 1)`, `vector_set: index 0 out of range for a vector of length 0`)
+	assertPanicsWith(t, `(vector_ref (quote (1)) 0)`, `vector_ref: expected a vector, got list (1)`)
+	assertPanicsWith(t, `(vector_length 5)`, `vector_length: expected a vector, got number 5`)
+}
+
 func TestFunctionsCanBeStoredInLists(t *testing.T) {
 	AssertThat(t, Process("((car (cons plus nil)) 1 2)"), Equals(int64(3)))
 }
