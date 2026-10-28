@@ -259,6 +259,41 @@ prints exactly what the interpreter does, error messages included.
   97s to 50s). The interpreter's stdlib load was never the cost: 41us a
   run.
 
+### Maps
+
+Planned: immutable maps, like the rest of glisp, built so that a map can
+be fast to build without giving that up.
+
+- [ ] **One hash for both backends.** FNV-1a over a canonical encoding of
+  a value: integers, booleans and nil as fixed codes, strings and
+  symbols by their bytes with a type salt, lists and vectors by their
+  elements' hashes. Functions can't be keys (`eq` never finds them
+  equal). Both backends must hash alike, since a map prints in trie
+  order; a parity test on hashes alone comes first.
+- [ ] **CHAMP in the interpreter.** A hash array mapped trie (Bagwell)
+  in Steindorff and Vinju's CHAMP form: 32-way nodes with a bitmap for
+  inline key/value pairs and one for child nodes, `popcount` to index
+  them, collision nodes at the bottom, and compaction on removal so
+  equal maps have one shape. Updates copy the path from the root
+  (Okasaki's path copying), 3-4 nodes for a million keys. Builtins
+  through `builtinSpecs` with a `mapKind`: `map`, `map_get` (with an
+  optional default), `map_put`, `map_remove`, `map_has`, `map_count`,
+  `map_keys`, `map_to_list`, `map?`; printed `{k v, k v}`. Tested
+  against a Go `map` with random operations.
+- [ ] **CHAMP in wasm.** One `tagKinds` row per node kind (a header,
+  the slot count, values), so the collector needs nothing else, and a
+  `tagMap` object holding the count and root; `i32.popcnt` in the
+  encoder.
+- [ ] **Transients inside.** `map` and other bulk builds mutate nodes
+  they made themselves, then freeze the result; no program sees the
+  steps. Then measure against a mutable Go map, building and updating
+  (a word count), to see where the gap is.
+- [ ] **Explicit transients, later (the door left open).** If
+  write-heavy programs need it, Clojure's model: a transient taken
+  from a map, updated in place by its one owner, and frozen back into
+  an immutable map. Keep the node layout and builder able to carry an
+  owner, so this needs no redesign.
+
 ### Missing abstractions
 
 What a review of the code found: concepts each restated in several places,
