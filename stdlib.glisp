@@ -53,3 +53,38 @@
         (cons (cond_body (cdr (car clauses)))
           (cons (cond_expand (cdr clauses)) nil))))))
 (defmacro cond (lambda (clauses) (cond_expand clauses)))
+
+; A list library. Each function takes nil or () as the empty list, gives ()
+; for an empty result, and runs in constant stack.
+
+; (list a b ...) is the list of its arguments.
+(defn list items items)
+
+; (empty? l) is true if l is nil or the empty list.
+(defn empty? (l) (or (eq l nil) (eq l (quote ()))))
+
+; (fold f acc l) is (f (f (f acc a) b) c) for l = (a b c).
+(defn fold (f acc l)
+  (if (empty? l) acc (fold f (f acc (car l)) (cdr l))))
+
+(defn reverse (l) (fold (lambda (acc x) (cons x acc)) (quote ()) l))
+
+; (foldr f init l) is (f a (f b (f c init))) for l = (a b c).
+(defn foldr (f init l) (fold (lambda (acc x) (f x acc)) init (reverse l)))
+
+(defn map (f l) (reverse (fold (lambda (acc x) (cons (f x) acc)) (quote ()) l)))
+
+(defn filter (keep l)
+  (reverse (fold (lambda (acc x) (if (keep x) (cons x acc) acc)) (quote ()) l)))
+
+(defn length (l) (fold (lambda (n x) (plus n 1)) 0 l))
+
+(defn append (a b) (foldr cons b a))
+
+(defn identity (x) x)
+
+; ((compose f g) x) is (f (g x)); (compose) is identity.
+(defn compose fs (foldr (lambda (f g) (lambda (x) (f (g x)))) identity fs))
+
+; ((partial f a) b) is (f a b).
+(defn partial (f . args) (lambda more (apply f (append args more))))

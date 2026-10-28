@@ -153,7 +153,7 @@ var builtinSpecs = append([]builtin{
 	{"vector_set", arity{3, 3}, []kind{vectorKind, numberKind, anyKind}, vectorSet},
 	{"vector_to_list", arity{1, 1}, []kind{vectorKind}, vectorToList},
 	{"hash", arity{1, 1}, anyOne, hashBuiltin},
-	{"map", arity{0, -1}, nil, makeMap},
+	{"hash_map", arity{0, -1}, nil, makeMap},
 	{"map_get", arity{2, 3}, []kind{mapKind, anyKind}, mapGet},
 	{"map_put", arity{3, 3}, []kind{mapKind, anyKind}, mapPut},
 	{"map_remove", arity{2, 2}, []kind{mapKind, anyKind}, mapRemove},

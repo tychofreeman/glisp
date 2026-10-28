@@ -201,7 +201,7 @@ with `'`. Write `(quote x)`.
 | boolean  | `true`, `false`           | `true`, `false`    | `boolean?`  |
 | function | `(lambda (x) x)`, `car`   | `<function>`       | `function?` |
 | vector   | `(vector 1 2)`            | `[1 2]`            | `vector?`   |
-| map      | `(map "a" 1)`             | `{"a" 1}`          | `map?`      |
+| map      | `(hash_map "a" 1)`        | `{"a" 1}`          | `map?`      |
 
 All values are immutable: operations that "change" a vector or map return a
 new one.
@@ -315,7 +315,7 @@ entries print in an order that is fixed (the same in both backends, and the
 same for equal maps however they were built) but not sorted.
 
 ```glisp
-(def m (map "apples" 3 "pears" 5))
+(def m (hash_map "apples" 3 "pears" 5))
 (p (map_get m "pears") (map_get m "plums") (map_get m "plums" 0))
 (def m2 (map_put m "plums" 7))
 (p (map_count m) (map_count m2) (map_has m2 "plums"))
@@ -573,7 +573,8 @@ before every program. A compiled program includes only the ones it uses.
 | `(cond (test body...) ...)` | the body of the first clause whose test is `true`, or `nil`. A test of `else` always is |
 | `(mult x y)` | `(* x y)`, kept for older programs |
 
-All but `not` and `mult` are macros.
+All but `not` and `mult` are macros. The stdlib also has a list library,
+below.
 
 ```glisp
 (defn describe (n)
@@ -591,6 +592,48 @@ All but `not` and `mult` are macros.
 negative zero small large
 false true 7 5 false
 => 22
+```
+
+### Lists
+
+| Function | Result |
+|----------|--------|
+| `(list x ...)` | the list of its arguments |
+| `(empty? l)` | whether `l` is `nil` or the empty list |
+| `(length l)` | the number of elements of `l` |
+| `(map f l)` | the list of `(f x)` for each element `x` of `l` |
+| `(filter f l)` | the elements `x` of `l` for which `(f x)` is `true` |
+| `(fold f acc l)` | `(f (f (f acc a) b) c)` for `l` = `(a b c)`; `acc` for an empty `l` |
+| `(foldr f init l)` | `(f a (f b (f c init)))` for `l` = `(a b c)`; `init` for an empty `l` |
+| `(reverse l)` | the elements of `l` in reverse order |
+| `(append a b)` | the elements of `a`, then those of `b` |
+| `(identity x)` | `x` |
+| `(compose f g ...)` | the function that applies the last of its arguments first: `((compose f g) x)` is `(f (g x))` |
+| `(partial f x ...)` | `f` with its first arguments given: `((partial f x) y)` is `(f x y)` |
+
+Each takes `nil` or `()` as the empty list, and an empty result is `()`.
+They all run in constant stack, so they work on lists of any length.
+They are ordinary definitions, so a program may redefine them; one that
+does changes the others that use it (`map` uses `fold` and `reverse`).
+
+```glisp
+(def nums (list 1 2 3 4 5))
+(defn square (x) (* x x))
+(defn even? (x) (eq 0 (mod x 2)))
+(p (map square nums) (filter even? nums) (length nums))
+(p (fold plus 0 nums) (foldr cons (quote ()) nums) (reverse nums))
+(p (append (list 1 2) (list 3)) (map square nil) (empty? nil) (empty? nums))
+(def inc_then_double (compose (partial * 2) (partial plus 1)))
+(p (inc_then_double 5) ((partial plus 1 2) 3) (identity 7))
+(fold (lambda (acc x) (plus acc (square x))) 0 nums)
+```
+
+```output
+(1 4 9 16 25) (2 4) 5
+15 (1 2 3 4 5) (5 4 3 2 1)
+(1 2 3) () true false
+12 6 7
+=> 55
 ```
 
 ## 8. Builtin functions
@@ -657,7 +700,7 @@ entry. Values of different types are never equal, nor are functions.
 ```glisp
 (p (eq 1 1) (eq "a" "a") (eq 1 "1"))
 (p (eq (quote (1 (2))) (quote (1 (2)))) (eq (vector 1 2) (vector 1 2)))
-(eq (map 1 2 3 4) (map 3 4 1 2))
+(eq (hash_map 1 2 3 4) (hash_map 3 4 1 2))
 ```
 
 ```output
@@ -752,7 +795,7 @@ glisp: line 3: vector_ref: index 3 out of range for a vector of length 3
 
 | Builtin | Result |
 |---------|--------|
-| `(map k v ...)` | a map of the keys and values given in pairs; a later value for the same key wins |
+| `(hash_map k v ...)` | a map of the keys and values given in pairs; a later value for the same key wins |
 | `(map_get m k)` | `k`'s value in `m`, or `nil` |
 | `(map_get m k default)` | `k`'s value in `m`, or `default` |
 | `(map_put m k v)` | a new map like `m` but with `k` bound to `v` |
@@ -767,7 +810,7 @@ that grows with the logarithm of the size, and a new map shares most of its
 structure with the old one.
 
 ```glisp
-(def m (map 1 "one" 1 "uno" (quote (a b)) "a list"))
+(def m (hash_map 1 "one" 1 "uno" (quote (a b)) "a list"))
 (p (map_count m) (map_get m 1) (map_get m (quote (a b))))
 (p (map_to_list (map_remove m (quote (a b)))))
 (map_put m car 1)
@@ -800,7 +843,7 @@ in both backends: equal values have equal hashes. Functions can't be hashed.
 
 ```glisp
 (p (number? 1) (string? "s") (symbol? (quote s)) (boolean? false))
-(p (list? (quote ())) (list? nil) (vector? (vector)) (map? (map)))
+(p (list? (quote ())) (list? nil) (vector? (vector)) (map? (hash_map)))
 ```
 
 ```output
@@ -883,14 +926,9 @@ What differs:
 A word count, with a map, a fold over a list, and sorting:
 
 ```glisp
-(defn fold (f acc l)
-  (if (eq l nil) acc
-    (if (eq l (quote ())) acc
-      (fold f (f acc (car l)) (cdr l)))))
-
 (defn count_words (words)
   (fold (lambda (counts w) (map_put counts w (plus 1 (map_get counts w 0))))
-        (map) words))
+        (hash_map) words))
 
 ; Insertion sort of (word count) pairs, most frequent first, then by word.
 (defn before (a b)

@@ -10,35 +10,35 @@ import (
 
 func TestMaps(t *testing.T) {
 	for _, c := range []struct{ src, want string }{
-		{`(map)`, `{}`},
-		{`(map 1 2)`, `{1 2}`},
-		{`(map_get (map 1 2) 1)`, `2`},
-		{`(map_get (map 1 2) 3)`, `nil`},
-		{`(map_get (map) 1 9)`, `9`},
-		{`(map_get (map 1 2 1 5) 1)`, `5`},
-		{`(map_count (map 1 2 3 4 1 5))`, `2`},
-		{`(map_has (map "a" 1) "a")`, `true`},
-		{`(map_has (map "a" 1) "b")`, `false`},
-		{`(map_count (map_remove (map 1 2 3 4) 1))`, `1`},
-		{`(map_count (map_remove (map 1 2) 7))`, `1`},
-		{`(map_get (map (quote (a b)) 1 (vector 1) 2) (quote (a b)))`, `1`},
-		{`(map_get (map (quote (a b)) 1 (vector 1) 2) (vector 1))`, `2`},
-		{`(map_keys (map (quote (a b)) 1))`, `((a b))`},
-		{`(map_to_list (map "k" (quote v)))`, `(("k" v))`},
-		{`(let (m (map 1 2)) (cons (map_put m 1 3) (cons m nil)))`, `({1 3} {1 2})`},
-		{`(eq (map 1 2 3 4) (map 3 4 1 2))`, `true`},
-		{`(eq (map 1 2) (map 1 3))`, `false`},
-		{`(eq (map 1 2) (map 1 2 3 4))`, `false`},
-		{`(eq (map) (vector))`, `false`},
-		{`(map? (map))`, `true`},
+		{`(hash_map)`, `{}`},
+		{`(hash_map 1 2)`, `{1 2}`},
+		{`(map_get (hash_map 1 2) 1)`, `2`},
+		{`(map_get (hash_map 1 2) 3)`, `nil`},
+		{`(map_get (hash_map) 1 9)`, `9`},
+		{`(map_get (hash_map 1 2 1 5) 1)`, `5`},
+		{`(map_count (hash_map 1 2 3 4 1 5))`, `2`},
+		{`(map_has (hash_map "a" 1) "a")`, `true`},
+		{`(map_has (hash_map "a" 1) "b")`, `false`},
+		{`(map_count (map_remove (hash_map 1 2 3 4) 1))`, `1`},
+		{`(map_count (map_remove (hash_map 1 2) 7))`, `1`},
+		{`(map_get (hash_map (quote (a b)) 1 (vector 1) 2) (quote (a b)))`, `1`},
+		{`(map_get (hash_map (quote (a b)) 1 (vector 1) 2) (vector 1))`, `2`},
+		{`(map_keys (hash_map (quote (a b)) 1))`, `((a b))`},
+		{`(map_to_list (hash_map "k" (quote v)))`, `(("k" v))`},
+		{`(let (m (hash_map 1 2)) (cons (map_put m 1 3) (cons m nil)))`, `({1 3} {1 2})`},
+		{`(eq (hash_map 1 2 3 4) (hash_map 3 4 1 2))`, `true`},
+		{`(eq (hash_map 1 2) (hash_map 1 3))`, `false`},
+		{`(eq (hash_map 1 2) (hash_map 1 2 3 4))`, `false`},
+		{`(eq (hash_map) (vector))`, `false`},
+		{`(map? (hash_map))`, `true`},
 		{`(map? (vector))`, `false`},
 	} {
 		AssertThat(t, Show(Process(c.src)), Equals(c.want))
 	}
-	assertPanicsWith(t, `(map 1)`, `map: expects keys and values in pairs, got 1 argument`)
-	assertPanicsWith(t, `(map_put (map) car 1)`, `map_put: can't hash function <function>`)
+	assertPanicsWith(t, `(hash_map 1)`, `hash_map: expects keys and values in pairs, got 1 argument`)
+	assertPanicsWith(t, `(map_put (hash_map) car 1)`, `map_put: can't hash function <function>`)
 	assertPanicsWith(t, `(map_get 5 1)`, `map_get: expected a map, got number 5`)
-	assertPanicsWith(t, `(map_get (map) 1 2 3)`, `map_get: expects 2 or 3 arguments, got 4`)
+	assertPanicsWith(t, `(map_get (hash_map) 1 2 3)`, `map_get: expects 2 or 3 arguments, got 4`)
 }
 
 // Random puts and removes, checked against a Go map after every step.

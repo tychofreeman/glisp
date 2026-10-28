@@ -28,11 +28,12 @@ predicates `number? string? symbol? list? function? boolean? nil? vector?
 map?`,
 strings `str string_length substring chars string< symbol parse_number`, and
 vectors `vector vector_ref vector_length vector_set vector_to_list`, maps
-`map map_get map_put map_remove map_has map_count map_keys map_to_list`,
+`hash_map map_get map_put map_remove map_has map_count map_keys map_to_list`,
 and `hash`.
 [`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
-`cond`.
+`cond`, and a list library: `list`, `empty?`, `length`, `map`, `filter`,
+`fold`, `foldr`, `reverse`, `append`, `identity`, `compose` and `partial`.
 
 ## Roadmap
 
@@ -303,7 +304,7 @@ be fast to build without giving that up.
   so a map has the same shape and prints the same in both backends: a
   parity program puts and removes 3,000 pseudo-random keys and prints
   the result, and another builds 2,000 entries and removes half.
-- [ ] **Transients inside.** `map` and other bulk builds mutate nodes
+- [ ] **Transients inside.** `hash_map` and other bulk builds mutate nodes
   they made themselves, then freeze the result; no program sees the
   steps. Then measure against a mutable Go map, building and updating
   (a word count), to see where the gap is.
@@ -376,10 +377,16 @@ Toward a Haskell-flavoured glisp. Decisions (2026-10-28, the user):
 
 In order, one PR each:
 
-- [ ] **`map` renamed, and a list library.** `hash_map` builds a hash
-  map; the stdlib gains `map`, `filter`, `fold`, `foldr`, `reverse`,
-  `append`, `length`, `list`, `compose` and `partial`, which programs
-  (the tour among them) defined for themselves.
+- [x] **`map` renamed, and a list library.** `hash_map` builds a hash
+  map; the stdlib gains `list`, `empty?`, `length`, `map`, `filter`,
+  `fold`, `foldr`, `reverse`, `append`, `identity`, `compose` (of any
+  number of functions) and `partial`, which programs (the tour among
+  them) defined for themselves; the examples now use them, and print
+  what they did, in both backends. Each takes `nil` or `()` as the empty
+  list and runs in constant stack: `map`, `filter` and `foldr` fold and
+  then reverse, rather than recursing. Specified, with examples, in
+  docs/spec.md. A program can still redefine any of them, which changes
+  the others that use it (`map` uses `fold` and `reverse`).
 - [ ] **Algebraic data types.** `(deftype shape (circle r) (rect w h))`
   defines constructors, a predicate per constructor and one for the
   type, and accessors. A value made by a constructor is a new kind of
