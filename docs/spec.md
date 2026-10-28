@@ -1,0 +1,929 @@
+# The glisp language
+
+glisp is a small, lexically scoped Lisp with immutable data. A program runs
+in two ways that print exactly the same thing, errors included:
+
+- the **interpreter**, written in Go, runs a program directly;
+- the **compiler** turns a program into a WebAssembly module for WASI, which
+  runs in any WASI runtime (wasmtime, wazero, Node).
+
+This document describes the language as both implement it. Every example
+under a `glisp` heading below is run by `TestSpecExamples`
+([`spec_test.go`](../spec_test.go)) in the interpreter and compiled, and
+must print exactly the output shown after it, so the examples stay true as
+the language changes.
+
+## Contents
+
+1. [Running programs](#1-running-programs)
+2. [Lexical structure](#2-lexical-structure)
+3. [Values and types](#3-values-and-types)
+4. [Evaluation](#4-evaluation)
+5. [Special forms](#5-special-forms)
+6. [Macros](#6-macros)
+7. [The standard library](#7-the-standard-library)
+8. [Builtin functions](#8-builtin-functions)
+9. [Errors](#9-errors)
+10. [The two backends](#10-the-two-backends)
+11. [A complete program](#11-a-complete-program)
+
+## 1. Running programs
+
+A program is a file of forms. Running it evaluates the forms in order,
+prints what each `p` call prints, and then prints `=>` and the value of the
+last form. `hello.glisp`:
+
+```text
+; hello.glisp
+(defn greet (name) (str "Hello, " name "!"))
+(p (greet "world"))
+(* 6 7)
+```
+
+### In the interpreter
+
+From a checkout of the repository:
+
+```sh
+go run ./cmd/glisp hello.glisp
+```
+
+```text
+Hello, world!
+=> 42
+```
+
+or install the command once and use it anywhere:
+
+```sh
+go install ./cmd/glisp      # puts glisp in $(go env GOPATH)/bin
+glisp hello.glisp
+```
+
+### Compiled to WebAssembly
+
+`-wasm OUT` compiles the program instead of running it. The module needs
+nothing but WASI's `fd_write` and `proc_exit`:
+
+```sh
+go run ./cmd/glisp -wasm hello.wasm hello.glisp
+```
+
+Then run the module in a WASI runtime. Each prints the same as the
+interpreter did:
+
+```sh
+wasmtime hello.wasm
+
+# wazero, the runtime glisp's tests use; from the glisp checkout this needs
+# no install, since go.mod already requires it:
+go run github.com/tetratelabs/wazero/cmd/wazero run hello.wasm
+
+# Node, with its built-in WASI (see run.mjs below):
+node run.mjs hello.wasm
+```
+
+For Node, `run.mjs` is:
+
+```js
+import { readFile } from 'node:fs/promises';
+import { WASI } from 'node:wasi';
+
+const wasi = new WASI({ version: 'preview1' });
+const module = await WebAssembly.compile(await readFile(process.argv[2]));
+const instance = await WebAssembly.instantiate(module, wasi.getImportObject());
+wasi.start(instance);
+```
+
+Node prints a warning that WASI is experimental, and Node 22 has been seen to
+crash on long runs; `node --no-wasm-tier-up run.mjs hello.wasm` mostly
+avoids it (see [the backends](#10-the-two-backends)).
+
+### Exit status and errors
+
+A program that runs to its end exits with status 0. An error stops the
+program: what it printed so far stays, then `glisp: ` and the message go to
+standard error, and the status is 1. Both backends do this. `fail.glisp`:
+
+```text
+(p "start")
+(car 5)
+(p "never printed")
+```
+
+```sh
+$ glisp fail.glisp; echo "status $?"
+start
+glisp: line 2: car: expected a list, got number 5
+status 1
+```
+
+The compiled module behaves the same:
+
+```sh
+$ glisp -wasm fail.wasm fail.glisp
+$ wasmtime fail.wasm; echo "status $?"
+start
+glisp: line 2: car: expected a list, got number 5
+status 1
+```
+
+A program that doesn't parse is reported when it is compiled, and no module
+is written. `bad.glisp` is `(p 1` and a newline:
+
+```sh
+$ glisp -wasm bad.wasm bad.glisp; echo "status $?"
+glisp: line 2: missing )
+status 1
+```
+
+### From Go
+
+The package `github.com/tychofreeman/glisp` does what the command does:
+
+```go
+value, err := glisp.Run(`(plus 1 2)`)   // value is int64(3); errors are returned
+fmt.Println(glisp.Show(value))           // 3
+
+module, err := glisp.CompileWasm(`(p "hi")`)  // the bytes of a WASI module
+```
+
+`RunFile` and `CompileWasmFile` take a file name instead of source.
+
+## 2. Lexical structure
+
+Source text is read as a sequence of forms. There are four kinds of token,
+and lists of forms in parentheses.
+
+**Whitespace** separates tokens. **Comments** run from `;` to the end of the
+line.
+
+**Integers** are an optional sign and decimal digits: `42`, `-7`, `+5`.
+
+**Strings** are any text between double quotes, and may span lines. There are
+no escapes: `\n` in a string is a backslash and an `n`, and a string can't
+contain `"`.
+
+**Symbols** are any other run of characters that aren't whitespace,
+parentheses or `"`: `x`, `string_length`, `nil?`, `<=`, `+`, `->`. A run of
+digits too long for 64 bits is a symbol too.
+
+**Lists** are forms in parentheses: `(plus 1 2)`, `(a (b c) "d")`, `()`.
+
+```glisp
+; A comment.
+(p 42 -7 +5)     ; three numbers
+(p "a string
+over two lines")
+(p "no \n escapes")
+```
+
+```output
+42 -7 5
+a string
+over two lines
+no \n escapes
+=> ()
+```
+
+There is no reader shorthand for quoting: `'x` is a symbol whose name starts
+with `'`. Write `(quote x)`.
+
+## 3. Values and types
+
+| Type     | Written as                | Printed as         | Predicate   |
+|----------|---------------------------|--------------------|-------------|
+| number   | `42`                      | `42`               | `number?`   |
+| string   | `"text"`                  | `text`, or `"text"` inside a structure | `string?` |
+| symbol   | `(quote name)`            | `name`             | `symbol?`   |
+| list     | `(quote (1 2))`           | `(1 2)`            | `list?`     |
+| nil      | `nil` or `()`             | `nil`              | `nil?`      |
+| boolean  | `true`, `false`           | `true`, `false`    | `boolean?`  |
+| function | `(lambda (x) x)`, `car`   | `<function>`       | `function?` |
+| vector   | `(vector 1 2)`            | `[1 2]`            | `vector?`   |
+| map      | `(map "a" 1)`             | `{"a" 1}`          | `map?`      |
+
+All values are immutable: operations that "change" a vector or map return a
+new one.
+
+**Numbers** are integers of 63 bits, from -2^62 to 2^62-1. Arithmetic wraps
+around at the ends, the same in both backends. There are no floating-point
+numbers.
+
+```glisp
+(p 4611686018427387903)
+(plus 4611686018427387903 1)
+```
+
+```output
+4611686018427387903
+=> -4611686018427387904
+```
+
+**Strings** are text, counted in characters (Unicode code points), not
+bytes. `p` and `=>` print a string as its text; inside a list, vector or map
+it is printed in quotes.
+
+```glisp
+(p "héllo" (string_length "héllo"))
+(p (quote ("a" b)))
+"done"
+```
+
+```output
+héllo 5
+("a" b)
+=> done
+```
+
+**Symbols** are names. Quoted, a symbol is a value; `symbol` makes one from
+a string.
+
+```glisp
+(p (quote apple) (symbol? (quote apple)))
+(eq (quote apple) (symbol "apple"))
+```
+
+```output
+apple true
+=> true
+```
+
+**Lists** are sequences of values. `nil` and the empty list `()` both end a
+list and both mean "nothing", but they are different values: `nil` is not a
+list, and `(quote ())` is. `()` written in code evaluates to `nil`.
+
+```glisp
+(p (list? (quote ())) (list? nil) (nil? nil))
+(p (eq (quote ()) nil) (eq () nil))
+(p (cdr (quote (1))) (car nil))
+```
+
+```output
+true false true
+false true
+() nil
+=> ()
+```
+
+There are no dotted pairs: `cons` onto something that isn't a list makes a
+list of two.
+
+**Booleans** are `true` and `false`. Only `true` counts as true: `if`
+treats every other value, `0` and `nil` and `()` included, as false.
+
+```glisp
+(p (if true "yes" "no") (if 1 "yes" "no") (if nil "yes" "no"))
+```
+
+```output
+yes no no
+=> ()
+```
+
+**Functions** are the builtins and the values of `lambda` expressions.
+Functions are never equal to anything, not even themselves.
+
+```glisp
+(p car (lambda (x) x))
+(p (function? car) (eq car car))
+```
+
+```output
+<function> <function>
+true false
+=> ()
+```
+
+**Vectors** hold values by index and read any of them in constant time.
+
+```glisp
+(def v (vector "a" "b" "c"))
+(p v (vector_ref v 1) (vector_length v))
+(p (vector_set v 0 "z") v)
+```
+
+```output
+["a" "b" "c"] b 3
+["z" "b" "c"] ["a" "b" "c"]
+=> ()
+```
+
+**Maps** associate keys with values. Any value but a function can be a key,
+including lists, vectors and maps; keys are compared with `eq`. A map's
+entries print in an order that is fixed (the same in both backends, and the
+same for equal maps however they were built) but not sorted.
+
+```glisp
+(def m (map "apples" 3 "pears" 5))
+(p (map_get m "pears") (map_get m "plums") (map_get m "plums" 0))
+(def m2 (map_put m "plums" 7))
+(p (map_count m) (map_count m2) (map_has m2 "plums"))
+(eq m (map_remove m2 "plums"))
+```
+
+```output
+5 nil 0
+2 3 true
+=> true
+```
+
+## 4. Evaluation
+
+A form is evaluated as follows:
+
+- a number or string evaluates to itself;
+- a symbol evaluates to the value it is bound to, in the innermost scope that
+  binds it (see [scope](#scope));
+- `()` evaluates to `nil`;
+- a list whose first element names a [special form](#5-special-forms) or a
+  [macro](#6-macros) is handled by it;
+- any other list is a **call**: its first element and then its arguments are
+  evaluated, left to right, and the function is called with the arguments.
+
+```glisp
+(plus (p 1) 2)
+```
+
+```output
+1
+glisp: line 1: plus: expected a number, got list ()
+```
+
+(`p` prints its arguments and returns `()`, which `plus` refuses after the
+`1` has been printed: the arguments were evaluated in order first.)
+
+Calling something that isn't a function is an error:
+
+```glisp
+(5 1)
+```
+
+```output
+glisp: line 1: Cannot call number 5 in (5 1)
+```
+
+### Scope
+
+Names are lexically scoped. The top level of a program is one scope, over the
+builtins; each call of a lambda makes a new scope, over the scope the lambda
+was made in, holding its parameters and its own `def`s. A name looks up
+through the scopes from the inside out.
+
+A closure sees the scope it was made in as it is when the closure is called,
+not as it was when it was made, so functions can refer to definitions that
+come after them, and to each other:
+
+```glisp
+(defn is_even (n) (if (eq n 0) true (is_odd (- n 1))))
+(defn is_odd (n) (if (eq n 0) false (is_even (- n 1))))
+(p (is_even 10) (is_odd 7))
+(def a 1)
+(defn get_a () a)
+(def a 2)
+(get_a)
+```
+
+```output
+true true
+=> 2
+```
+
+Builtins are ordinary names and can be redefined, in the program's own scope.
+
+### Tail calls
+
+A call whose value is the value of the function it is in, a **tail call**,
+doesn't use stack in either backend: a loop written as recursion runs in
+constant space, mutual recursion included. The branches of an `if`, the last
+form of a lambda, and the clauses of `and`, `or` and `cond` are in tail
+position.
+
+```glisp
+(defn count_down (n) (if (eq n 0) (quote done) (count_down (- n 1))))
+(count_down 1000000)
+```
+
+```output
+=> done
+```
+
+Calls that aren't tail calls nest; compiled code allows them about 300,000
+deep.
+
+## 5. Special forms
+
+There are five. They are recognised by name, before macros and calls.
+
+### `quote`
+
+`(quote datum)` is `datum` itself, not evaluated: a symbol stays a symbol and
+a list stays a list.
+
+```glisp
+(p (quote x) (quote (plus 1 2)) (quote (a (b "c") 3)))
+```
+
+```output
+x (plus 1 2) (a (b "c") 3)
+=> ()
+```
+
+### `if`
+
+`(if test then else)` evaluates `test`; if it is `true`, the value is that of
+`then`, otherwise that of `else`. Only one branch is evaluated. All three
+parts are required.
+
+```glisp
+(defn sign (n) (if (< n 0) -1 (if (eq n 0) 0 1)))
+(p (sign -5) (sign 0) (sign 9))
+(if true "only this" (car 5))
+```
+
+```output
+-1 0 1
+=> only this
+```
+
+```glisp
+(if true 1)
+```
+
+```output
+glisp: line 1: IF requires 3 parts - conditional, true expression and false expression. You have 2 parts - (true 1).
+```
+
+### `lambda`
+
+`(lambda (params...) body...)` makes a function. Calling it binds each
+parameter to an argument, evaluates the body forms in order, and gives the
+value of the last; an empty body gives `nil`. The number of arguments must
+match.
+
+A **rest parameter** takes the remaining arguments as a list: `(a b . rest)`
+needs at least two arguments and binds `rest` to the others, and a single
+symbol in place of the list, `(lambda args ...)`, takes them all.
+
+```glisp
+(def add (lambda (x y) (plus x y)))
+(p (add 2 3))
+(p ((lambda (first . rest) rest) 1 2 3))
+(p ((lambda args args) 1 2 3))
+(p ((lambda (x))  1))
+(def make_adder (lambda (n) (lambda (x) (plus x n))))
+((make_adder 10) 5)
+```
+
+```output
+5
+(2 3)
+(1 2 3)
+nil
+=> 15
+```
+
+```glisp
+((lambda (a b) a) 1)
+```
+
+```output
+glisp: line 1: lambda (a b) expects 2 arguments, got 1: (1)
+```
+
+### `def`
+
+`(def name value)` evaluates `value` and binds `name` to it in the current
+scope: at the top level, for the whole program; inside a lambda, for that
+call only. Defining a name again replaces it. `def` gives `()`.
+
+```glisp
+(def x 5)
+(defn scaled (n)
+  (def factor 3)
+  (* n factor))
+(p (scaled x))
+(def x 6)
+(p x)
+(def y 1)
+```
+
+```output
+15
+6
+=> ()
+```
+
+### `defmacro`
+
+`(defmacro name function)` defines a macro: see [the next section](#6-macros).
+It gives `()`.
+
+## 6. Macros
+
+A macro is a function that runs on code before the code runs. When the
+expander meets a list whose first element names a macro, it calls the
+macro's function with **one argument, the list of the call's unevaluated
+arguments**, and replaces the call with the code it returns, which is then
+expanded in turn.
+
+```glisp
+; (unless test then else) is (if test else then).
+(defmacro unless (lambda (xs)
+  (cons (quote if)
+    (cons (car xs)
+      (cons (car (cdr (cdr xs)))
+        (cons (car (cdr xs)) nil))))))
+(unless false "then" "else")
+```
+
+```output
+=> then
+```
+
+Macros are expanded as the program is read, form by form, so a macro applies
+to the forms after its definition. A macro's function may call functions
+defined before it with `def` or `defn`. A macro is not a value:
+
+```glisp
+defn
+```
+
+```output
+glisp: defn is a macro, not a value
+```
+
+When a program is compiled, its macros run in the compiler. Their helper
+functions are run there too, if they are top-level `def`s of lambdas (as
+`defn` makes); other `def`s are not evaluated while compiling, so a macro
+can't use a value the program computes when it runs.
+
+## 7. The standard library
+
+These are written in glisp, in [`stdlib.glisp`](../stdlib.glisp), and loaded
+before every program. A compiled program includes only the ones it uses.
+
+| Form | Meaning |
+|------|---------|
+| `(defn name (params...) body...)` | `(def name (lambda (params...) body...))`; rest parameters as for `lambda` |
+| `(let (name value ...) body...)` | binds each name in turn, so a value can use the names before it, then evaluates `body` |
+| `(not x)` | `true` unless `x` is `true` (a function) |
+| `(and a b ...)` | the first argument that isn't `true`, as `false`, without evaluating the rest; otherwise the last. `(and)` is `true` |
+| `(or a b ...)` | `true` as soon as an argument is `true`, without evaluating the rest; otherwise the last. `(or)` is `false` |
+| `(cond (test body...) ...)` | the body of the first clause whose test is `true`, or `nil`. A test of `else` always is |
+| `(mult x y)` | `(* x y)`, kept for older programs |
+
+All but `not` and `mult` are macros.
+
+```glisp
+(defn describe (n)
+  (cond ((< n 0) "negative")
+        ((eq n 0) "zero")
+        ((and (> n 0) (< n 10)) "small")
+        (else "large")))
+(p (describe -3) (describe 0) (describe 4) (describe 50))
+(p (not true) (not 0) (or false 7) (and true 5) (and 1 (car 5)))
+(let (a 2 b (* a 10))
+  (plus a b))
+```
+
+```output
+negative zero small large
+false true 7 5 false
+=> 22
+```
+
+## 8. Builtin functions
+
+Builtins check their arguments before they run: the number, and the type of
+each, with the same messages in both backends. In the tables, `n` is a
+number, `s` a string, `l` a list (or `nil`), `v` a vector, `m` a map, `f` a
+function and `x` any value; `...` means any number more.
+
+### Lists
+
+| Builtin | Result |
+|---------|--------|
+| `(car l)` | the first element of `l`; `nil` for an empty list or `nil` |
+| `(cdr l)` | `l` without its first element, a list; `nil` for an empty list or `nil` |
+| `(cons x l)` | the list of `x` followed by the elements of `l`. If `l` is `nil` or left out, `(x)`; if it is not a list, `(x l)` |
+| `(atom x)` | `true` unless `x` is a list |
+
+```glisp
+(def l (quote (1 2 3)))
+(p (car l) (cdr l) (cons 0 l))
+(p (cons 1 nil) (cons 1 2) (atom l) (atom nil))
+```
+
+```output
+1 (2 3) (0 1 2 3)
+(1) (1 2) false true
+=> ()
+```
+
+### Arithmetic and comparison
+
+| Builtin | Result |
+|---------|--------|
+| `(plus n ...)` | the sum; `(plus)` is 0 |
+| `(- n ...)` | `n` minus the others; `(- n)` is `-n` |
+| `(* n ...)` | the product; `(*)` is 1 |
+| `(/ a b)` | `a` divided by `b`, truncated toward zero |
+| `(mod a b)` | the remainder of `(/ a b)`, with `a`'s sign |
+| `(< a b)` `(> a b)` `(<= a b)` `(>= a b)` | comparisons of two numbers |
+
+Dividing by zero is an error.
+
+```glisp
+(p (plus 1 2 3) (- 10 3 2) (- 5) (* 2 3 4))
+(p (/ 7 2) (/ -7 2) (mod 7 2) (mod -7 2))
+(p (< 1 2) (>= 1 2) (<= 2 2))
+(/ 1 0)
+```
+
+```output
+6 5 -5 24
+3 -3 1 -1
+true false true
+glisp: line 4: /: division by zero
+```
+
+### Equality
+
+`(eq a b)` is `true` if `a` and `b` are equal: numbers, strings, symbols and
+booleans by value, lists and vectors element by element, maps entry by
+entry. Values of different types are never equal, nor are functions.
+
+```glisp
+(p (eq 1 1) (eq "a" "a") (eq 1 "1"))
+(p (eq (quote (1 (2))) (quote (1 (2)))) (eq (vector 1 2) (vector 1 2)))
+(eq (map 1 2 3 4) (map 3 4 1 2))
+```
+
+```output
+true true false
+true true
+=> true
+```
+
+### Functions
+
+`(apply f x ... l)` calls `f` with the arguments `x ...` followed by the
+elements of the list `l`.
+
+```glisp
+(p (apply plus (quote (1 2 3))))
+(apply plus 1 2 (quote (3 4)))
+```
+
+```output
+6
+=> 10
+```
+
+### Output and errors
+
+| Builtin | Result |
+|---------|--------|
+| `(p x ...)` | prints its arguments on one line, separated by spaces, and gives `()` |
+| `(str x ...)` | its arguments printed as `p` prints them, joined into one string |
+| `(error x ...)` | stops the program with an error whose message is `(str x ...)` |
+
+```glisp
+(p "total:" 3 (quote (a "b")))
+(p (str "x=" 1 ", list=" (quote (a "b"))))
+(error "bad value: " 42)
+```
+
+```output
+total: 3 (a "b")
+x=1, list=(a "b")
+glisp: line 3: bad value: 42
+```
+
+### Strings
+
+| Builtin | Result |
+|---------|--------|
+| `(string_length s)` | the number of characters in `s` |
+| `(substring s start end)` | the characters of `s` from `start` up to, not including, `end` |
+| `(chars s)` | the characters of `s`, as a list of one-character strings |
+| `(string< a b)` | whether `a` sorts before `b` (by bytes, so by code point) |
+| `(symbol s)` | the symbol named `s` |
+| `(parse_number s)` | the integer `s` spells (an optional `-` and digits), or `nil` |
+
+```glisp
+(p (string_length "héllo") (substring "hello" 1 3) (chars "abc"))
+(p (string< "apple" "banana") (parse_number "-12") (parse_number "12x"))
+(substring "hello" 2 9)
+```
+
+```output
+5 el ("a" "b" "c")
+true -12 nil
+glisp: line 3: substring: indexes 2..9 out of range for a string of length 5
+```
+
+### Vectors
+
+| Builtin | Result |
+|---------|--------|
+| `(vector x ...)` | a vector of its arguments |
+| `(vector_ref v i)` | the value at index `i`, counting from 0 |
+| `(vector_length v)` | the number of values in `v` |
+| `(vector_set v i x)` | a new vector like `v` but with `x` at `i` |
+| `(vector_to_list v)` | the values of `v`, as a list |
+
+`(apply vector l)` makes a vector from a list. An index outside the vector
+is an error.
+
+```glisp
+(def v (apply vector (quote (10 20 30))))
+(p v (vector_to_list v) (vector))
+(vector_ref v 3)
+```
+
+```output
+[10 20 30] (10 20 30) []
+glisp: line 3: vector_ref: index 3 out of range for a vector of length 3
+```
+
+### Maps
+
+| Builtin | Result |
+|---------|--------|
+| `(map k v ...)` | a map of the keys and values given in pairs; a later value for the same key wins |
+| `(map_get m k)` | `k`'s value in `m`, or `nil` |
+| `(map_get m k default)` | `k`'s value in `m`, or `default` |
+| `(map_put m k v)` | a new map like `m` but with `k` bound to `v` |
+| `(map_remove m k)` | a new map like `m` but without `k` |
+| `(map_has m k)` | whether `m` has the key `k` |
+| `(map_count m)` | the number of entries in `m` |
+| `(map_keys m)` | the keys of `m`, as a list, in the map's order |
+| `(map_to_list m)` | the entries of `m`, as a list of `(k v)` lists, in the map's order |
+
+Maps are hash array mapped tries: getting, putting and removing take time
+that grows with the logarithm of the size, and a new map shares most of its
+structure with the old one.
+
+```glisp
+(def m (map 1 "one" 1 "uno" (quote (a b)) "a list"))
+(p (map_count m) (map_get m 1) (map_get m (quote (a b))))
+(p (map_to_list (map_remove m (quote (a b)))))
+(map_put m car 1)
+```
+
+```output
+2 uno a list
+((1 "uno"))
+glisp: line 4: map_put: can't hash function <function>
+```
+
+### Hashing
+
+`(hash x)` is a number from 0 to 2^32-1 computed from `x`'s value, the same
+in both backends: equal values have equal hashes. Functions can't be hashed.
+
+```glisp
+(eq (hash (quote (1 "two"))) (hash (cons 1 (quote ("two")))))
+```
+
+```output
+=> true
+```
+
+### Type predicates
+
+`number?`, `string?`, `symbol?`, `list?`, `nil?`, `boolean?`, `function?`,
+`vector?` and `map?` each take one value and say whether it is of that type
+(see [values and types](#3-values-and-types)).
+
+```glisp
+(p (number? 1) (string? "s") (symbol? (quote s)) (boolean? false))
+(p (list? (quote ())) (list? nil) (vector? (vector)) (map? (map)))
+```
+
+```output
+true true true true
+true false true true
+=> ()
+```
+
+## 9. Errors
+
+An error stops the program; glisp has no way to catch one. The message
+says what went wrong and, for an error in a call, the line of the call that
+was being made, inside functions too. Code a macro made gets the line of the
+macro call.
+
+```glisp
+(defn first_of (l) (car l))
+(p "before")
+(first_of 5)
+```
+
+```output
+before
+glisp: line 1: car: expected a list, got number 5
+```
+
+The kinds of error:
+
+- **parse errors**: `missing )`, `unexpected )`, `unterminated string`, with
+  the line where they were found;
+- **unknown names**: `Cannot resolve symbol x`;
+- **arguments**: the wrong number (`car: expects 1 argument, got 2`) or type
+  (`car: expected a list, got number 5`), for builtins and lambdas alike;
+- **operations**: dividing by zero, an index out of range, hashing a
+  function;
+- **`error`**: whatever message the program gives.
+
+```glisp
+(car 1 2)
+```
+
+```output
+glisp: line 1: car: expects 1 argument, got 2
+```
+
+```glisp
+undefined_name
+```
+
+```output
+glisp: Cannot resolve symbol undefined_name
+```
+
+## 10. The two backends
+
+The interpreter and the compiler implement one language: the tests run
+every program in both and compare what they print, error messages included.
+What differs:
+
+- **Speed.** Compiled code is faster; it inlines calls to the common builtins
+  (`plus`, `-`, `*`, comparisons, `eq`, `car`, `cdr`, `cons`, `atom` and some
+  type predicates) while still allowing a program to redefine them.
+- **Memory.** Compiled code manages its own heap in linear memory, with a
+  copying garbage collector, and grows memory as it needs.
+- **Stack.** Calls that aren't tail calls nest about 300,000 deep in
+  compiled code; the interpreter goes deeper.
+- **Errors found while compiling.** Parse errors and malformed special
+  forms are reported by `glisp -wasm`, and no module is written; the
+  interpreter reports them when it reaches them, after running the forms
+  before. The message is the same.
+- **Macros at compile time.** A macro can use only functions defined with a
+  top-level `def` of a lambda (see [macros](#6-macros)).
+- **Trailing spaces.** The interpreter drops trailing spaces from an error
+  message; compiled code keeps them.
+- **Runtimes.** Node 22 (`node:wasi`) has crashed at random on long runs,
+  which `--no-wasm-tier-up` mostly avoids; wazero and wasmtime run them.
+
+## 11. A complete program
+
+A word count, with a map, a fold over a list, and sorting:
+
+```glisp
+(defn fold (f acc l)
+  (if (eq l nil) acc
+    (if (eq l (quote ())) acc
+      (fold f (f acc (car l)) (cdr l)))))
+
+(defn count_words (words)
+  (fold (lambda (counts w) (map_put counts w (plus 1 (map_get counts w 0))))
+        (map) words))
+
+; Insertion sort of (word count) pairs, most frequent first, then by word.
+(defn before (a b)
+  (let (ca (car (cdr a)) cb (car (cdr b)))
+    (or (> ca cb) (and (eq ca cb) (string< (car a) (car b))))))
+(defn insert (x sorted)
+  (cond ((eq sorted (quote ())) (cons x nil))
+        ((before x (car sorted)) (cons x sorted))
+        (else (cons (car sorted) (insert x (cdr sorted))))))
+(defn sort (l) (fold (lambda (sorted x) (insert x sorted)) (quote ()) l))
+
+(def words (quote ("the" "cat" "and" "the" "hat" "and" "the" "bat")))
+(def counts (count_words words))
+(p (map_count counts) "distinct words")
+(defn show (pairs)
+  (if (eq pairs (quote ())) (quote done)
+    (let (pair (car pairs))
+      (p (car pair) (car (cdr pair)))
+      (show (cdr pairs)))))
+(show (sort (map_to_list counts)))
+```
+
+```output
+5 distinct words
+the 3
+and 2
+bat 1
+cat 1
+hat 1
+=> done
+```
+
+More programs: [`examples/numbers.glisp`](../examples/numbers.glisp) and
+[`examples/tour.glisp`](../examples/tour.glisp), a longer tour with a list
+library, sorting, primes, symbolic differentiation, N-queens, Church
+numerals and lazy streams.

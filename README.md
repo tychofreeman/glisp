@@ -2,6 +2,10 @@
 
 A small Lisp interpreter written in Go.
 
+The language, with examples of every form and builtin and how to run and
+compile programs, is described in [`docs/spec.md`](docs/spec.md). Its
+examples are run by the tests in both backends, so they stay true.
+
 ```
 go run ./cmd/glisp examples/numbers.glisp
 ```
