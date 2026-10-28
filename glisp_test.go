@@ -514,6 +514,21 @@ func TestErrorFailsWithItsArgumentsAsStrJoinsThem(t *testing.T) {
 	assertPanicsWith(t, "(error)", "error: expects at least 1 argument, got 0")
 }
 
+func TestIntegersWrapAt63Bits(t *testing.T) {
+	for _, c := range []struct{ src, want string }{
+		{`(plus 4611686018427387903 1)`, `-4611686018427387904`},
+		{`(* 4611686018427387903 2)`, `-2`},
+		{`(- -4611686018427387904 1)`, `4611686018427387903`},
+		{`(- -4611686018427387904)`, `-4611686018427387904`},
+		{`(/ -4611686018427387904 -1)`, `-4611686018427387904`},
+		{`4611686018427387904`, `-4611686018427387904`},
+		{`(parse_number "4611686018427387905")`, `-4611686018427387903`},
+		{`(* 3037000500 3037000500)`, `145474192`},
+	} {
+		AssertThat(t, Show(Process(c.src)), Equals(c.want))
+	}
+}
+
 func TestFunctionsCanBeStoredInLists(t *testing.T) {
 	AssertThat(t, Process("((car (cons plus nil)) 1 2)"), Equals(int64(3)))
 }

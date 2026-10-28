@@ -48,19 +48,19 @@ func plus(_ *Scope, args List) interface{} {
 	for _, n := range args {
 		sum += n.(int64)
 	}
-	return sum
+	return int63(sum)
 }
 
 // minus is (- a b c ...), a-b-c..., and (- a), -a.
 func minus(_ *Scope, args List) interface{} {
 	if len(args) == 1 {
-		return -args[0].(int64)
+		return int63(-args[0].(int64))
 	}
 	result := args[0].(int64)
 	for _, n := range args[1:] {
 		result -= n.(int64)
 	}
-	return result
+	return int63(result)
 }
 
 // times is (* a b c ...), the product; (*) is 1.
@@ -69,7 +69,7 @@ func times(_ *Scope, args List) interface{} {
 	for _, n := range args {
 		product *= n.(int64)
 	}
-	return product
+	return int63(product)
 }
 
 // divide returns a builtin (op a b) that divides two numbers with div, as
@@ -80,7 +80,7 @@ func divide(op string, div func(a, b int64) int64) Function {
 		if b == 0 {
 			panic(op + ": division by zero")
 		}
-		return div(a, b)
+		return int63(div(a, b))
 	}
 }
 

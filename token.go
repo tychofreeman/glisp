@@ -72,7 +72,7 @@ func (n NumberToken) Str() string {
 func (n NumberToken) Value() int64 {
 	num, err := strconv.ParseInt(strings.TrimSpace(n.value), 10, 64)
 	if err == nil {
-		return num
+		return int63(num)
 	}
 	panic(fmt.Sprintf("Could not parse %v as a number!!", n.value))
 }
