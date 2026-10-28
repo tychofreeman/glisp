@@ -942,3 +942,18 @@ One entry per PR, written before committing it.
   outside the tests too (interpreter and wazero output byte for byte
   alike), since 700 lines of hand-written trie code passing at once was
   more than I trusted.
+
+### PR: Language spec
+
+- Read through `inspect` (the builtin table, `Eval`, the expander, the
+  tokenizer, the printer) and probed edge cases with the command.
+- Three batches: `create_file` for spec_test.go (test first, failing on
+  the missing spec), then the spec, the test's `compiledPrints` by
+  `add_declaration` and a `replace_text` to call it, then `replace_text`
+  for fixes to the spec's shell transcripts, this entry and README.
+- One batch was lost to the shell, not the tool: an unquoted heredoc
+  ran the backticks in the Go content as commands. The JSON is now
+  written from a quoted heredoc.
+- The spec's examples found one difference between the harness and the
+  command: an error found while compiling came back as
+  `compile error: ...`, where `glisp -wasm` prints `glisp: ...`.
