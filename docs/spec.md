@@ -990,17 +990,17 @@ glisp: line 3: bad value: 42
 | `(chars s)` | the characters of `s`, as a list of one-character strings |
 | `(string< a b)` | whether `a` sorts before `b` (by bytes, so by code point) |
 | `(symbol s)` | the symbol named `s` |
-| `(parse_number s)` | the integer `s` spells (an optional `-` and digits), or `nil` |
+| `(parse_number s)` | the number `s` spells, or `nil`: an integer (an optional `-` and digits) or a float (written as a float literal is, without a `+`), read as the float nearest its first 40 significant digits |
 
 ```glisp
 (p (string_length "héllo") (substring "hello" 1 3) (chars "abc"))
-(p (string< "apple" "banana") (parse_number "-12") (parse_number "12x"))
+(p (string< "apple" "banana") (parse_number "-12") (parse_number "12x") (parse_number "2.5e-3"))
 (substring "hello" 2 9)
 ```
 
 ```output
 5 el ("a" "b" "c")
-true -12 nil
+true -12 nil 2.5e-3
 glisp: line 3: substring: indexes 2..9 out of range for a string of length 5
 ```
 

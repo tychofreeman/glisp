@@ -1032,3 +1032,11 @@ One entry per PR, written before committing it.
 - Test first (the spec's example and parity programs), then the
   tokenizer: `replace_text` for the branch in `tokenizer.list` and
   `add_declaration` for `escape`. Nothing by hand.
+
+### PR: `parse_number` of a float
+
+- Test first (strconv as the reference, the spec's example, parity
+  programs), then `readFloat` and the compiled `parseFloat` by
+  `replace_text` in two batches. One bug the tests caught: `select`'s
+  operands in the wrong order, so exponents changed sign; one
+  `replace_text`. Nothing by hand.

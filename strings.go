@@ -53,7 +53,8 @@ func toSymbol(_ *Scope, args List) interface{} {
 }
 
 // parseNumber is (parse_number s): the integer s spells, an optional - and
-// digits, or nil if it spells something else.
+// digits, or the float, as readFloat reads it, or nil if it spells
+// something else.
 func parseNumber(_ *Scope, args List) interface{} {
 	digits, negative := strings.CutPrefix(args[0].(string), "-")
 	if digits == "" {
@@ -62,6 +63,9 @@ func parseNumber(_ *Scope, args List) interface{} {
 	var n int64
 	for i := 0; i < len(digits); i++ {
 		if digits[i] < '0' || digits[i] > '9' {
+			if f, isFloat := readFloat(args[0].(string)); isFloat {
+				return f
+			}
 			return nil
 		}
 		n = n*10 + int64(digits[i]-'0')

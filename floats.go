@@ -3,6 +3,7 @@ package glisp
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -58,6 +59,50 @@ func rounding(name string, round func(float64) float64) Function {
 		}
 		return int64(r)
 	}
+}
+
+// decimalFloat is a float as parse_number reads one: digits, then a
+// fraction, an exponent or both, after an optional minus.
+var decimalFloat = regexp.MustCompile(`^-?[0-9]+(\.[0-9]+([eE][+-]?[0-9]+)?|[eE][+-]?[0-9]+)$`)
+
+// maxDigits is how many significant digits of a float are read; the rest
+// are ignored. It bounds the bignums compiled code needs to read one.
+const maxDigits = 40
+
+// readFloat is the float s spells, if it is one as parse_number reads it:
+// the float nearest its first maxDigits significant digits.
+func readFloat(s string) (float64, bool) {
+	if !decimalFloat.MatchString(s) {
+		return 0, false
+	}
+	negative := strings.HasPrefix(s, "-")
+	mantissa, exponent, _ := strings.Cut(strings.ToLower(strings.TrimPrefix(s, "-")), "e")
+	whole, fraction, _ := strings.Cut(mantissa, ".")
+	e := 0
+	if exponent != "" {
+		digits := strings.TrimLeft(strings.TrimLeft(exponent, "+-"), "0")
+		if len(digits) > 6 {
+			digits = "999999"
+		}
+		e, _ = strconv.Atoi(digits)
+		if strings.HasPrefix(exponent, "-") {
+			e = -e
+		}
+	}
+	digits := strings.TrimLeft(whole+fraction, "0")
+	e -= len(fraction)
+	if len(digits) > maxDigits {
+		e += len(digits) - maxDigits
+		digits = digits[:maxDigits]
+	}
+	f := 0.0
+	if digits != "" {
+		f, _ = strconv.ParseFloat(digits+"e"+strconv.Itoa(e), 64)
+	}
+	if negative {
+		f = -f
+	}
+	return f, true
 }
 
 // floatBits is f's bits as hash encodes them: one zero and one NaN.

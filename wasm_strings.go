@@ -343,7 +343,10 @@ func (c *wasmCompiler) stringBuiltin(b *wasmBody, name string) {
 			b.LocalGet(ch)
 			b.I32Const('9')
 			b.Op(wasm.I32GtU, wasm.I32Or)
-			b.returnIf(func() { b.I64Const(addrNil) })
+			b.returnIf(func() {
+				b.LocalGet(s)
+				b.Call(c.rt.parseFloat)
+			})
 			b.LocalGet(acc)
 			b.I64Const(10)
 			b.Op(wasm.I64Mul)

@@ -442,9 +442,18 @@ In order, one PR each:
   floats (random bits, powers of 2 and 10, subnormals, the extremes).
   The wasm encoder gained the f64 instructions; floats stay i64 bits in
   locals, reinterpreted for each operation.
-- [ ] **Floats, later.** `parse_number` of a float: reading a decimal
-  exactly in compiled code needs the bignums again (or Eisel-Lemire
-  with a fallback). Functions wasm has no instruction for (`exp`, `log`,
+- [x] **`parse_number` of a float.** `(parse_number "2.5e-3")` reads a
+  float written as a literal is (without a `+`): the float nearest its
+  first 40 significant digits, the rest ignored, in both backends and
+  for literals too (`readFloat`). The interpreter reads them with
+  strconv; compiled code with the printing bignums: the digits make N,
+  the value N*10^e is A/B scaled by 2^k into [1, 2), and the float's
+  bits are that many bits of the quotient, rounded half to even, with
+  subnormals and overflow. 40 digits keep A and B within the bignums'
+  1280 bits. Checked against strconv on 6,000 strings (random floats
+  printed shortest and to 21 digits, random decimals of up to 40 digits
+  with exponents from -350 to 350, the ties and boundaries).
+- [ ] **Floats, later.** Functions wasm has no instruction for (`exp`, `log`,
   `sin`, ...), which must print alike in both backends, so both would
   need one implementation. And the float runtime, with its bignums, is
   in every module (4.5KB; the module for `(p 1)` went from 17.9KB to
