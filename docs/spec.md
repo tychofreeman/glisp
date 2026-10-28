@@ -148,7 +148,8 @@ fmt.Println(glisp.Show(value))           // 3
 module, err := glisp.CompileWasm(`(p "hi")`)  // the bytes of a WASI module
 ```
 
-`RunFile` and `CompileWasmFile` take a file name instead of source.
+`RunFile` and `CompileWasmFile` take a file name instead of source. A
+list comes back as a `glisp.List`, a slice of its elements.
 
 ## 2. Lexical structure
 

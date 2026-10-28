@@ -18,6 +18,9 @@ func Show(v interface{}) string {
 // Write returns v as it would be written in glisp: lists in parentheses,
 // symbols by name, strings in quotes.
 func Write(v interface{}) string {
+	if l, isList := asList(v); isList {
+		v = l
+	}
 	switch v := v.(type) {
 	case List:
 		parts := make([]string, len(v))
@@ -89,7 +92,7 @@ func typeName(v interface{}) string {
 		return "string"
 	case Symbol:
 		return "symbol"
-	case List:
+	case List, *Pair:
 		return "list"
 	case Vector:
 		return "vector"

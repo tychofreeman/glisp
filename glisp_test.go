@@ -25,6 +25,26 @@ func TestCdrGrabsTail(t *testing.T) {
 	AssertThat(t, Process("(cdr (quote (\"a\" \"b\" \"c\" (\"d\"))))"), HasExactly(str("b"), str("c"), HasExactly(str("d"))))
 }
 
+// cons shares the list it puts a value in front of, so consing onto a long
+// list costs what consing onto a short one does; a program's value still
+// comes back as a List.
+func TestConsSharesItsTail(t *testing.T) {
+	var tail interface{} = List{}
+	for i := range 10000 {
+		tail = cons(nil, List{int64(i), tail})
+	}
+	args := List{int64(-1), tail}
+	if bytes := testing.Benchmark(func(b *testing.B) {
+		for range b.N {
+			cons(nil, args)
+		}
+	}).AllocedBytesPerOp(); bytes > 100 {
+		t.Errorf("cons onto 10,000 elements allocated %d bytes, want a pair's", bytes)
+	}
+	AssertThat(t, Process(`(cons 1 (cons 2 (list 3)))`), Equals(List{int64(1), int64(2), int64(3)}))
+	AssertThat(t, Process(`(cdr (cons 1 (cons 2 nil)))`), Equals(List{int64(2)}))
+}
+
 func TestAtomIsTrueForSymbols(t *testing.T) {
 	AssertThat(t, Process("(atom \"a\")"), IsTrue)
 }

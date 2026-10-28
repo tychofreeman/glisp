@@ -13,24 +13,20 @@ import (
 type Function func(_ *Scope, params List) interface{}
 
 func car(_ *Scope, args List) interface{} {
-	if x, _ := args[0].(List); len(x) > 0 {
-		return x[0]
-	}
-	return nil
+	first, _, _ := uncons(args[0])
+	return first
 }
 
 func cdr(_ *Scope, args List) interface{} {
-	if x, _ := args[0].(List); len(x) > 0 {
-		return x.Rest()
-	}
-	return nil
+	_, rest, _ := uncons(args[0])
+	return rest
 }
 
 func atom(_ *Scope, args List) interface{} {
-	_, isList := args[0].(List)
-	return !isList
+	return !isList(args[0])
 }
 
+// cons puts a value in front of a list, sharing it: a Pair.
 func cons(_ *Scope, args List) interface{} {
 	if len(args) == 1 {
 		return List{args[0]}
@@ -39,7 +35,12 @@ func cons(_ *Scope, args List) interface{} {
 	case nil:
 		return List{args[0]}
 	case List:
-		return append(List{args[0]}, rest...)
+		if len(rest) == 0 {
+			return List{args[0]}
+		}
+		return &Pair{args[0], rest}
+	case *Pair:
+		return &Pair{args[0], rest}
 	default:
 		return List{args[0], rest}
 	}
@@ -142,17 +143,23 @@ func eq(_ *Scope, args List) interface{} {
 // other values with ==. Values whose type can't be compared with ==, such as
 // functions, are never equal.
 func equal(a, b interface{}) bool {
-	if la, isList := a.(List); isList {
-		lb, isList := b.(List)
-		if !isList || len(la) != len(lb) {
+	if isList(a) {
+		if !isList(b) {
 			return false
 		}
-		for i := range la {
-			if !equal(la[i], lb[i]) {
+		// Element by element, without copying a Pair into a List: (eq l
+		// (quote ())) is how a loop over a list ends.
+		for {
+			fa, ra, moreA := uncons(a)
+			fb, rb, moreB := uncons(b)
+			if !moreA || !moreB {
+				return moreA == moreB
+			}
+			if !equal(fa, fb) {
 				return false
 			}
+			a, b = ra, rb
 		}
-		return true
 	}
 	if ma, isMap := a.(Map); isMap {
 		mb, isMap := b.(Map)
@@ -183,7 +190,7 @@ func apply(scope *Scope, args List) interface{} {
 	fn, _ := asFunction(args[0])
 	last := args[len(args)-1]
 	checkKind("apply", listKind, last)
-	list, _ := last.(List)
+	list, _ := asList(last)
 	spread := append(append(List{}, args[1:len(args)-1]...), list...)
 	return fn(scope, spread)
 }
@@ -289,7 +296,7 @@ func processLines(scope *Scope, tokens List, lines Lines) interface{} {
 			value = Eval(node, scope)
 		}
 	}
-	return value
+	return withoutPairs(value)
 }
 
 // Process evaluates the program in input and returns the value of its last

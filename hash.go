@@ -60,9 +60,10 @@ func hashInto(fn string, h *uint32, v interface{}) {
 		text('s', v)
 	case Symbol:
 		text('y', v.Str())
-	case List:
+	case List, *Pair:
+		l, _ := asList(v)
 		put('(')
-		for _, x := range v {
+		for _, x := range l {
 			hashInto(fn, h, x)
 		}
 		put(')')
