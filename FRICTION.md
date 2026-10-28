@@ -1155,3 +1155,12 @@ One entry per PR, written before committing it.
 - glisp, in stdlib.glisp, one `replace_text`; the spec rows, example
   and parity program by `replace_text` too, before the code. Nothing by
   hand.
+
+### PR: letrec
+
+- glisp, by `replace_text` in stdlib.glisp, the spec and the tests.
+  The parity program's error case first shared a program with the
+  others: compiled code expands every form before running any, so it
+  reported the macro's error and nothing else, where the interpreter
+  printed the earlier forms first. It is a program of its own now.
+  Nothing by hand.

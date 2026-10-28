@@ -574,6 +574,14 @@ In order, one PR each:
   the rest of the list library: two sorts of 600 elements by the generic
   `compare` take about 0.4 s interpreted. A parity program sorts pairs
   by their first element, so it checks stability in both backends.
+- [x] **`letrec`.** `let` binds each name after its value, so a value
+  can't call itself; `(letrec (name value ...) body...)` can, and the
+  functions it binds can call each other. A macro over what both
+  backends already had: it expands to a lambda of no arguments whose
+  body `def`s each name, then runs the body, so the names are local to
+  it. `data_fields` now uses it instead of a top-level helper. `let`
+  stays as it is: `definstance` relies on a value seeing the name's
+  definition outside (`(let (next show) ...)`).
 - [x] **An error's line, restored after a call.** Both backends set the
   line at each call with one and never put it back when the call
   returned, so code without lines (the stdlib's) that failed after a

@@ -89,6 +89,17 @@
 ; ((partial f a) b) is (f a b).
 (defn partial (f . args) (lambda more (apply f (append args more))))
 
+; (letrec (name value ...) body...) is let whose values can use every name
+; it binds, its own included, for functions that call themselves or each
+; other: the names are defined in turn in a new scope, then body runs there.
+(defn letrec_defs (bindings)
+  (cond ((empty? bindings) (quote ()))
+        ((empty? (cdr bindings)) (error "letrec: expected names and values in pairs, got " bindings))
+        (else (cons (list (quote def) (car bindings) (car (cdr bindings)))
+                    (letrec_defs (cdr (cdr bindings)))))))
+(defmacro letrec (lambda (xs)
+  (list (cons (quote lambda) (cons (quote ()) (append (letrec_defs (car xs)) (cdr xs)))))))
+
 ; (deftype type (constructor field ...) ...) defines an algebraic data type:
 ; for each constructor, a function that makes a data value of it, a
 ; predicate constructor?, and constructor_field for each field; and a
@@ -284,9 +295,9 @@
 (defmacro definstance (lambda (xs) (definstance_expand xs)))
 
 ; (data_fields d) is the fields of d, as a list.
-(defn data_fields (d) (data_fields_from d 0))
-(defn data_fields_from (d i)
-  (if (eq i (data_length d)) (quote ()) (cons (data_ref d i) (data_fields_from d (plus i 1)))))
+(defn data_fields (d)
+  (letrec (from (lambda (i) (if (eq i (data_length d)) (quote ()) (cons (data_ref d i) (from (plus i 1))))))
+    (from 0)))
 
 ; (fmap f x) applies f to each value x holds: the elements of a list or a
 ; vector, the values of a map, the value of a just or a right.

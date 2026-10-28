@@ -615,6 +615,7 @@ before every program. A compiled program includes only the ones it uses.
 |------|---------|
 | `(defn name (params...) body...)` | `(def name (lambda (params...) body...))`; rest parameters as for `lambda` |
 | `(let (name value ...) body...)` | binds each name in turn, so a value can use the names before it, then evaluates `body` |
+| `(letrec (name value ...) body...)` | the same, but each value can use every name it binds, its own included: functions that call themselves or each other |
 | `(not x)` | `true` unless `x` is `true` (a function) |
 | `(and a b ...)` | the first argument that isn't `true`, as `false`, without evaluating the rest; otherwise the last. `(and)` is `true` |
 | `(or a b ...)` | `true` as soon as an argument is `true`, without evaluating the rest; otherwise the last. `(or)` is `false` |
@@ -632,6 +633,9 @@ below.
         (else "large")))
 (p (describe -3) (describe 0) (describe 4) (describe 50))
 (p (not true) (not 0) (or false 7) (and true 5) (and 1 (car 5)))
+(p (letrec (even (lambda (n) (if (eq n 0) true (odd (- n 1))))
+            odd (lambda (n) (if (eq n 0) false (even (- n 1)))))
+     (list (even 10) (odd 7))))
 (let (a 2 b (* a 10))
   (plus a b))
 ```
@@ -639,6 +643,7 @@ below.
 ```output
 negative zero small large
 false true 7 5 false
+(true true)
 => 22
 ```
 
