@@ -129,7 +129,7 @@ type wasmCompiler struct {
 func compileWasm(run *runState, tokens List, lines Lines, dir string) []byte {
 	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}, run: run}
 	expander := NewExpander(scope)
-	expander.lines, expander.dir = Lines{}, dir
+	expander.lines, expander.dir, expander.own, expander.library = Lines{}, dir, programPrefix, libraryNames()
 	expand := func(form interface{}) []Node {
 		var nodes []Node
 		for _, node := range expander.ExpandFileForm(form) {
@@ -656,7 +656,7 @@ func (f *wasmFunc) ref(n Ref) {
 	case n.Loc == nil:
 		if value, found := f.c.scope.lookup(symbol(n.Name)); found {
 			if _, isMacro := value.(Macro); isMacro {
-				f.c.fail(f.wasmBody, n.Name+" is a macro, not a value", nil)
+				f.c.fail(f.wasmBody, sourceName(n.Name)+" is a macro, not a value", nil)
 				return
 			}
 		}
@@ -683,7 +683,7 @@ func (f *wasmFunc) ref(n Ref) {
 func (f *wasmFunc) checkBound(name string) {
 	f.LocalTee(f.scratch)
 	f.Op(wasm.I64Eqz)
-	f.c.failIf(f.wasmBody, "Cannot resolve symbol "+name, nil)
+	f.c.failIf(f.wasmBody, "Cannot resolve symbol "+sourceName(name), nil)
 	f.LocalGet(f.scratch)
 }
 

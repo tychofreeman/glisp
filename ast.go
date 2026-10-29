@@ -72,9 +72,9 @@ func (n Quote) String() string { return "(quote " + Write(n.Datum) + ")" }
 
 func (n Ref) String() string {
 	if n.Loc != nil {
-		return fmt.Sprintf("%s@%d.%d", n.Name, n.Loc.Depth, n.Loc.Index)
+		return fmt.Sprintf("%s@%d.%d", sourceName(n.Name), n.Loc.Depth, n.Loc.Index)
 	}
-	return n.Name
+	return sourceName(n.Name)
 }
 
 func (n If) String() string {
@@ -110,7 +110,7 @@ func (n Lambda) arity() arity {
 	return arity{len(n.Params), len(n.Params)}
 }
 
-func (n Def) String() string { return "(def " + n.Name + " " + n.Value.String() + ")" }
+func (n Def) String() string { return "(def " + sourceName(n.Name) + " " + n.Value.String() + ")" }
 
 func (n Apply) String() string { return "(" + n.Fn.String() + nodesString(n.Args) + ")" }
 

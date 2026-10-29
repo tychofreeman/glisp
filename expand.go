@@ -53,6 +53,9 @@ type Expander struct {
 	imported map[string]*loadedModule // the modules the file imports, by name
 	aliases  map[string]string        // the modules it imports under another name, by that name
 	imports  map[string][]string      // what each name it imports unqualified stands for
+	own      string                   // what qualifies the names a program defines (programPrefix, or its module's name); "" for a module loaded by an import, or the stdlib
+	macros   map[string]bool          // the macros the file defines
+	library  map[string]bool          // in a program, the names the builtins and the stdlib define (libraryNames)
 }
 
 // NewExpander returns an Expander that finds macros in, and defines them in,
@@ -176,6 +179,10 @@ func (e *Expander) expandList(f List) Node {
 				panic(fmt.Sprintf("defmacro: expected a function, got %s\n", described(value)))
 			}
 			e.scope.add(name, Macro{fn})
+			if e.own != "" {
+				// Under the name a reference read before it means, too.
+				e.scope.add(e.own+"/"+name, Macro{fn})
+			}
 			return Quote{List{}}
 		case "begin":
 			return begin(e.ExpandBody(f[1:]))
@@ -199,7 +206,7 @@ func (e *Expander) macro(sym Symbol) (Macro, bool) {
 
 // evalMacroBody evaluates the value of a defmacro, which should be a function.
 func (e *Expander) evalMacroBody(form interface{}) interface{} {
-	return Eval(e.Expand(form), e.scope)
+	return Eval(e.topNames([]Node{e.Expand(form)})[0], e.scope)
 }
 
 // paramNames returns the names in a lambda's parameter list, and whether

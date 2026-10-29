@@ -29,10 +29,10 @@ func evaluate(node Node, scope *Scope) interface{} {
 		case Ref:
 			value, found := scope.lookup(symbol(n.Name))
 			if !found {
-				panic("Cannot resolve symbol " + n.Name)
+				panic("Cannot resolve symbol " + sourceName(n.Name))
 			}
 			if _, isMacro := value.(Macro); isMacro {
-				panic(n.Name + " is a macro, not a value")
+				panic(sourceName(n.Name) + " is a macro, not a value")
 			}
 			return value
 		case If:

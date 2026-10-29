@@ -414,7 +414,29 @@ true true
 => 2
 ```
 
-Builtins are ordinary names and can be redefined, in the program's own scope.
+Each file has a top level of its own (see [`import`](#import)). As each
+top-level form is read, a name in it means the program's own definition
+if an earlier form, or this one, defines it; otherwise a name the
+program imports, the stdlib's or a builtin's; otherwise the program's
+own, defined later. So a program may define a name the stdlib or a
+builtin has: from then on the name is the program's, and the stdlib's
+own code goes on using its own definition. A function read before the
+program defines such a name keeps the stdlib's.
+
+```glisp
+(defn count_of (l) (length l))
+(defn fold (f acc l) "mine")
+(def car 5)
+(defn length (l) 99)
+(p (fold plus 0 (list 1 2)) (map (lambda (x) (* x 2)) (list 1 2)) car)
+(p (count_of (list 1 2)) (length (list 1 2)))
+```
+
+```output
+mine (2 4) 5
+2 99
+=> ()
+```
 
 ### Tail calls
 
@@ -763,8 +785,9 @@ false true 7 5 false
 
 Each takes `nil` or `()` as the empty list, and an empty result is `()`.
 They all run in constant stack, so they work on lists of any length.
-They are ordinary definitions, so a program may redefine them; one that
-does changes the others that use it (`map` uses `fold` and `reverse`).
+They are ordinary definitions, so a program may define its own of any
+of these names; the stdlib's go on using one another (`map` keeps the
+stdlib's `fold` and `reverse`), as [scope](#scope) describes.
 
 ```glisp
 (def nums (list 1 2 3 4 5))
