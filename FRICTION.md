@@ -1206,3 +1206,18 @@ One entry per PR, written before committing it.
   `load` the import's `line`, passing the caller's local of that name.
   The loader and renaming by `replace_text` into module.go. Nothing by
   hand.
+
+### PR: Names resolve when read
+
+- Spec examples and a module test first, by `replace_text`. Then
+  `add_field` twice, `rename` of `withImports` to `topNames` (its job
+  grew), `replace_declaration` of its body, and `add_declaration` of
+  `topName`, `libraryNames`, `programPrefix` and `sourceName`.
+  `replace_declaration` refused content of five declarations for one
+  (it replaces one): the batch split it into replace and add. A first
+  `libraryNames` as a package `sync.OnceValue` made an initialization
+  cycle (`stdlibExpanded` reaches `topName` through `expandLibrary`):
+  the type checker named it, and the names went into a field the two
+  callers set. One `replace_text` was refused for a tab inside a JSON
+  string that a heredoc kept raw; `replace_statements` with `function`
+  did it instead. Nothing by hand.

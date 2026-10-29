@@ -334,7 +334,7 @@ func ProcessTokens(scope *Scope, tokenized List) interface{} {
 // in lines, and returns the value of the last one.
 func processLines(scope *Scope, tokens List, lines Lines, dir string) interface{} {
 	expander := NewExpander(scope)
-	expander.lines, expander.dir = Lines{}, dir
+	expander.lines, expander.dir, expander.own, expander.library = Lines{}, dir, programPrefix, libraryNames()
 	var value interface{}
 	for _, token := range tokens {
 		form := readLines(token, lines, expander.lines)

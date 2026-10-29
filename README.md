@@ -679,7 +679,7 @@ helpers, which only works because they share that namespace.
   the file it happened in, which the message doesn't name: an import
   cycle found in `b.glisp` reports `b.glisp`'s line. Messages should
   say `geometry.glisp:3:` once a program is several files.
-- [ ] **Names resolve when read.** Each module has its own top-level
+- [x] **Names resolve when read.** Each module has its own top-level
   scope: its definitions, its imports and the prelude, looked up when the
   code is read. A program that defines `fold` gets its own `fold`, and
   the stdlib's `map` keeps using the stdlib's. A module may not define a
@@ -690,6 +690,27 @@ helpers, which only works because they share that namespace.
   still leaves out what nothing reaches. The interpreter gets one scope
   per module. The spec changes: "a program that redefines `fold` changes
   `map`" goes.
+  Done, by renaming rather than by scopes, as imports did: there is still
+  one global namespace in each backend, and every name a file defines
+  is a global of its own. A module's are `geometry/...` (step 2); a
+  program's are qualified too, with `(program)`, which no symbol can be
+  written as, or with its module's name if it declares one. As each
+  top-level form is read (`Expander.topName`), a name means the
+  program's own definition if an earlier form or this one defines it,
+  then an import, then the stdlib's or a builtin's (`libraryNames`),
+  and otherwise the program's own, defined later, so mutual recursion
+  between top-level functions still works. The stdlib and the builtins
+  stay plain globals that no program definition can replace, so a
+  program's `fold` or `car` leaves `map` alone, in a module or not; a
+  function read before the program defines such a name keeps the
+  stdlib's, as in Clojure. A macro's body is read the same way, and a
+  macro is also registered under the program's name for it, so using one
+  as a value still says `later is a macro, not a value`. Messages print
+  names as written (`sourceName`). `definstance` keeps the generic's
+  name, so a program's or module's instances still add to the stdlib's
+  generics. Not yet: a generic exported by a module of the program's,
+  extended from another (`(definstance geometry/show ...)`), which
+  defines a qualified name.
 - [ ] **Macros keep their module.** A macro's expansion names its own
   module's helpers (`let` expands to `let_expand`'s output, `definstance`
   to `definstance_next`), which stop being visible once they are

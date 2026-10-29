@@ -33,6 +33,10 @@ func TestModulesImport(t *testing.T) {
 			"shapes": "(module shapes (export double_area))\n(import util)\n(import geometry)\n(defn double_area (w h) (util/twice (lambda (x) (* 2 x)) (geometry/area w h)))",
 			"main":   "(import shapes)\n(import util (unless))\n(p (shapes/double_area 1 2) (unless false \"yes\" \"no\") (util/unless true 1 2))"},
 			"8 yes 2\n=> ()\n"},
+		// The program's fold is its own; the module's map keeps the stdlib's.
+		{map[string]string{"twice": "(module twice (export all))\n(defn all (l) (map (lambda (x) (* 2 x)) l))",
+			"main": "(import twice)\n(defn fold (f acc l) 0)\n(p (twice/all (list 1 2)) (fold plus 1 (list 2)))"},
+			"(2 4) 0\n=> ()\n"},
 		{map[string]string{"geometry": geometry,
 			"main": "(import geometry)\n(geometry/helper 1)"},
 			"glisp: line 2: geometry/helper: geometry doesn't export helper\n"},

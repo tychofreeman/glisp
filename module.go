@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 )
 
 // A module is what a file's (module name (export name ...)) form declares:
@@ -44,8 +45,14 @@ func (e *Expander) ExpandFileForm(form interface{}) []Node {
 			}
 			e.defined[name] = true
 		}
+		if head == "defmacro" {
+			if e.macros == nil {
+				e.macros = map[string]bool{}
+			}
+			e.macros[definedNames(form, nodes)[0]] = true
+		}
 	}
-	return e.withImports(nodes)
+	return e.topNames(nodes)
 }
 
 // declareModule reads the (module name (export name ...)) form f.
@@ -80,6 +87,9 @@ func (e *Expander) declareModule(f List, first bool) {
 		}
 	}
 	e.module = m
+	if e.own != "" {
+		e.own = m.name
+	}
 }
 
 // Finish checks the file's module, once every form is expanded: each name
@@ -268,26 +278,71 @@ func (e *Expander) load(name string, line int) (*loadedModule, []Node) {
 	return m, nodes
 }
 
-// withImports is nodes with each name imported unqualified that they use
-// as a top-level name made the qualified name it stands for.
-func (e *Expander) withImports(nodes []Node) []Node {
-	if len(e.imports) == 0 {
+// topNames is nodes, a top-level form of the file, with each top-level
+// name it uses or defines made the global it means (topName).
+func (e *Expander) topNames(nodes []Node) []Node {
+	if len(e.imports) == 0 && e.own == "" {
 		return nodes
 	}
-	rename := func(name string) string {
-		switch globals := e.imports[name]; len(globals) {
-		case 0:
-			return name
-		case 1:
-			return globals[0]
-		default:
-			panic(fmt.Sprintf("%s is imported from more than one module: %s", name, strings.Join(globals, ", ")))
-		}
-	}
 	for i, node := range nodes {
-		nodes[i] = renameFree(node, rename, nil)
+		nodes[i] = renameFree(node, e.topName, nil)
 	}
 	return nodes
+}
+
+// topName is the global a top-level name of the file means as a form is
+// read: a name imported unqualified stands for the import; in a program,
+// its own definition, by an earlier form or this one, comes next, then
+// the stdlib's or a builtin's, and a name none of them has is the
+// program's, defined later. A module's own names are renamed when the
+// whole module is read (load), and its other names stay as they are.
+func (e *Expander) topName(name string) string {
+	if _, _, qualified := qualify(name); qualified {
+		return name
+	}
+	switch globals := e.imports[name]; len(globals) {
+	case 0:
+	case 1:
+		return globals[0]
+	default:
+		panic(fmt.Sprintf("%s is imported from more than one module: %s", name, strings.Join(globals, ", ")))
+	}
+	if e.own == "" || e.macros[name] {
+		return name
+	}
+	if e.defined[name] || !e.library[name] {
+		return e.own + "/" + name
+	}
+	return name
+}
+
+// libraryNames are the names the builtins and the stdlib define: what a
+// program's name means unless the program defines it first.
+var libraryNames = sync.OnceValue(func() map[string]bool {
+	names := map[string]bool{}
+	for name := range builtins {
+		names[name] = true
+	}
+	nodes, macros := stdlibExpanded()
+	for name := range macros {
+		names[name] = true
+	}
+	for _, node := range nodes {
+		if def, isDef := node.(Def); isDef {
+			names[def.Name] = true
+		}
+	}
+	return names
+})
+
+// programPrefix qualifies the names a program defines, so that they are
+// apart from the stdlib's and the builtins': no symbol can be written with
+// it. A program that is a module uses its module's name instead.
+const programPrefix = "(program)"
+
+// sourceName is a global's name as the program wrote it.
+func sourceName(name string) string {
+	return strings.TrimPrefix(name, programPrefix+"/")
 }
 
 // macroName is the name a call's head names a macro by: an imported one's
