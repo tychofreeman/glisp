@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 // A module is what a file's (module name (export name ...)) form declares:
@@ -240,7 +241,7 @@ func (e *Expander) load(name string, line int) (*loadedModule, []Node) {
 	defer func() { l.loading = l.loading[:len(l.loading)-1] }()
 	tokens, lines := tokenizeLines(string(source))
 	child := NewExpander(&Scope{prev: l.root, table: map[string]interface{}{}, run: e.scope.run})
-	child.lines, child.dir, child.loader = Lines{}, filepath.Dir(path), l
+	child.lines, child.dir, child.loader, child.declared = Lines{}, filepath.Dir(path), l, declaredNames(tokens)
 	var nodes []Node
 	for _, token := range tokens {
 		form := readLines(token, lines, child.lines)
@@ -261,8 +262,12 @@ func (e *Expander) load(name string, line int) (*loadedModule, []Node) {
 	m := &loadedModule{name: name, exports: map[string]bool{}}
 	for _, export := range child.module.exports {
 		m.exports[export] = true
-		if macro, isMacro := child.scope.table[export].(Macro); isMacro {
-			l.root.add(name+"/"+export, macro)
+	}
+	// Every macro, so that a template can name one: privacy is for what a
+	// program writes.
+	for n, value := range child.scope.table {
+		if macro, isMacro := value.(Macro); isMacro {
+			l.root.add(name+"/"+n, macro)
 		}
 	}
 	rename := func(n string) string {
@@ -403,4 +408,106 @@ func qualify(name string) (module, rest string, qualified bool) {
 		return "", name, false
 	}
 	return name[:i], name[i+1:], true
+}
+
+// quasi is the code that builds the quasiquote template x at depth (1 for
+// the outermost): x as data, except that (unquote y) at this depth is y's
+// value and, in a list, (unquote-splicing y) is y's elements, and its
+// symbols are what templateSymbol makes them. fresh holds the names this
+// template made for those that end in #.
+func (e *Expander) quasi(x interface{}, depth int, fresh map[string]Symbol) Node {
+	switch x := x.(type) {
+	case Symbol:
+		return Quote{e.templateSymbol(x, fresh)}
+	case List:
+		if len(x) == 0 {
+			return Quote{List{}}
+		}
+		if head, _ := listHead(x); len(x) == 2 {
+			switch head {
+			case "unquote":
+				if depth == 1 {
+					return e.Expand(x[1])
+				}
+				return e.quasiList(x, depth-1, fresh)
+			case "unquote-splicing":
+				if depth == 1 {
+					panic("unquote-splicing: only in a list inside a quasiquote")
+				}
+				return e.quasiList(x, depth-1, fresh)
+			case "quasiquote":
+				return e.quasiList(x, depth+1, fresh)
+			}
+		}
+		return e.quasiList(x, depth, fresh)
+	}
+	return Quote{x}
+}
+
+// quasiList is quasi for the elements of a list, built from the last with
+// cons, and append for a (unquote-splicing y) before the last.
+func (e *Expander) quasiList(l List, depth int, fresh map[string]Symbol) Node {
+	var built Node = Quote{List{}}
+	for i := len(l) - 1; i >= 0; i-- {
+		if head, _ := listHead(l[i]); head == "unquote-splicing" && depth == 1 && len(l[i].(List)) == 2 {
+			spliced := e.Expand(l[i].(List)[1])
+			if i == len(l)-1 {
+				built = spliced
+			} else {
+				built = Apply{Fn: Ref{Name: "append"}, Args: []Node{spliced, built}, Line: e.line}
+			}
+			continue
+		}
+		built = Apply{Fn: Ref{Name: "cons"}, Args: []Node{e.quasi(l[i], depth, fresh), built}, Line: e.line}
+	}
+	return built
+}
+
+// templateSymbol is a symbol a quasiquote template writes: a name ending in
+// # becomes one no other code has, the same throughout the template; a
+// name the file defines becomes that definition's global, which means it
+// wherever the template's code ends up.
+func (e *Expander) templateSymbol(s Symbol, fresh map[string]Symbol) Symbol {
+	name := s.Str()
+	if s.global {
+		return s
+	}
+	if len(name) > 1 && strings.HasSuffix(name, "#") {
+		if made, found := fresh[name]; found {
+			return made
+		}
+		made := symbol(fmt.Sprintf("%s%d", name, freshNames.Add(1)))
+		fresh[name] = made
+		return made
+	}
+	if !e.defined[name] && !e.declared[name] {
+		return s
+	}
+	switch {
+	case e.own != "":
+		return Symbol{name: e.own + "/" + name, global: true}
+	case e.module != nil:
+		return Symbol{name: e.module.name + "/" + name, global: true}
+	}
+	return s
+}
+
+// freshNames counts the names templates have made for those ending in #.
+var freshNames atomic.Int64
+
+// declaredNames are the names a module's forms define by def, defn,
+// defmacro or defgeneric, read before the module is expanded, so that a
+// template can mean a definition that comes after it.
+func declaredNames(tokens List) map[string]bool {
+	names := map[string]bool{}
+	for _, token := range tokens {
+		form, _ := Read(token).(List)
+		switch head, _ := listHead(form); head {
+		case "def", "defn", "defmacro", "defgeneric":
+			if name, isSymbol := symbolAt(form, 1); isSymbol {
+				names[name] = true
+			}
+		}
+	}
+	return names
 }

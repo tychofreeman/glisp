@@ -2,22 +2,15 @@
 (def mult (lambda (x y) (* x y)))
 
 ; (defn name (params...) body...) is (def name (lambda (params...) body...)).
-(defmacro defn (lambda (xs)
-  (cons (quote def)
-    (cons (car xs)
-      (cons (cons (quote lambda) (cdr xs)) nil)))))
+(defmacro defn (lambda (xs) `(def ,(car xs) (lambda ,@(cdr xs)))))
 
 ; (let (name value name value ...) body...) binds each name to its value, in
 ; order, so a value can use the names before it, then evaluates body.
 ; (let (a 1 b a) body) is ((lambda (a) ((lambda (b) ((lambda () body))) a)) 1).
 (defn let_expand (bindings body)
   (if (eq (car bindings) nil)
-    (cons (cons (quote lambda) (cons (quote ()) body)) nil)
-    (cons
-      (cons (quote lambda)
-        (cons (cons (car bindings) nil)
-          (cons (cons (quote let) (cons (cdr (cdr bindings)) body)) nil)))
-      (cons (car (cdr bindings)) nil))))
+    `((lambda () ,@body))
+    `((lambda (,(car bindings)) (let ,(cdr (cdr bindings)) ,@body)) ,(car (cdr bindings)))))
 (defmacro let (lambda (xs) (let_expand (car xs) (cdr xs))))
 
 ; (not x) is true unless x is true, the one value if takes as true.
@@ -28,7 +21,7 @@
 (defn and_expand (xs)
   (if (eq xs (quote ())) (quote true)
     (if (eq (cdr xs) (quote ())) (car xs)
-      (cons (quote if) (cons (car xs) (cons (and_expand (cdr xs)) (cons (quote false) nil)))))))
+      `(if ,(car xs) ,(and_expand (cdr xs)) false))))
 (defmacro and (lambda (xs) (and_expand xs)))
 
 ; (or a b ...) is true as soon as one of its arguments is true, without
@@ -36,7 +29,7 @@
 (defn or_expand (xs)
   (if (eq xs (quote ())) (quote false)
     (if (eq (cdr xs) (quote ())) (car xs)
-      (cons (quote if) (cons (car xs) (cons (quote true) (cons (or_expand (cdr xs)) nil)))))))
+      `(if ,(car xs) true ,(or_expand (cdr xs))))))
 (defmacro or (lambda (xs) (or_expand xs)))
 
 ; (cond (test body...) ...) is the body of the first clause whose test is
@@ -45,13 +38,12 @@
 (defn cond_body (body)
   (if (eq body (quote ())) (quote nil)
     (if (eq (cdr body) (quote ())) (car body)
-      (cons (cons (quote lambda) (cons (quote ()) body)) nil))))
+      `((lambda () ,@body)))))
 (defn cond_expand (clauses)
   (if (eq clauses (quote ())) (quote nil)
-    (cons (quote if)
-      (cons (cond_test (car (car clauses)))
-        (cons (cond_body (cdr (car clauses)))
-          (cons (cond_expand (cdr clauses)) nil))))))
+    `(if ,(cond_test (car (car clauses)))
+       ,(cond_body (cdr (car clauses)))
+       ,(cond_expand (cdr clauses)))))
 (defmacro cond (lambda (clauses) (cond_expand clauses)))
 
 ; A list library. Each function takes nil or () as the empty list, gives ()
@@ -95,10 +87,9 @@
 (defn letrec_defs (bindings)
   (cond ((empty? bindings) (quote ()))
         ((empty? (cdr bindings)) (error "letrec: expected names and values in pairs, got " bindings))
-        (else (cons (list (quote def) (car bindings) (car (cdr bindings)))
+        (else (cons `(def ,(car bindings) ,(car (cdr bindings)))
                     (letrec_defs (cdr (cdr bindings)))))))
-(defmacro letrec (lambda (xs)
-  (list (cons (quote lambda) (cons (quote ()) (append (letrec_defs (car xs)) (cdr xs)))))))
+(defmacro letrec (lambda (xs) `((lambda () ,@(letrec_defs (car xs)) ,@(cdr xs)))))
 
 ; (deftype type (constructor field ...) ...) defines an algebraic data type:
 ; for each constructor, a function that makes a data value of it, a
@@ -115,32 +106,23 @@
     c
     (error "deftype: expected (constructor field ...), got " c)))
 (defn deftype_make (c)
-  (list (quote def) (car c)
-    (list (quote lambda) (cdr c)
-      (cons (quote data) (cons (deftype_quote (car c)) (cdr c))))))
+  `(def ,(car c) (lambda ,(cdr c) (data (quote ,(car c)) ,@(cdr c)))))
 (defn deftype_is (c)
-  (list (quote def) (deftype_name (list (car c) "?"))
-    (list (quote lambda) (quote (x))
-      (list (quote and) (quote (data? x))
-        (list (quote eq) (quote (data_name x)) (deftype_quote (car c)))))))
+  `(def ,(deftype_name (list (car c) "?"))
+     (lambda (x#) (and (data? x#) (eq (data_name x#) (quote ,(car c)))))))
 (defn deftype_fields (name fields i)
   (if (empty? fields) (quote ())
     (let (getter (deftype_name (list name "_" (car fields))))
       (cons
-        (list (quote def) getter
-          (list (quote lambda) (quote (x))
-            (list (quote if) (list (deftype_name (list name "?")) (quote x))
-              (list (quote data_ref) (quote x) i)
-              (list (quote error)
-                (str getter ": expected " (deftype_article name) name ", got ")
-                (quote x)))))
+        `(def ,getter
+           (lambda (x#)
+             (if (,(deftype_name (list name "?")) x#)
+               (data_ref x# ,i)
+               (error ,(str getter ": expected " (deftype_article name) name ", got ") x#))))
         (deftype_fields name (cdr fields) (plus i 1))))))
 (defn deftype_type (type constructors)
-  (list (quote def) (deftype_name (list type "?"))
-    (list (quote lambda) (quote (x))
-      (cons (quote or)
-        (map (lambda (c) (list (deftype_name (list (car c) "?")) (quote x)))
-             constructors)))))
+  `(def ,(deftype_name (list type "?"))
+     (lambda (x) (or ,@(map (lambda (c) (list (deftype_name (list (car c) "?")) (quote x))) constructors)))))
 (defn deftype_expand (xs)
   (if (not (symbol? (car xs)))
     (error "deftype: expected a type name, got " (car xs))
@@ -220,9 +202,9 @@
     (let (compiled (match_compile (car clause) (quote __match))
           bindings (car (cdr compiled)))
       (match_unique bindings)
-      (list (quote if) (cons (quote and) (car compiled))
-        (cons (quote let) (cons (fold append (quote ()) bindings) (cdr clause)))
-        next))))
+      `(if (and ,@(car compiled))
+         (let ,(fold append (quote ()) bindings) ,@(cdr clause))
+         ,next))))
 (defn match_clauses (clauses)
   (if (empty? clauses)
     (quote (error "match: no clause matches " __match))
@@ -230,7 +212,7 @@
 (defn match_expand (xs)
   (if (empty? xs)
     (error "match: expected a value and clauses")
-    (list (list (quote lambda) (quote (__match)) (match_clauses (cdr xs))) (car xs))))
+    `((lambda (__match) ,(match_clauses (cdr xs))) ,(car xs))))
 (defmacro match (lambda (xs) (match_expand xs)))
 
 ; Errors as values: a function that can fail returns a maybe, a value or
@@ -263,11 +245,10 @@
            (cond ((empty? (cdr steps)) (error "do: the last step can't bind a name: " step))
                  ((not (and (symbol? (car step)) (eq (length step) 3)))
                   (error "do: expected (name <- value), got " step))
-                 (else (list (quote bind) (car (cdr (cdr step)))
-                         (list (quote lambda) (list (car step)) (do_expand (cdr steps))))))))
+                 (else `(bind ,(car (cdr (cdr step)))
+                          (lambda (,(car step)) ,(do_expand (cdr steps))))))))
         ((empty? (cdr steps)) (car steps))
-        (else (list (quote bind) (car steps)
-                (list (quote lambda) (quote (_)) (do_expand (cdr steps)))))))
+        (else `(bind ,(car steps) (lambda (_#) ,(do_expand (cdr steps)))))))
 (defmacro do (lambda (steps) (do_expand steps)))
 
 ; Generic operations: functions with an instance for each type of value
@@ -277,8 +258,8 @@
 ; the values for which (type? p) holds. A later instance is tried first,
 ; so a program can add instances for its own types, or replace these.
 (defmacro defgeneric (lambda (xs)
-  (list (quote defn) (car xs) (car (cdr xs))
-    (list (quote error) (str (car xs) ": no instance for ") (list (quote show) (car (cdr (cdr xs))))))))
+  `(defn ,(car xs) ,(car (cdr xs))
+     (error ,(str (car xs) ": no instance for ") (show ,(car (cdr (cdr xs))))))))
 (defn definstance_param (p) (if (cons? p) (car p) p))
 (defn definstance_test (name params)
   (cond ((empty? params) (error "definstance: expected a parameter (name type?) for " name))
@@ -286,12 +267,12 @@
         (else (definstance_test name (cdr params)))))
 (defn definstance_expand (xs)
   (let (name (car xs) params (car (cdr xs)) plain (map definstance_param params))
-    (list (quote def) name
-      (list (quote let) (list (quote definstance_next) name)
-        (list (quote lambda) plain
-          (list (quote if) (definstance_test name params)
-            (cons (quote begin) (cdr (cdr xs)))
-            (cons (quote definstance_next) plain)))))))
+    `(def ,name
+       (let (next# ,name)
+         (lambda ,plain
+           (if ,(definstance_test name params)
+             (begin ,@(cdr (cdr xs)))
+             (next# ,@plain)))))))
 (defmacro definstance (lambda (xs) (definstance_expand xs)))
 
 ; (data_fields d) is the fields of d, as a list.

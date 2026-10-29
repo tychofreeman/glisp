@@ -56,6 +56,7 @@ type Expander struct {
 	own      string                   // what qualifies the names a program defines (programPrefix, or its module's name); "" for a module loaded by an import, or the stdlib
 	macros   map[string]bool          // the macros the file defines
 	library  map[string]bool          // in a program, the names the builtins and the stdlib define (libraryNames)
+	declared map[string]bool          // a loaded module's names, read before it is expanded (declaredNames)
 }
 
 // NewExpander returns an Expander that finds macros in, and defines them in,
@@ -111,6 +112,9 @@ func (n begin) String() string { return "(begin" + nodesString(n) + ")" }
 func (e *Expander) expand(form interface{}) Node {
 	switch f := form.(type) {
 	case Symbol:
+		if f.global {
+			return Ref{Name: f.Str()}
+		}
 		return Ref{Name: e.local(f.Str())}
 	case List:
 		return e.expandList(f)
@@ -150,7 +154,9 @@ func (e *Expander) expandList(f List) Node {
 		defer func() { e.line = saved }()
 	}
 	if head, isSymbol := f[0].(Symbol); isSymbol {
-		head = symbol(e.macroName(e.local(head.Str())))
+		if !head.global {
+			head = symbol(e.macroName(e.local(head.Str())))
+		}
 		switch head.Str() {
 		case "quote":
 			if len(f) < 2 {
@@ -186,6 +192,13 @@ func (e *Expander) expandList(f List) Node {
 			return Quote{List{}}
 		case "begin":
 			return begin(e.ExpandBody(f[1:]))
+		case "quasiquote":
+			if len(f) != 2 {
+				panic(fmt.Sprintf("quasiquote: expects 1 argument, got %d", len(f)-1))
+			}
+			return e.quasi(f[1], 1, map[string]Symbol{})
+		case "unquote", "unquote-splicing":
+			panic(head.Str() + ": only inside a quasiquote")
 		}
 		if macro, isMacro := e.macro(head); isMacro {
 			return e.expand(withoutPairs(macro.fn(e.scope, List{f.Rest()})))
