@@ -30,13 +30,19 @@ strings `str string_length substring chars string< symbol parse_number`, and
 vectors `vector vector_ref vector_length vector_set vector_to_list`, maps
 `hash_map map_get map_put map_remove map_has map_count map_keys map_to_list`,
 data `data data_name data_ref data_length`, and `hash`.
-[`stdlib.glisp`](stdlib.glisp) is embedded in the package and loaded before
+[`stdlib/stdlib.glisp`](stdlib/stdlib.glisp) is embedded in the package and loaded before
 every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`, and a list library: `list`, `empty?`, `length`, `map`, `filter`,
 `fold`, `foldr`, `reverse`, `append`, `identity`, `compose`, `partial` and
 `cons?`; `deftype`, which defines data types; `match`; math (`pi exp
 log sin cos tan asin acos atan atan2 expt`); and errors as values, `maybe` (`just`, `nothing`), `either` (`left`, `right`), `bind`
 and `do`.
+
+Layout: the Go package `glisp` at the root holds the reader, the
+expander, the interpreter and the compiler (`wasm_*.go`); `wasm/` is the
+binary encoder, `cmd/glisp` the command, `stdlib/` the stdlib in glisp
+(embedded), `docs/` the spec and the friction log, `examples/` example
+programs and `tools/` scripts for working on the code.
 
 ## Roadmap
 

@@ -1235,3 +1235,9 @@ One entry per PR, written before committing it.
   with `==` (a bug in go-matchers, not logged there yet); `Equals`
   compares them deeply. The stdlib's macros by `replace_text`, one per
   macro. Nothing by hand.
+
+### PR: The stdlib and the friction log in directories
+
+- `move_file` for both files (it ran the batch again checked at its end,
+  since the embed broke until the next step fixed its path), then
+  `replace_text` for the embed and the links. Nothing by hand.

@@ -234,12 +234,12 @@ func raise(scope *Scope, args List) interface{} {
 
 var builtins = builtinTable()
 
-//go:embed stdlib.glisp
+//go:embed stdlib/stdlib.glisp
 var stdlib string
 
 var builtinScope = &Scope{table: builtins}
 
-// stdlibForms is stdlib.glisp, read once.
+// stdlibForms is stdlib/stdlib.glisp, read once.
 var stdlibForms = Read(TokenizeString(stdlib)).(List)
 
 // stdlibExpanded is the stdlib expanded once, in a scope of its own: its
