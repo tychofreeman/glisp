@@ -1,7 +1,7 @@
 package glisp
 
 import (
-	_ "embed"
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -234,13 +234,22 @@ func raise(scope *Scope, args List) interface{} {
 
 var builtins = builtinTable()
 
-//go:embed stdlib/stdlib.glisp
-var stdlib string
+// stdlibFiles are the stdlib's modules: the prelude, which every module and
+// program has, and those a program imports by name.
+//
+//go:embed stdlib/*.glisp
+var stdlibFiles embed.FS
+
+// stdlibSource is the source of the stdlib module name, if there is one.
+func stdlibSource(name string) (string, bool) {
+	source, err := stdlibFiles.ReadFile("stdlib/" + name + ".glisp")
+	return string(source), err == nil
+}
 
 var builtinScope = &Scope{table: builtins}
 
-// stdlibForms is stdlib/stdlib.glisp, read once.
-var stdlibForms = Read(TokenizeString(stdlib)).(List)
+// stdlibForms is the prelude, stdlib/prelude.glisp, read once.
+var stdlibForms = Read(TokenizeString(func() string { s, _ := stdlibSource("prelude"); return s }())).(List)
 
 // stdlibExpanded is the stdlib expanded once, in a scope of its own: its
 // nodes, and the macros it defines. A run evaluates the nodes in its own
@@ -250,35 +259,36 @@ var stdlibExpanded = sync.OnceValues(func() ([]Node, map[string]Macro) {
 	return expandLibrary(stdlibForms)
 })
 
-// expandLibrary expands and evaluates the forms of a library, the stdlib, and
-// returns its nodes and macros.
+// expandLibrary expands and evaluates the forms of the prelude, a module,
+// and returns its nodes, each name it defines renamed prelude/..., and
+// its macros, by their names. Each name may be defined once, and none may
+// be a builtin's.
 func expandLibrary(forms List) ([]Node, map[string]Macro) {
 	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}}
 	expander := NewExpander(scope)
+	expander.declared, expander.once = declaredNames(forms), true
 	var nodes []Node
-	defined := map[string]bool{}
 	for _, form := range forms {
-		expanded := expander.ExpandTop(form)
-		if head, _ := listHead(form); head != "definstance" {
-			for _, name := range definedNames(form, expanded) {
-				if _, isBuiltin := builtinScope.lookup(symbol(name)); isBuiltin {
-					panic(fmt.Sprintf("stdlib: %s is a builtin; name it something else", name))
-				}
-				if defined[name] {
-					panic(fmt.Sprintf("stdlib: %s is defined twice; name it something else, or add to a generic with definstance", name))
-				}
-				defined[name] = true
-			}
-		}
-		for _, node := range expanded {
+		for _, node := range expander.ExpandFileForm(form) {
 			Eval(node, scope)
 			nodes = append(nodes, node)
 		}
 	}
+	expander.Finish()
+	name := expander.module.name
+	rename := func(n string) string {
+		if expander.defined[n] {
+			return name + "/" + n
+		}
+		return n
+	}
+	for i, node := range nodes {
+		nodes[i] = renameFree(node, rename, nil)
+	}
 	macros := map[string]Macro{}
-	for name, value := range scope.table {
+	for n, value := range scope.table {
 		if macro, isMacro := value.(Macro); isMacro {
-			macros[name] = macro
+			macros[n] = macro
 		}
 	}
 	return nodes, macros

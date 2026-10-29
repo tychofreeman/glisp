@@ -30,18 +30,20 @@ strings `str string_length substring chars string< symbol parse_number`, and
 vectors `vector vector_ref vector_length vector_set vector_to_list`, maps
 `hash_map map_get map_put map_remove map_has map_count map_keys map_to_list`,
 data `data data_name data_ref data_length`, and `hash`.
-[`stdlib/stdlib.glisp`](stdlib/stdlib.glisp) is embedded in the package and loaded before
-every program; it defines `mult`, `defn`, `let`, `not`, `and`, `or` and
+The stdlib is two modules in [`stdlib/`](stdlib), embedded in the
+package. The prelude, in every program and module, defines `mult`, `defn`, `let`, `not`, `and`, `or` and
 `cond`, and a list library: `list`, `empty?`, `length`, `map`, `filter`,
 `fold`, `foldr`, `reverse`, `append`, `identity`, `compose`, `partial` and
-`cons?`; `deftype`, which defines data types; `match`; math (`pi exp
-log sin cos tan asin acos atan atan2 expt`); and errors as values, `maybe` (`just`, `nothing`), `either` (`left`, `right`), `bind`
-and `do`.
+`cons?`; `deftype`, which defines data types; `match`; errors as values,
+`maybe` (`just`, `nothing`), `either` (`left`, `right`), `bind` and `do`;
+`letrec`, `sort`, and the generic operations `fmap`, `show` and
+`compare`. `math`, imported by name, has `pi exp log sin cos tan asin
+acos atan atan2 expt`.
 
 Layout: the Go package `glisp` at the root holds the reader, the
 expander, the interpreter and the compiler (`wasm_*.go`); `wasm/` is the
-binary encoder, `cmd/glisp` the command, `stdlib/` the stdlib in glisp
-(embedded), `docs/` the spec and the friction log, `examples/` example
+binary encoder, `cmd/glisp` the command, `stdlib/` the stdlib's modules
+in glisp (embedded), `docs/` the spec and the friction log, `examples/` example
 programs and `tools/` scripts for working on the code.
 
 ## Roadmap
@@ -751,7 +753,7 @@ helpers, which only works because they share that namespace.
   `show`: the one sanctioned way to change another module's definition,
   as the stdlib's redefinition check already allows. Instances live as
   long as the program, whichever module added them.
-- [ ] **The stdlib as modules.** The prelude: the special forms' macros
+- [x] **The stdlib as modules.** The prelude: the special forms' macros
   (`defn`, `let`, `letrec`, `cond`, `and`, `or`), `not`, the list
   library, `deftype` and `match`, `maybe` and `either` with `bind` and
   `do`, `defgeneric` and `definstance`, `fmap`, `show`, `compare` and
@@ -759,6 +761,21 @@ helpers, which only works because they share that namespace.
   and `expt`, and is imported by name. To decide when it is built: which
   builtins move too (`sqrt`, `floor`, `float` into `math`; the map,
   vector and string builtins into modules of their own, or the prelude).
+  Done: `stdlib/prelude.glisp` is `(module prelude (export ...))`,
+  expanded once (`expandLibrary`) and renamed like any module, so its
+  helpers (`let_expand`, `match_compile`, `show_join`, ...) are private
+  `prelude/...` globals; `stdlib/math.glisp` is `(module math (export pi
+  exp log sin cos tan asin acos atan atan2 expt))`, embedded with it and
+  loaded by `import`, even from a program run from a string. What a
+  prelude or builtin name means (`libraryNames`): a builtin's or a
+  prelude macro's name itself, any other prelude name `prelude/...`; a
+  module's code means the same while it is read. The prelude's macros
+  are registered under `prelude/...` too, so its templates' names (`let`
+  in `let`'s own expansion, `bind` in `do`'s) are the prelude's wherever
+  they land. Each stdlib module is checked as it loads: a name defined
+  twice, or a builtin's, is an error. The builtins stay where they are
+  for now; whether `sqrt`, `floor` and `float` move to `math` is still
+  open. Breaking: `sin` and the rest need `(import math)`.
 - [ ] **Go modules.** `(import go/text)` imports the functions a Go host
   registered under `text`, with the types its `extern`s declared (see
   Interop with Go): a module file of `extern`s, or one the host

@@ -108,14 +108,15 @@ func TestMathFunctionsAreAccurate(t *testing.T) {
 	// A special value as code: the names Write gives NaN and the
 	// infinities aren't literals.
 	code := func(f float64) string {
-		return strings.NewReplacer("-Infinity", "(- math_inf)", "Infinity", "math_inf", "NaN", "(/ 0.0 0)").Replace(Write(f))
+		return strings.NewReplacer("-Infinity", "(/ -1.0 0)", "Infinity", "(/ 1.0 0)", "NaN", "(/ 0.0 0)").Replace(Write(f))
 	}
 	var program strings.Builder
+	program.WriteString("(import math)\n")
 	var cases [][][]float64 // each line's arguments
 	for _, f := range fns {
 		arity := len(f.args())
 		var line [][]float64
-		program.WriteString("(p (map (lambda (a) (apply " + f.name + " a)) (list")
+		program.WriteString("(p (map (lambda (a) (apply math/" + f.name + " a)) (list")
 		for _, a := range specials {
 			for _, b := range specials[:1+(arity-1)*(len(specials)-1)] {
 				args := []float64{a, b}[:arity]
@@ -127,7 +128,7 @@ func TestMathFunctionsAreAccurate(t *testing.T) {
 				line = append(line, args)
 			}
 		}
-		program.WriteString(")))\n(p (map (lambda (a) (apply " + f.name + " a)) (quote (")
+		program.WriteString(")))\n(p (map (lambda (a) (apply math/" + f.name + " a)) (quote (")
 		cases = append(cases, line)
 		line = nil
 		for range 300 {
@@ -183,7 +184,7 @@ func TestModulesWithoutFloatsLeaveOutTheirRuntime(t *testing.T) {
 		}
 	}
 	for _, program := range []string{`(p 1.5)`, `(p (float 1))`, `(p (sqrt 4))`, `(p (parse_number "1"))`,
-		`(p (quote (a 1.5)))`, `(p (exp 1))`, `(defmacro f (lambda (xs) 2.5)) (p (f))`} {
+		`(p (quote (a 1.5)))`, `(import math (exp)) (p (exp 1))`, `(defmacro f (lambda (xs) 2.5)) (p (f))`} {
 		if g := growth(program); g > 100 {
 			t.Errorf("%s: a float adds %d bytes; was the float runtime left out?", program, g)
 		}
