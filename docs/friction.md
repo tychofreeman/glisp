@@ -1241,3 +1241,15 @@ One entry per PR, written before committing it.
 - `move_file` for both files (it ran the batch again checked at its end,
   since the embed broke until the next step fixed its path), then
   `replace_text` for the embed and the links. Nothing by hand.
+
+### PR: The stdlib as the prelude and math modules
+
+- The two files by `create_file` (their contents split from the old
+  one by a script) and `delete_file`, in the batch that changed the
+  embed, since neither half type-checks alone. `replace_declaration`
+  refused twice: content of two declarations for one, then a function
+  for the `var libraryNames` it replaced; the var went by
+  `replace_text`, since no operation turns a package variable into a
+  function (an `inline`-then-wrap, or a kind-changing replace, would).
+  The rest by `replace_text`, `add_field` and `replace_declaration`
+  (`expandLibrary`). Nothing by hand.

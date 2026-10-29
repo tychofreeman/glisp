@@ -55,8 +55,9 @@ type Expander struct {
 	imports  map[string][]string      // what each name it imports unqualified stands for
 	own      string                   // what qualifies the names a program defines (programPrefix, or its module's name); "" for a module loaded by an import, or the stdlib
 	macros   map[string]bool          // the macros the file defines
-	library  map[string]bool          // in a program, the names the builtins and the stdlib define (libraryNames)
+	library  map[string]string        // what the builtins' and the prelude's names mean (libraryNames); nil in the prelude
 	declared map[string]bool          // a loaded module's names, read before it is expanded (declaredNames)
+	once     bool                     // a stdlib module, which defines each name once and none of a builtin's
 }
 
 // NewExpander returns an Expander that finds macros in, and defines them in,
@@ -188,6 +189,9 @@ func (e *Expander) expandList(f List) Node {
 			if e.own != "" {
 				// Under the name a reference read before it means, too.
 				e.scope.add(e.own+"/"+name, Macro{fn})
+			} else if e.module != nil {
+				// And under the name a template of the module's means.
+				e.scope.add(e.module.name+"/"+name, Macro{fn})
 			}
 			return Quote{List{}}
 		case "begin":

@@ -668,14 +668,14 @@ a program next to it can say:
 
 which prints `6 16 0`: `square` uses the module's `area`, not the
 program's. A program run from a string, not a file, can import only the
-stdlib's modules, and there are none yet:
+stdlib's modules, such as `math`:
 
 ```glisp
 (import geometry)
 ```
 
 ```output
-glisp: line 1: import: no module geometry: a program not read from a file can import only the stdlib's modules, and it has none yet
+glisp: line 1: import: no module geometry: a program not read from a file can import only the stdlib's modules, such as math
 ```
 
 Lines in an error are the lines of the file the error is in, which the
@@ -762,11 +762,14 @@ glisp: line 1: unquote: only inside a quasiquote
 
 ## 7. The standard library
 
-These are written in glisp, in [`stdlib/stdlib.glisp`](../stdlib/stdlib.glisp), and loaded
-before every program. A compiled program includes only the ones it uses.
-The stdlib defines each name once, and none of a builtin's (checked as
-it loads; `definstance` adds to a generic instead), but a program may
-redefine any of them.
+These are written in glisp, as modules in [`stdlib/`](../stdlib). The
+prelude ([`prelude.glisp`](../stdlib/prelude.glisp)) is in every program
+and module without an import; the others are imported by name: `math`
+([`math.glisp`](../stdlib/math.glisp)). A compiled program includes only
+what it uses. A stdlib module defines each name once, and none of a
+builtin's (checked as it loads; `definstance` adds to a generic
+instead); its helpers are private, and a program may define any name
+the prelude exports, as [scope](#scope) describes.
 
 | Form | Meaning |
 |------|---------|
@@ -1058,21 +1061,23 @@ is the `error` that `defgeneric` put there.
 | `(atan2 y x)` | the angle of the point (x, y), from -π to π |
 | `(expt x y)` | `x` to the power `y`: an integer for integers with `y` at least 0 (wrapping as integer arithmetic does), otherwise a float |
 
-They take integers or floats and, but for `expt` of integers, give floats.
-They are written in glisp in the stdlib, with Go's math package's
-algorithms, so both backends compute the same float. The results are
-within a float or so of the true value; `sin`, `cos` and `tan` lose
-accuracy for arguments beyond about 5×10⁸.
+These are the `math` module's: `(import math)` for `math/sin`, or
+`(import math (sin cos))` for `sin` and `cos`. They take integers or
+floats and, but for `expt` of integers, give floats. They are written in
+glisp, with Go's math package's algorithms (its exact reduction of large
+arguments for `sin`, `cos` and `tan` included), so both backends compute
+the same float, within a float or so of the true value.
 
 ```glisp
-(p pi (exp 1) (log 10) (log 1e-310))
+(import math (pi exp log sin cos tan atan atan2 acos expt))
+(p pi (exp 1) (log 10) (log 1e-310) (math/sin 0))
 (p (sin (/ pi 6)) (cos 0) (tan (/ pi 4)) (atan 1) (atan2 1 -1) (acos -1))
 (p (expt 2 10) (expt 2 -1) (expt 2.0 0.5) (expt -8 (/ 1.0 3)) (expt 10 -3))
 (exp 1000)
 ```
 
 ```output
-3.141592653589793 2.718281828459045 2.302585092994046 -713.8013788281542
+3.141592653589793 2.718281828459045 2.302585092994046 -713.8013788281542 0.0
 0.49999999999999994 1.0 1.0 0.7853981633974483 2.356194490192345 3.141592653589793
 1024 0.5 1.4142135623730951 NaN 1.0e-3
 => Infinity

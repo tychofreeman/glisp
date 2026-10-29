@@ -56,7 +56,7 @@ func TestModulesImport(t *testing.T) {
 			"main": "(import geometry (area))\n(import rect (area))\n(p (area 1 2))"},
 			"glisp: line 3: area is imported from more than one module: geometry/area, rect/area\n"},
 		{map[string]string{"main": "(import nowhere)"},
-			"glisp: line 1: import: no module nowhere: there is no nowhere.glisp next to the file that imports it\n"},
+			"glisp: line 1: import: no module nowhere: there is no nowhere.glisp next to the file that imports it, nor a stdlib module nowhere\n"},
 		{map[string]string{"plain": "(def z 1)", "main": "(def x 1)\n(import plain)"},
 			"glisp: line 2: import: plain.glisp is not the module plain: it must start with (module plain ...)\n"},
 		{map[string]string{

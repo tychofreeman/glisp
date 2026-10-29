@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"sync"
 	"sync/atomic"
 )
 
@@ -40,6 +39,14 @@ func (e *Expander) ExpandFileForm(form interface{}) []Node {
 	// An instance adds to a generic: it defines no name of the file's.
 	if head != "definstance" {
 		for _, name := range definedNames(form, nodes) {
+			if e.once {
+				if _, isBuiltin := builtins[name]; isBuiltin {
+					panic(fmt.Sprintf("stdlib: %s is a builtin; name it something else", name))
+				}
+				if e.defined[name] {
+					panic(fmt.Sprintf("stdlib: %s is defined twice; name it something else, or add to a generic with definstance", name))
+				}
+			}
 			if globals := e.imports[name]; len(globals) > 0 {
 				e.scope.at(e.formLine(form))
 				panic(fmt.Sprintf("def: %s is imported from %s", name, strings.Split(globals[0], "/")[0]))
@@ -229,19 +236,25 @@ func (e *Expander) load(name string, line int) (*loadedModule, []Node) {
 	if i := slices.Index(l.loading, name); i >= 0 {
 		panic(fmt.Sprintf("import: a cycle: %s", strings.Join(append(append([]string{}, l.loading[i:]...), name), " imports ")))
 	}
-	if e.dir == "" {
-		panic(fmt.Sprintf("import: no module %s: a program not read from a file can import only the stdlib's modules, and it has none yet", name))
-	}
+	// A file next to this one, else a stdlib module of that name.
 	path := filepath.Join(e.dir, name+".glisp")
-	source, err := os.ReadFile(path)
-	if err != nil {
-		panic(fmt.Sprintf("import: no module %s: there is no %s.glisp next to the file that imports it", name, name))
+	file, err := os.ReadFile(path)
+	source, stdlib := string(file), false
+	if e.dir == "" || err != nil {
+		source, stdlib = stdlibSource(name)
+		if !stdlib || name == "prelude" {
+			if e.dir == "" {
+				panic(fmt.Sprintf("import: no module %s: a program not read from a file can import only the stdlib's modules, such as math", name))
+			}
+			panic(fmt.Sprintf("import: no module %s: there is no %s.glisp next to the file that imports it, nor a stdlib module %s", name, name, name))
+		}
 	}
 	l.loading = append(l.loading, name)
 	defer func() { l.loading = l.loading[:len(l.loading)-1] }()
-	tokens, lines := tokenizeLines(string(source))
+	tokens, lines := tokenizeLines(source)
 	child := NewExpander(&Scope{prev: l.root, table: map[string]interface{}{}, run: e.scope.run})
 	child.lines, child.dir, child.loader, child.declared = Lines{}, filepath.Dir(path), l, declaredNames(tokens)
+	child.library, child.once = e.library, stdlib
 	var nodes []Node
 	for _, token := range tokens {
 		form := readLines(token, lines, child.lines)
@@ -274,6 +287,9 @@ func (e *Expander) load(name string, line int) (*loadedModule, []Node) {
 		if child.defined[n] {
 			return name + "/" + n
 		}
+		if global, found := e.library[n]; found {
+			return global
+		}
 		return n
 	}
 	for i, node := range nodes {
@@ -286,7 +302,7 @@ func (e *Expander) load(name string, line int) (*loadedModule, []Node) {
 // topNames is nodes, a top-level form of the file, with each top-level
 // name it uses or defines made the global it means (topName).
 func (e *Expander) topNames(nodes []Node) []Node {
-	if len(e.imports) == 0 && e.own == "" {
+	if len(e.imports) == 0 && e.own == "" && e.library == nil {
 		return nodes
 	}
 	for i, node := range nodes {
@@ -312,33 +328,58 @@ func (e *Expander) topName(name string) string {
 	default:
 		panic(fmt.Sprintf("%s is imported from more than one module: %s", name, strings.Join(globals, ", ")))
 	}
-	if e.own == "" || e.macros[name] {
+	if e.own == "" {
+		// A module's own names are renamed once it is all read; while it is,
+		// the prelude's and the builtins' are what its code and macros use.
+		if e.library != nil && !e.defined[name] && !e.declared[name] && !e.macros[name] {
+			if global, found := e.library[name]; found {
+				return global
+			}
+		}
 		return name
 	}
-	if e.defined[name] || !e.library[name] {
+	if e.macros[name] {
+		return name
+	}
+	if e.defined[name] {
 		return e.own + "/" + name
 	}
-	return name
+	if global, found := e.library[name]; found {
+		return global
+	}
+	return e.own + "/" + name
 }
 
-// libraryNames are the names the builtins and the stdlib define: what a
-// program's name means unless the program defines it first.
-var libraryNames = sync.OnceValue(func() map[string]bool {
-	names := map[string]bool{}
+// libraryNames are what the names the builtins and the prelude export mean
+// in a program or a module, unless it defines them first: a builtin's name
+// itself, a prelude macro's name (macros are found by name), and the
+// global of any other prelude name, prelude/....
+func libraryNames() map[string]string {
+	names := map[string]string{}
 	for name := range builtins {
-		names[name] = true
+		names[name] = name
 	}
-	nodes, macros := stdlibExpanded()
-	for name := range macros {
-		names[name] = true
-	}
-	for _, node := range nodes {
-		if def, isDef := node.(Def); isDef {
-			names[def.Name] = true
+	_, macros := stdlibExpanded()
+	for _, name := range preludeExports() {
+		if _, isMacro := macros[name]; isMacro {
+			names[name] = name
+		} else {
+			names[name] = "prelude/" + name
 		}
 	}
 	return names
-})
+}
+
+// preludeExports are the names the prelude's module form exports.
+func preludeExports() []string {
+	export, _ := stdlibForms[0].(List)[2].(List)
+	var names []string
+	for i := 1; i < len(export); i++ {
+		name, _ := symbolAt(export, i)
+		names = append(names, name)
+	}
+	return names
+}
 
 // programPrefix qualifies the names a program defines, so that they are
 // apart from the stdlib's and the builtins': no symbol can be written with

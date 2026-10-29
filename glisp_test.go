@@ -650,7 +650,7 @@ func TestTheStdlibDefinesEachNameOnce(t *testing.T) {
 		t.Errorf("a new name and an instance: %v", err)
 	}
 	for src, want := range map[string]string{
-		`(defn math_pow2 (n) n)`:  "stdlib: math_pow2 is defined twice; name it something else, or add to a generic with definstance",
+		`(defn let_expand (b) b)`: "stdlib: let_expand is defined twice; name it something else, or add to a generic with definstance",
 		`(def car 1)`:             "stdlib: car is a builtin; name it something else",
 		`(defmacro let identity)`: "stdlib: let is defined twice; name it something else, or add to a generic with definstance",
 		`(deftype pair (just x))`: "stdlib: just is defined twice; name it something else, or add to a generic with definstance",
