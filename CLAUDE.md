@@ -27,7 +27,7 @@ example and its output: `TestSpecExamples` runs each in both backends.
 
 One branch and one PR per item; the user merges. Each PR updates the
 roadmap in README.md (check the item off, saying what changed) and
-appends an entry to FRICTION.md. There is no CI: before pushing, run
+appends an entry to docs/friction.md. There is no CI: before pushing, run
 
     gofmt -l .       # must print nothing
     go vet ./...
@@ -59,8 +59,8 @@ Moves that work:
 
 ## Friction log
 
-Append one entry per PR at the end of [FRICTION.md](FRICTION.md), never
-between older entries, headed `### PR: <title>`: how the change went
+Append one entry per PR at the end of [docs/friction.md](docs/friction.md),
+never between older entries, headed `### PR: <title>`: how the change went
 through the tools, what you did by hand and why no tool did it (none
 exists, one refused and why, or its argument was missing), and the
 operation that would have done it. Log refusals that cost a turn too.

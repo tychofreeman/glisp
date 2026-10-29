@@ -762,7 +762,7 @@ glisp: line 1: unquote: only inside a quasiquote
 
 ## 7. The standard library
 
-These are written in glisp, in [`stdlib.glisp`](../stdlib.glisp), and loaded
+These are written in glisp, in [`stdlib/stdlib.glisp`](../stdlib/stdlib.glisp), and loaded
 before every program. A compiled program includes only the ones it uses.
 The stdlib defines each name once, and none of a builtin's (checked as
 it loads; `definstance` adds to a generic instead), but a program may
