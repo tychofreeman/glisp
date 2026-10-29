@@ -41,7 +41,7 @@ func Write(v interface{}) string {
 	case Data:
 		return v.write()
 	case Symbol:
-		return v.Str()
+		return sourceName(v.Str())
 	case nil:
 		return "nil"
 	case string:

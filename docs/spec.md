@@ -460,8 +460,9 @@ deep.
 
 ## 5. Special forms
 
-There are eight. They are recognised by name, before macros and calls;
-`module` and `import` only at the top level of a file.
+There are eight, and `quasiquote` (see [macros](#quasiquote)). They are
+recognised by name, before macros and calls; `module` and `import` only
+at the top level of a file.
 
 ### `quote`
 
@@ -718,6 +719,46 @@ When a program is compiled, its macros run in the compiler. Their helper
 functions are run there too, if they are top-level `def`s of lambdas (as
 `defn` makes); other `def`s are not evaluated while compiling, so a macro
 can't use a value the program computes when it runs.
+
+### Quasiquote
+
+`` `template `` is `(quasiquote template)`: the template as data, like
+`quote`, except that `,x` (`(unquote x)`) puts in the value of `x`, and
+`,@x` (`(unquote-splicing x)`) puts in the elements of the list `x`. It
+is how a macro writes the code it returns. A name in a template that ends
+in `#` is made a name no other code has, the same throughout the
+template (a template inside another's `,` has its own), for a variable
+the code binds that can't capture one of the caller's. A name the file defines (a module's, or a program's own) means
+that definition wherever the code ends up: a module's exported macro can
+call the module's private functions. Other names are left as written,
+so the caller's code passed in with `,` keeps the caller's meaning.
+Building a template uses `cons`, and `append` for a `,@` before the end.
+
+```glisp
+(def x 2)
+(def xs (list 3 4))
+(p `(a ,x ,@xs b) `(1 ,@xs) `sym `(nested (,x)))
+(defmacro swap_args (lambda (xs) `(,(car xs) ,@(reverse (cdr xs)))))
+(p (swap_args - 1 10))
+(defmacro twice (lambda (xs) `(let (v# ,(car xs)) (plus v# v#))))
+(def v 100)
+(p (twice (plus v 1)))
+```
+
+```output
+(a 2 3 4 b) (1 3 4) sym (nested (2))
+9
+202
+=> ()
+```
+
+```glisp
+(p ,x)
+```
+
+```output
+glisp: line 1: unquote: only inside a quasiquote
+```
 
 ## 7. The standard library
 

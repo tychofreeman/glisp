@@ -1,13 +1,18 @@
 package glisp
 
-type Symbol struct{ name string }
+// A Symbol is a name. A global one is a name a quasiquote template made
+// mean a top-level definition, which the expander takes as it is.
+type Symbol struct {
+	name   string
+	global bool
+}
 
 func (sym Symbol) Str() string {
 	return sym.name
 }
 
 func symbol(s string) Symbol {
-	return Symbol{s}
+	return Symbol{name: s}
 }
 
 func (sym Symbol) Append(c rune) Symbol {

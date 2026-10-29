@@ -711,7 +711,7 @@ helpers, which only works because they share that namespace.
   generics. Not yet: a generic exported by a module of the program's,
   extended from another (`(definstance geometry/show ...)`), which
   defines a qualified name.
-- [ ] **Macros keep their module.** A macro's expansion names its own
+- [x] **Macros keep their module.** A macro's expansion names its own
   module's helpers (`let` expands to `let_expand`'s output, `definstance`
   to `definstance_next`), which stop being visible once they are
   private. As in Clojure's syntax-quote, the names a macro's template
@@ -720,6 +720,26 @@ helpers, which only works because they share that namespace.
   the module that wrote them, while the code a caller passes in stays
   the caller's. The stdlib's macros move to quasiquote first, which also
   makes them shorter than their `cons` and `list` chains.
+  Done. The reader turns `` ` ``, `,` and `,@` at the start of a form into
+  `(quasiquote form)`, `(unquote form)` and `(unquote-splicing form)`
+  (`a,b` is still one symbol), and the expander turns a template into
+  `cons` calls, with `append` only for a `,@` before the end, so the
+  stdlib's first macros, defined before `append`, can use it. A
+  template's names are resolved as it is read (`templateSymbol`): one
+  ending in `#` becomes a fresh name, the same throughout the template;
+  one the file defines becomes that definition's global, a symbol marked
+  `global` that the expander takes as it is, past the export check, so a
+  module's exported macro can call its private functions. A loaded
+  module's names are read before it is expanded (`declaredNames`), so a
+  template can mean a function defined after it, and all its macros are
+  registered under qualified names for templates to use. The stdlib's
+  macros are rewritten with it: `defn`, `let`, `and`, `or`, `cond`,
+  `letrec`, `deftype`, `match`, `do`, `defgeneric` and `definstance`,
+  whose `definstance_next` is now `next#`. Their names stay plain
+  globals until the stdlib becomes the prelude module (the next step),
+  so a program's own `bind` would still capture `do`'s; after it, the
+  prelude's templates name `prelude/bind`. Nested templates each have
+  their own `#` names, like Clojure's.
 - [ ] **Generics stay open.** `(definstance show ((x point?)) ...)` in a
   module that imports `show` adds an instance to the exporting module's
   `show`: the one sanctioned way to change another module's definition,

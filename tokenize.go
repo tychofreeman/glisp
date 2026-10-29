@@ -60,6 +60,22 @@ func (t *tokenizer) list(nested bool) List {
 
 	closed := false
 	acc := ""
+	// The quasiquote marks read before the next form: `, , and ,@ make it
+	// (quasiquote form), (unquote form) and (unquote-splicing form).
+	var marks []string
+	names := map[string]string{"`": "quasiquote", ",": "unquote", ",@": "unquote-splicing"}
+	wrap := func(x interface{}) interface{} {
+		for i := len(marks) - 1; i >= 0; i-- {
+			x = List{symbol(names[marks[i]]), x}
+		}
+		marks = nil
+		return x
+	}
+	unmarked := func() {
+		if len(marks) > 0 {
+			panic(fmt.Sprintf("line %d: %s with nothing after it", t.line, marks[len(marks)-1]))
+		}
+	}
 	for bs.Len() > 0 {
 		c, _, _ := bs.ReadRune()
 
@@ -81,6 +97,16 @@ func (t *tokenizer) list(nested bool) List {
 			acc += t.escape()
 		} else if inQuote && c != '"' {
 			acc += string(c)
+		} else if acc == "" && (c == '`' || c == ',') {
+			mark := string(c)
+			if c == ',' {
+				if next, _, err := bs.ReadRune(); err == nil && next == '@' {
+					mark = ",@"
+				} else if err == nil {
+					bs.UnreadRune()
+				}
+			}
+			marks = append(marks, mark)
 		} else if !unicode.IsSpace(c) && c != '(' && c != ')' && c != '"' {
 			acc += string(c)
 		} else if c == '(' {
@@ -89,10 +115,13 @@ func (t *tokenizer) list(nested bool) List {
 			if len(sub) > 0 {
 				t.lines[&sub[0]] = start
 			}
-			r = append(r, sub)
+			r = append(r, wrap(sub))
 		} else if c == ')' {
 			if !nested {
 				panic(fmt.Sprintf("line %d: unexpected )", t.line))
+			}
+			if acc == "" {
+				unmarked()
 			}
 			closed = true
 			break
@@ -101,7 +130,7 @@ func (t *tokenizer) list(nested bool) List {
 			acc += string(c)
 		} else {
 			if acc != "" {
-				r = append(r, token(acc))
+				r = append(r, wrap(token(acc)))
 			}
 			acc = ""
 		}
@@ -114,8 +143,9 @@ func (t *tokenizer) list(nested bool) List {
 		panic(fmt.Sprintf("line %d: missing )", t.line))
 	}
 	if acc != "" {
-		r = append(r, token(acc))
+		r = append(r, wrap(token(acc)))
 	}
+	unmarked()
 	return r
 }
 

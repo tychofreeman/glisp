@@ -30,7 +30,7 @@ func token(s string) Token {
 	} else if floatLiteral.MatchString(s) {
 		return FloatToken{s}
 	}
-	return Symbol{s}
+	return Symbol{name: s}
 }
 
 // floatLiteral is a float as a program writes one: digits with a fraction,

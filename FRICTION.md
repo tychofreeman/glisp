@@ -1221,3 +1221,17 @@ One entry per PR, written before committing it.
   callers set. One `replace_text` was refused for a tab inside a JSON
   string that a heredoc kept raw; `replace_statements` with `function`
   did it instead. Nothing by hand.
+
+### PR: Quasiquote, and the stdlib's macros on it
+
+- Tests and the spec section first (`add_declaration`, `replace_text`).
+  The reader's marks and the expander's `quasi` by `replace_text` and
+  `add_declaration`; `add_field` for the expander's `declared`. Adding
+  a field to `Symbol` meant keying its two positional literals first
+  (`Symbol{s}` to `Symbol{name: s}`), by `replace_text`: the gap
+  `add_field` refuses for, and an operation that keys a struct's
+  literals would close. The reader test first used go-matchers'
+  `HasExactly` on nested lists, which panics comparing two `List`s
+  with `==` (a bug in go-matchers, not logged there yet); `Equals`
+  compares them deeply. The stdlib's macros by `replace_text`, one per
+  macro. Nothing by hand.

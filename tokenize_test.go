@@ -54,6 +54,17 @@ func TestMultipleFirstLevelExprsPossible(t *testing.T) {
 	AssertThat(t, TokenizeString("(a) (b) (c)"), HasExactly(HasExactly(symbol("a")), HasExactly(symbol("b")), HasExactly(symbol("c"))))
 }
 
+// ` , and ,@ before a form read as (quasiquote form), (unquote form) and
+// (unquote-splicing form).
+func TestQuasiquoteMarksReadAsLists(t *testing.T) {
+	q := func(name string, x interface{}) List { return List{symbol(name), x} }
+	AssertThat(t, TokenizeString("`(a ,b ,@(c) ,`d)"), Equals(List{q("quasiquote",
+		List{symbol("a"), q("unquote", symbol("b")), q("unquote-splicing", List{symbol("c")}),
+			q("unquote", q("quasiquote", symbol("d")))})}))
+	AssertThat(t, TokenizeString("a,b"), Equals(List{symbol("a,b")}))
+	assertPanicsWith(t, "(a `)", "line 1: ` with nothing after it")
+}
+
 func TestHandlesNumbersToo(t *testing.T) {
 	AssertThat(t, TokenizeString("1"), HasExactly(token("1")))
 }

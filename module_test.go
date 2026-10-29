@@ -37,6 +37,11 @@ func TestModulesImport(t *testing.T) {
 		{map[string]string{"twice": "(module twice (export all))\n(defn all (l) (map (lambda (x) (* 2 x)) l))",
 			"main": "(import twice)\n(defn fold (f acc l) 0)\n(p (twice/all (list 1 2)) (fold plus 1 (list 2)))"},
 			"(2 4) 0\n=> ()\n"},
+		// An exported macro calls a private function of its module; the
+		// program's own mul doesn't capture it.
+		{map[string]string{"tools": "(module tools (export square_of))\n(defn mul (a b) (* a b))\n(defmacro square_of (lambda (xs) `(let (v# ,(car xs)) (mul v# v#))))",
+			"main": "(import tools)\n(defn mul (a b) 0)\n(p (tools/square_of 7))"},
+			"49\n=> ()\n"},
 		{map[string]string{"geometry": geometry,
 			"main": "(import geometry)\n(geometry/helper 1)"},
 			"glisp: line 2: geometry/helper: geometry doesn't export helper\n"},
