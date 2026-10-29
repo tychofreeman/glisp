@@ -605,6 +605,91 @@ Not now, recorded for later: explicit laziness; purity (side effects stay
 allowed anywhere, kept apart by convention); automatic currying, which conflicts with functions of any number
 of arguments (`partial` instead); integers of any size; static types.
 
+### Modules and imports
+
+Decisions (2026-10-28, the user): a file is a module, which names what it
+exports; other modules use it through `import`, with `/` between a
+module's name and a name in it. Names resolve to their definitions when
+the code is read, so redefining a stdlib function no longer changes the
+stdlib's own code. A prelude imported by every module has only the
+basics, not the math functions. Go functions arrive by the same `import`.
+Not built yet: the plan first.
+
+Where things stand: one global namespace, in which the stdlib keeps its
+helpers apart by prefix (`math_`, `match_`, `deftype_`, `sort_`) and
+every one of them is visible; a program is one file; a name is looked
+up when it runs, so a program that redefines `fold` changes `map` (the
+spec says so); and macros expand to code that names the stdlib's
+helpers, which only works because they share that namespace.
+
+- [ ] **Qualified names.** A symbol `geometry/area` names `area` in the
+  module `geometry`. `/` alone stays division; a `/` between two
+  non-empty parts always qualifies, so `a/b` is an error unless `a` is
+  imported. Both backends resolve a qualified name when
+  they read it, as `Resolve` does now.
+- [ ] **Modules and exports.** A file may start with
+  `(module geometry (export area perimeter))`: its name, then what other
+  modules can use; everything else is private to it, the stdlib's
+  helpers included. Without a `module` form, a file is a program, which
+  exports nothing. Of the two forms considered, a list or a keyword on
+  each definition (`(defn pub area ...)`), the list: macros such as
+  `deftype` define several names a keyword couldn't reach, and the list
+  says in one place what a module offers. The interop plan's
+  `(export name)` for compiled modules becomes the same list: what a
+  module exports, a host can call.
+- [ ] **Imports.** `(import geometry)` makes `geometry/area` available;
+  `(import geometry (area perimeter))` also brings those in unqualified;
+  `(import geometry as g)` names it `g/area`. A module is found next to
+  the file that imports it (`geometry.glisp`), or among the stdlib's
+  modules, which are in the binary. An import cycle is an error, naming
+  the modules in it. A name imported unqualified from two modules is an
+  error where it is used, not where it is imported. `Run` of a string
+  has no directory, so it can import only the stdlib's modules; `RunFile`
+  and `CompileWasmFile` read the files they import.
+- [ ] **Names resolve when read.** Each module has its own top-level
+  scope: its definitions, its imports and the prelude, looked up when the
+  code is read. A program that defines `fold` gets its own `fold`, and
+  the stdlib's `map` keeps using the stdlib's. A module may not define a
+  name it imports unqualified (an error, as the stdlib's own check does
+  now); it can define one the prelude has, which then hides the
+  prelude's in that module only. Compiled code already resolves names
+  ahead of time: a global is keyed by `module/name`, and `usedDefs`
+  still leaves out what nothing reaches. The interpreter gets one scope
+  per module. The spec changes: "a program that redefines `fold` changes
+  `map`" goes.
+- [ ] **Macros keep their module.** A macro's expansion names its own
+  module's helpers (`let` expands to `let_expand`'s output, `definstance`
+  to `definstance_next`), which stop being visible once they are
+  private. As in Clojure's syntax-quote, the names a macro's template
+  writes are qualified with the macro's module when the template is read:
+  glisp gets quasiquote (`` ` ``, `,`, `,@`), whose symbols resolve in
+  the module that wrote them, while the code a caller passes in stays
+  the caller's. The stdlib's macros move to quasiquote first, which also
+  makes them shorter than their `cons` and `list` chains.
+- [ ] **Generics stay open.** `(definstance show ((x point?)) ...)` in a
+  module that imports `show` adds an instance to the exporting module's
+  `show`: the one sanctioned way to change another module's definition,
+  as the stdlib's redefinition check already allows. Instances live as
+  long as the program, whichever module added them.
+- [ ] **The stdlib as modules.** The prelude: the special forms' macros
+  (`defn`, `let`, `letrec`, `cond`, `and`, `or`), `not`, the list
+  library, `deftype` and `match`, `maybe` and `either` with `bind` and
+  `do`, `defgeneric` and `definstance`, `fmap`, `show`, `compare` and
+  `sort`. `math` holds `pi`, `exp`, `log`, the trigonometric functions
+  and `expt`, and is imported by name. To decide when it is built: which
+  builtins move too (`sqrt`, `floor`, `float` into `math`; the map,
+  vector and string builtins into modules of their own, or the prelude).
+- [ ] **Go modules.** `(import go/text)` imports the functions a Go host
+  registered under `text`, with the types its `extern`s declared (see
+  Interop with Go): a module file of `extern`s, or one the host
+  describes. Calls to them read as `text/count_words`, like any other
+  module's.
+
+Order: qualified names and the module form; imports from files; names
+resolved when read, one scope per module; quasiquote and the stdlib's
+macros on it; the stdlib split into the prelude and `math`; then Go
+modules with the interop work.
+
 ### Interop with Go
 
 Decisions (2026-10-28, the user): glisp calls Go first (calling other wasm

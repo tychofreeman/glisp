@@ -1174,3 +1174,7 @@ One entry per PR, written before committing it.
   helpers. The test, sent first, was stubbed as `expandLibrary`, so the
   extraction refused the name: the test goes after the refactorings that
   make what it calls. Nothing by hand.
+
+### PR: Roadmap for modules and imports
+
+- README only, one `replace_text`. Nothing by hand.
