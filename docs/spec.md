@@ -438,7 +438,7 @@ deep.
 
 ## 5. Special forms
 
-There are six. They are recognised by name, before macros and calls.
+There are seven. They are recognised by name, before macros and calls.
 
 ### `quote`
 
@@ -565,6 +565,47 @@ Anywhere else it is a sequence with a scope of its own.
 11
 one
 => two
+```
+
+### `module`
+
+`(module name (export name ...))`, as the first form of a file, makes the
+file a module: it names it, and lists the names it defines that other
+modules may use. A name written
+`module/name` is qualified: `geometry/area` is `area` in the module
+`geometry`. A file refers to its own definitions either way; another
+module's will need an `import`, which is still to come, so a qualified
+name of any other module is an error, and so is defining a qualified
+name. Each name the module exports must be one it defines. `/` alone is
+still division. `module` gives `()`.
+
+```glisp
+(module geometry (export area square))
+(defn area (w h) (* w h))
+(defn square (s) (geometry/area s s))
+(p (area 2 3) (square 4) (/ 12 4))
+```
+
+```output
+6 16 3
+=> ()
+```
+
+```glisp
+(module geometry (export area volume))
+(defn area (w h) (* w h))
+```
+
+```output
+glisp: line 1: module geometry exports volume, which it doesn't define
+```
+
+```glisp
+(p (other/thing 1))
+```
+
+```output
+glisp: line 1: other/thing: no module other is imported
 ```
 
 ## 6. Macros

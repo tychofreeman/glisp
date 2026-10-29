@@ -210,6 +210,9 @@ func definedName(fn string, params List) string {
 		}
 		panic(fmt.Sprintf("%s: expects a name and a value, got %d %s", fn, len(params), arguments))
 	}
+	if _, _, qualified := qualify(sym.Str()); qualified {
+		panic(fmt.Sprintf("%s: can't define a qualified name, %s", fn, sym.Str()))
+	}
 	return sym.Str()
 }
 
@@ -334,7 +337,7 @@ func processLines(scope *Scope, tokens List, lines Lines) interface{} {
 	var value interface{}
 	for _, token := range tokens {
 		form := readLines(token, lines, expander.lines)
-		nodes := expander.ExpandTop(form)
+		nodes := expander.ExpandFileForm(form)
 		if scope.run != nil {
 			scope.run.line = expander.formLine(form)
 		}
@@ -342,6 +345,7 @@ func processLines(scope *Scope, tokens List, lines Lines) interface{} {
 			value = Eval(node, scope)
 		}
 	}
+	expander.Finish()
 	return withoutPairs(value)
 }
 

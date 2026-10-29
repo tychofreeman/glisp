@@ -12,6 +12,11 @@ var lineErrors = []struct{ src, want string }{
 	{"; a comment\n(p \"two\nlines\")\n(car 1)", "line 4: car: expected a list, got number 1"},
 	// The stdlib's fmap fails after calling a show instance from line 1,
 	// whose call has returned: the call being made is still line 3's.
+	{"(def x 1)\n(module geometry)", "line 2: module: must be the first form of a file"},
+	{"(module 5)", "line 1: module: expected (module name (export name ...)), got (module 5)"},
+	{"(module geometry (export area volume))\n(defn area (w h) (* w h))", "line 1: module geometry exports volume, which it doesn't define"},
+	{"(def x 1)\n(p (plus x\n  (other/thing 1)))", "line 3: other/thing: no module other is imported"},
+	{"(module geometry)\n(def geometry/x 1)", "line 2: def: can't define a qualified name, geometry/x"},
 	{"(definstance show ((x vector?))\n  (str \"v\"))\n(fmap car \"abc\")", "line 3: fmap: no instance for \"abc\""},
 }
 

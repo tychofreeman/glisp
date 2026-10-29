@@ -1178,3 +1178,14 @@ One entry per PR, written before committing it.
 ### PR: Roadmap for modules and imports
 
 - README only, one `replace_text`. Nothing by hand.
+
+### PR: Qualified names and the module form
+
+- Tests and the spec section first, by `replace_text`; then `add_field`
+  for the `Expander`'s three fields, `create_file` for module.go, and
+  `replace_text` at each place a symbol is read or a top-level form is
+  expanded (both backends' loops, `definedName`). Changing the
+  top-level loops from `ExpandTop` to `ExpandFileForm` was three
+  separate text edits: `fold` can't tell the file-level calls from the
+  call in `ExpandBody` that must stay, and no operation redirects only
+  some calls of a function. Nothing by hand.

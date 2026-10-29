@@ -622,12 +622,21 @@ up when it runs, so a program that redefines `fold` changes `map` (the
 spec says so); and macros expand to code that names the stdlib's
 helpers, which only works because they share that namespace.
 
-- [ ] **Qualified names.** A symbol `geometry/area` names `area` in the
+- [x] **Qualified names.** A symbol `geometry/area` names `area` in the
   module `geometry`. `/` alone stays division; a `/` between two
   non-empty parts always qualifies, so `a/b` is an error unless `a` is
-  imported. Both backends resolve a qualified name when
-  they read it, as `Resolve` does now.
-- [ ] **Modules and exports.** A file may start with
+  imported. Done for the file's own module: the expander turns its
+  qualified names into its own (`Expander.local`), as a call's head too,
+  so a qualified macro call expands; any other module's is an error
+  (`other/thing: no module other is imported`) until imports come, and
+  so is defining a qualified name (`def: can't define a qualified name,
+  m/x`). Programs could name a global `a/b` before; now they can't.
+- [x] **Modules and exports.** The `module` form and its checks are done
+  (`ExpandFileForm`, which both backends' top-level loops use, and
+  `Finish` after the last form): only the first form may be one, and
+  every name it exports must be one the file defines (`module geometry
+  exports volume, which it doesn't define`). Privacy takes effect with
+  imports, the next step: until then nothing outside a file can see in. A file may start with
   `(module geometry (export area perimeter))`: its name, then what other
   modules can use; everything else is private to it, the stdlib's
   helpers included. Without a `module` form, a file is a program, which
