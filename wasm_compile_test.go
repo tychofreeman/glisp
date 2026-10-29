@@ -18,8 +18,13 @@ import (
 // runCompiled compiles program to wasm and runs it under WASI, returning
 // what it prints on stdout and stderr.
 func runCompiled(t *testing.T, program string) string {
-	t.Helper()
 	module, err := CompileWasm(program)
+	return compiledOutput(t, module, err)
+}
+
+// compiledOutput runs a compiled module, or reports why it didn't compile.
+func compiledOutput(t *testing.T, module []byte, err error) string {
+	t.Helper()
 	if err != nil {
 		return "compile error: " + err.Error()
 	}
@@ -99,6 +104,12 @@ func lineOf(lines []string, i int) string {
 // runInterpreted runs program in the interpreter and returns what
 // cmd/glisp would print.
 func runInterpreted(t *testing.T, program string) string {
+	return printedBy(t, func() (interface{}, error) { return Run(program) })
+}
+
+// printedBy runs a program with run, and returns what it printed and its
+// value, or its error, as the glisp command shows them.
+func printedBy(t *testing.T, run func() (interface{}, error)) string {
 	t.Helper()
 	read, write, err := os.Pipe()
 	if err != nil {
@@ -111,7 +122,7 @@ func runInterpreted(t *testing.T, program string) string {
 		b, _ := io.ReadAll(read)
 		printed <- string(b)
 	}()
-	value, err := Run(program)
+	value, err := run()
 	os.Stdout = stdout
 	write.Close()
 	out := <-printed

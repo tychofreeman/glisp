@@ -438,7 +438,8 @@ deep.
 
 ## 5. Special forms
 
-There are seven. They are recognised by name, before macros and calls.
+There are eight. They are recognised by name, before macros and calls;
+`module` and `import` only at the top level of a file.
 
 ### `quote`
 
@@ -571,13 +572,13 @@ one
 
 `(module name (export name ...))`, as the first form of a file, makes the
 file a module: it names it, and lists the names it defines that other
-modules may use. A name written
-`module/name` is qualified: `geometry/area` is `area` in the module
-`geometry`. A file refers to its own definitions either way; another
-module's will need an `import`, which is still to come, so a qualified
-name of any other module is an error, and so is defining a qualified
-name. Each name the module exports must be one it defines. `/` alone is
-still division. `module` gives `()`.
+modules may use; the rest are its own. A name written `module/name` is
+qualified: `geometry/area` is `area` in the module `geometry`. A file
+refers to its own definitions either way, and to another module's once
+it imports it; a qualified name of a module it doesn't import is an
+error, and so is defining a qualified name. Each name the module exports
+must be one it defines. `/` alone is still division. `module` gives
+`()`.
 
 ```glisp
 (module geometry (export area square))
@@ -607,6 +608,55 @@ glisp: line 1: module geometry exports volume, which it doesn't define
 ```output
 glisp: line 1: other/thing: no module other is imported
 ```
+
+### `import`
+
+`(import name)`, at the top level of a file, loads the module `name` from
+`name.glisp` next to the file, and makes the names it exports available
+as `name/...`. `(import name (a b))` also lets the file use `a` and `b`
+unqualified, and `(import name as n)` names the module `n` in this file.
+A module is loaded once however many files import it, and an import
+cycle is an error. Inside a module its names are its own: the module's
+code uses its own definitions whatever the program defines, and the
+program may define a name the module also does. Its private names, and
+any name it doesn't export, are an error to use from outside. A name
+imported unqualified can't be defined in the importing file, and one
+imported from two modules is an error where it is used. An exported
+macro is used the same way (`util/unless`, or `unless` once imported by
+name). `definstance` in a module adds to the generic it names, as it
+does anywhere.
+
+With `geometry.glisp`:
+
+```text
+(module geometry (export area square))
+(defn area (w h) (* w h))
+(defn square (s) (area s s))
+```
+
+a program next to it can say:
+
+```text
+(import geometry)
+(import geometry (square))
+(defn area (x) 0)
+(p (geometry/area 2 3) (square 4) (area 1))
+```
+
+which prints `6 16 0`: `square` uses the module's `area`, not the
+program's. A program run from a string, not a file, can import only the
+stdlib's modules, and there are none yet:
+
+```glisp
+(import geometry)
+```
+
+```output
+glisp: line 1: import: no module geometry: a program not read from a file can import only the stdlib's modules, and it has none yet
+```
+
+Lines in an error are the lines of the file the error is in, which the
+message doesn't yet name.
 
 ## 6. Macros
 

@@ -17,6 +17,8 @@ var lineErrors = []struct{ src, want string }{
 	{"(module geometry (export area volume))\n(defn area (w h) (* w h))", "line 1: module geometry exports volume, which it doesn't define"},
 	{"(def x 1)\n(p (plus x\n  (other/thing 1)))", "line 3: other/thing: no module other is imported"},
 	{"(module geometry)\n(def geometry/x 1)", "line 2: def: can't define a qualified name, geometry/x"},
+	{"(def x 1)\n(import geometry)", "line 2: import: no module geometry: a program not read from a file can import only the stdlib's modules, and it has none yet"},
+	{"(import geometry as)", "line 1: import: expected (import name), (import name (name ...)) or (import name as alias), got (import geometry as)"},
 	{"(definstance show ((x vector?))\n  (str \"v\"))\n(fmap car \"abc\")", "line 3: fmap: no instance for \"abc\""},
 }
 

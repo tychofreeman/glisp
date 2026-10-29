@@ -42,12 +42,17 @@ type Macro struct{ fn Function }
 // macros as it goes. Macros are found in scope, where defmacro puts them,
 // so a macro applies to the forms expanded after its definition.
 type Expander struct {
-	scope   *Scope
-	lines   Lines           // the line of each list read from source
-	line    int             // the line of the innermost list being expanded
-	module  *module         // what the file's module form declared, if it has one
-	forms   int             // how many top-level forms of the file ExpandFileForm has seen
-	defined map[string]bool // the names the file's top-level forms define
+	scope    *Scope
+	lines    Lines                    // the line of each list read from source
+	line     int                      // the line of the innermost list being expanded
+	module   *module                  // what the file's module form declared, if it has one
+	forms    int                      // how many top-level forms of the file ExpandFileForm has seen
+	defined  map[string]bool          // the names the file's top-level forms define
+	dir      string                   // the directory of the file, where its imports are found; "" if it isn't from one
+	loader   *loader                  // what loads the run's modules
+	imported map[string]*loadedModule // the modules the file imports, by name
+	aliases  map[string]string        // the modules it imports under another name, by that name
+	imports  map[string][]string      // what each name it imports unqualified stands for
 }
 
 // NewExpander returns an Expander that finds macros in, and defines them in,
@@ -142,7 +147,7 @@ func (e *Expander) expandList(f List) Node {
 		defer func() { e.line = saved }()
 	}
 	if head, isSymbol := f[0].(Symbol); isSymbol {
-		head = symbol(e.local(head.Str()))
+		head = symbol(e.macroName(e.local(head.Str())))
 		switch head.Str() {
 		case "quote":
 			if len(f) < 2 {

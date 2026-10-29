@@ -646,7 +646,7 @@ helpers, which only works because they share that namespace.
   says in one place what a module offers. The interop plan's
   `(export name)` for compiled modules becomes the same list: what a
   module exports, a host can call.
-- [ ] **Imports.** `(import geometry)` makes `geometry/area` available;
+- [x] **Imports.** `(import geometry)` makes `geometry/area` available;
   `(import geometry (area perimeter))` also brings those in unqualified;
   `(import geometry as g)` names it `g/area`. A module is found next to
   the file that imports it (`geometry.glisp`), or among the stdlib's
@@ -655,6 +655,30 @@ helpers, which only works because they share that namespace.
   error where it is used, not where it is imported. `Run` of a string
   has no directory, so it can import only the stdlib's modules; `RunFile`
   and `CompileWasmFile` read the files they import.
+  Done (module.go): an import loads the module's file once per run (a
+  `loader`), expanding its forms in a scope of their own where its
+  macros and their helpers run, then renames every name the module
+  defines to `geometry/...` wherever its code uses it (`renameFree`,
+  which leaves alone the names a lambda binds) and gives those nodes as
+  the import's: both backends then run them as any top-level forms, so
+  a module's names are globals no other file can reach except through
+  its exports, and its own code uses its own definitions whatever the
+  program defines. Names imported unqualified are renamed the same way
+  in the importing file; exported macros are added under their
+  qualified names. A module's `definstance` keeps the generic's name,
+  so it adds to the generic, as planned below. Tested in both backends
+  with files in a temporary directory (module_test.go): qualified,
+  unqualified and aliased use, a module the program shadows, modules
+  importing modules, an exported macro, and each error. Left for the
+  steps below: a module's free names that aren't its own (the stdlib's)
+  are still looked up when the code runs, so a program redefining
+  `fold` still changes a module's `map`; and a macro's expansion still
+  names its module's helpers unqualified, so an exported macro whose
+  helpers are private fails where it is used.
+- [ ] **Errors that name their file.** An error's line is the line of
+  the file it happened in, which the message doesn't name: an import
+  cycle found in `b.glisp` reports `b.glisp`'s line. Messages should
+  say `geometry.glisp:3:` once a program is several files.
 - [ ] **Names resolve when read.** Each module has its own top-level
   scope: its definitions, its imports and the prelude, looked up when the
   code is read. A program that defines `fold` gets its own `fold`, and
