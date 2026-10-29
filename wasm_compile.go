@@ -125,7 +125,7 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 	expander.lines = Lines{}
 	expand := func(form interface{}) []Node {
 		var nodes []Node
-		for _, node := range expander.ExpandTop(form) {
+		for _, node := range expander.ExpandFileForm(form) {
 			if def, isDef := node.(Def); isDef {
 				if _, isLambda := def.Value.(Lambda); isLambda {
 					Eval(node, scope) // so later macros can call it
@@ -156,6 +156,7 @@ func compileWasm(run *runState, tokens List, lines Lines) []byte {
 			programNodes = append(programNodes, node)
 		}
 	}
+	expander.Finish()
 
 	used := usedDefs(stdlibNodes, programNodes)
 	c := newWasmCompiler(scope, makes(append(append([]Node{}, used...), programNodes...)))
