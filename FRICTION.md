@@ -1189,3 +1189,20 @@ One entry per PR, written before committing it.
   separate text edits: `fold` can't tell the file-level calls from the
   call in `ExpandBody` that must stay, and no operation redirects only
   some calls of a function. Nothing by hand.
+
+### PR: Imports
+
+- The test helpers first: `add_declaration` of `printedBy` and
+  `compiledOutput` from the bodies of `runInterpreted` and
+  `runCompiled`, which `replace_statements` with `function` then made
+  calls of them, so a test can run a file. The tests by `create_file`
+  and `replace_text`. Then `add_parameter` gave `processLines` and
+  `compileWasm` a `dir` (`""` at every call), `add_field` the
+  `Expander`'s five fields, and `add_declaration` with
+  `replace_statements` made `Run` and `CompileWasm` wrappers of
+  `runIn` and `compileWasmIn`: expand, migrate (by hand: two lines of
+  `RunFile` and `CompileWasmFile`, by `replace_text`), no contract,
+  since the exported functions stay. A second `add_parameter` gave
+  `load` the import's `line`, passing the caller's local of that name.
+  The loader and renaming by `replace_text` into module.go. Nothing by
+  hand.

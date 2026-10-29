@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -326,14 +327,14 @@ func newScope() *Scope {
 }
 
 func ProcessTokens(scope *Scope, tokenized List) interface{} {
-	return processLines(scope, tokenized, nil)
+	return processLines(scope, tokenized, nil, "")
 }
 
 // processLines evaluates the forms in tokens, whose lists start on the lines
 // in lines, and returns the value of the last one.
-func processLines(scope *Scope, tokens List, lines Lines) interface{} {
+func processLines(scope *Scope, tokens List, lines Lines, dir string) interface{} {
 	expander := NewExpander(scope)
-	expander.lines = Lines{}
+	expander.lines, expander.dir = Lines{}, dir
 	var value interface{}
 	for _, token := range tokens {
 		form := readLines(token, lines, expander.lines)
@@ -353,7 +354,7 @@ func processLines(scope *Scope, tokens List, lines Lines) interface{} {
 // form. It panics on an error in the program; Run returns the error instead.
 func Process(input string) interface{} {
 	tokens, lines := tokenizeLines(input)
-	return processLines(newScope(), tokens, lines)
+	return processLines(newScope(), tokens, lines, "")
 }
 
 func ProcessFile(fname string) interface{} {
@@ -364,10 +365,16 @@ func ProcessFile(fname string) interface{} {
 // Errors in the program, such as unbalanced parens, an unknown symbol or an
 // argument of the wrong type, are returned rather than panicking.
 func Run(input string) (value interface{}, err error) {
+	return runIn(input, "")
+}
+
+// runIn is Run for a program read from a file in dir, from which it may
+// import modules; dir is "" for one that wasn't.
+func runIn(input, dir string) (value interface{}, err error) {
 	scope := newScope()
 	defer recoverAt(&err, scope.run)
 	tokens, lines := tokenizeLines(input)
-	return processLines(scope, tokens, lines), nil
+	return processLines(scope, tokens, lines, dir), nil
 }
 
 // RunFile is Run for the program in the file fname.
@@ -376,7 +383,7 @@ func RunFile(fname string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return Run(string(program))
+	return runIn(string(program), filepath.Dir(fname))
 }
 
 // recoverAt, deferred, turns a panic into an error in *err, naming the line

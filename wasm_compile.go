@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 
 	"github.com/tychofreeman/glisp/wasm"
 )
@@ -18,10 +19,16 @@ import (
 // Macros are expanded while compiling, so a program's macros, and the
 // functions they call (top-level defs of lambdas), run in the interpreter.
 func CompileWasm(input string) (module []byte, err error) {
+	return compileWasmIn(input, "")
+}
+
+// compileWasmIn is CompileWasm for a program read from a file in dir, from
+// which it may import modules; dir is "" for one that wasn't.
+func compileWasmIn(input, dir string) (module []byte, err error) {
 	run := &runState{}
 	defer recoverAt(&err, run)
 	tokens, lines := tokenizeLines(input)
-	return compileWasm(run, tokens, lines), nil
+	return compileWasm(run, tokens, lines, dir), nil
 }
 
 // CompileWasmFile is CompileWasm for the program in the file fname.
@@ -30,7 +37,7 @@ func CompileWasmFile(fname string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return CompileWasm(string(program))
+	return compileWasmIn(string(program), filepath.Dir(fname))
 }
 
 // Compiled values are i64s. An odd value is an integer n stored as 2n+1; any
@@ -119,10 +126,10 @@ type wasmCompiler struct {
 	made     map[string]bool // the optional types the program can make (makers): the module has the runtime of no others
 }
 
-func compileWasm(run *runState, tokens List, lines Lines) []byte {
+func compileWasm(run *runState, tokens List, lines Lines, dir string) []byte {
 	scope := &Scope{prev: builtinScope, table: map[string]interface{}{}, run: run}
 	expander := NewExpander(scope)
-	expander.lines = Lines{}
+	expander.lines, expander.dir = Lines{}, dir
 	expand := func(form interface{}) []Node {
 		var nodes []Node
 		for _, node := range expander.ExpandFileForm(form) {
